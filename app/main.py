@@ -25,18 +25,31 @@ app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
 
 # Add CORS middleware
 # Support both local development and production (Render)
+import os
+
 cors_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-# Add production frontend URL if provided via environment variable
-if hasattr(settings, "frontend_url") and settings.frontend_url:
-    cors_origins.append(settings.frontend_url)
-# Also allow any Render subdomain (for flexibility)
-import os
+
+# Add production frontend URL from environment variable
 frontend_url_env = os.getenv("FRONTEND_URL", "")
 if frontend_url_env:
     cors_origins.append(frontend_url_env)
+
+# Also add from settings if set
+if hasattr(settings, "frontend_url") and settings.frontend_url:
+    cors_origins.append(settings.frontend_url)
+
+# For production, allow common Render frontend URLs
+# Add your specific frontend URL here or via FRONTEND_URL env var
+cors_origins.append("https://curie-frontend-8hvz.onrender.com")
+
+# In production, if FRONTEND_URL is not set, allow all origins (less secure but works)
+# Remove this in production and set FRONTEND_URL explicitly
+if not frontend_url_env and not (hasattr(settings, "frontend_url") and settings.frontend_url):
+    # Allow all origins in development (not recommended for production)
+    cors_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
