@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Key, Users, Shield, Globe, Bell } from 'lucide-react';
+import { Save, Key, Users, Shield, Globe, Bell, Clock } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 export default function SettingsPage() {
@@ -19,10 +19,25 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings & Configuration</h1>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
           Manage your account and platform settings
         </p>
+      </div>
+
+      {/* Coming Soon Banner */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
+              Advanced Settings Coming Soon
+            </h3>
+            <p className="text-sm text-blue-700 dark:text-blue-400">
+              Additional configuration options, localization settings, and advanced controls are in development.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-6">
