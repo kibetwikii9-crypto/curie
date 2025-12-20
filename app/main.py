@@ -72,6 +72,29 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️  Database initialization error: {e}")
     
+    # Auto-create admin user if it doesn't exist
+    try:
+        from app.database import get_db_context
+        from app.services.auth import create_user, get_user_by_email
+        
+        with get_db_context() as db:
+            admin_email = "admin@curie.com"
+            existing = get_user_by_email(db, admin_email)
+            if not existing:
+                admin_user = create_user(
+                    db,
+                    email=admin_email,
+                    password="admin123",
+                    full_name="Admin User",
+                    role="admin"
+                )
+                print(f"✅ Admin user auto-created: {admin_email} / admin123")
+            else:
+                print(f"✅ Admin user already exists: {admin_email}")
+    except Exception as e:
+        print(f"⚠️  Admin user creation error: {e}")
+        # Don't fail startup if admin creation fails
+    
     # Load knowledge base
     if load_knowledge("faq.json"):
         print("✅ Knowledge base loaded successfully")
