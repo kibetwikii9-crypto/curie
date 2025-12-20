@@ -40,5 +40,4 @@ services:
           type: web
           name: curie-backend
           property: host
-    staticPublishPath: frontend/.next
 
