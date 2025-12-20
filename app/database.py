@@ -21,16 +21,21 @@ from app.config import settings
 # SQLite connection string: sqlite:///./curie.db
 # PostgreSQL connection string: postgresql://user:pass@host/dbname
 # This supports both SQLite (local) and PostgreSQL (production)
+# For PostgreSQL, we use psycopg3 (postgresql+psycopg://) instead of psycopg2
+
 connect_args = {}
-if settings.database_url.startswith("sqlite"):
+database_url = settings.database_url
+
+# Convert postgresql:// to postgresql+psycopg:// for psycopg3 support
+if database_url.startswith("postgresql://"):
+    # Replace postgresql:// with postgresql+psycopg:// to use psycopg3
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+elif database_url.startswith("sqlite"):
     # SQLite-specific connection args
     connect_args = {"check_same_thread": False}
-else:
-    # PostgreSQL connection args (if needed)
-    connect_args = {}
 
 engine = create_engine(
-    settings.database_url,
+    database_url,
     connect_args=connect_args,
     echo=False,  # Set to True for SQL query logging (useful for debugging)
 )
