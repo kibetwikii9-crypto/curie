@@ -915,6 +915,412 @@ async def get_timeline_analytics(
     }
 
 
+@router.get("/analytics/performance-summary")
+async def get_performance_summary(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get executive performance summary with trends."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    previous_start = datetime.utcnow() - timedelta(days=days * 2)
+    previous_end = start_date
+    
+    # Current period metrics
+    current_conversations = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= start_date
+    ).scalar() or 0
+    
+    current_leads = db.query(func.count(Lead.id)).filter(
+        Lead.created_at >= start_date
+    ).scalar() or 0
+    
+    # Previous period metrics
+    previous_conversations = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= previous_start,
+        Conversation.created_at < previous_end
+    ).scalar() or 0
+    
+    previous_leads = db.query(func.count(Lead.id)).filter(
+        Lead.created_at >= previous_start,
+        Lead.created_at < previous_end
+    ).scalar() or 0
+    
+    # Calculate trends
+    conv_trend = ((current_conversations - previous_conversations) / max(previous_conversations, 1)) * 100 if previous_conversations > 0 else 0
+    lead_trend = ((current_leads - previous_leads) / max(previous_leads, 1)) * 100 if previous_leads > 0 else 0
+    
+    # Automation efficiency (all AI-handled in Phase 1)
+    ai_resolved = current_conversations  # All are AI-resolved
+    automation_efficiency = 100.0  # 100% automated
+    
+    return {
+        "conversation_growth": {
+            "current": current_conversations,
+            "previous": previous_conversations,
+            "trend": round(conv_trend, 1),
+            "direction": "up" if conv_trend > 0 else "down" if conv_trend < 0 else "stable",
+        },
+        "lead_acquisition": {
+            "current": current_leads,
+            "previous": previous_leads,
+            "trend": round(lead_trend, 1),
+            "direction": "up" if lead_trend > 0 else "down" if lead_trend < 0 else "stable",
+        },
+        "automation_efficiency": {
+            "percentage": automation_efficiency,
+            "ai_resolved": ai_resolved,
+            "human_handoffs": 0,  # Placeholder
+        },
+    }
+
+
+@router.get("/analytics/conversation-flow")
+async def get_conversation_flow(
+    days: int = Query(30, ge=7, le=90),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get conversation volume and flow analysis."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Daily conversation volume
+    daily_volume = (
+        db.query(
+            func.date(Conversation.created_at).label("date"),
+            func.count(Conversation.id).label("count"),
+        )
+        .filter(Conversation.created_at >= start_date)
+        .group_by(func.date(Conversation.created_at))
+        .order_by(func.date(Conversation.created_at))
+        .all()
+    )
+    
+    # Message depth per conversation (simplified - count messages per user)
+    message_depth = (
+        db.query(
+            Conversation.user_id,
+            func.count(Message.id).label("message_count")
+        )
+        .join(Message, Message.user_id == Conversation.user_id)
+        .filter(Conversation.created_at >= start_date)
+        .group_by(Conversation.user_id)
+        .all()
+    )
+    
+    avg_depth = sum(depth[1] for depth in message_depth) / max(len(message_depth), 1) if message_depth else 0
+    
+    return {
+        "daily_volume": [{"date": str(date), "count": count} for date, count in daily_volume],
+        "average_message_depth": round(avg_depth, 1),
+        "total_conversations": len(daily_volume),
+    }
+
+
+@router.get("/analytics/intent-performance")
+async def get_intent_performance(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get deep intent performance analytics."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Intent frequency over time
+    intent_frequency = (
+        db.query(
+            Conversation.intent,
+            func.count(Conversation.id).label("count")
+        )
+        .filter(Conversation.created_at >= start_date)
+        .group_by(Conversation.intent)
+        .order_by(func.count(Conversation.id).desc())
+        .all()
+    )
+    
+    # Intent to lead conversion
+    intent_performance = []
+    for intent, count in intent_frequency:
+        intent_leads = db.query(func.count(Lead.id)).filter(
+            Lead.source_intent == intent,
+            Lead.created_at >= start_date
+        ).scalar() or 0
+        
+        conversion_rate = (intent_leads / count * 100) if count > 0 else 0
+        
+        # Check for fallbacks
+        fallback_count = db.query(func.count(Conversation.id)).filter(
+            Conversation.intent == "unknown",
+            Conversation.created_at >= start_date
+        ).scalar() or 0
+        
+        intent_performance.append({
+            "intent": intent,
+            "frequency": count,
+            "leads_generated": intent_leads,
+            "conversion_rate": round(conversion_rate, 1),
+            "causes_fallback": intent == "unknown",
+            "fallback_count": fallback_count if intent == "unknown" else 0,
+        })
+    
+    return {
+        "intent_performance": intent_performance,
+        "period_days": days,
+    }
+
+
+@router.get("/analytics/channel-efficiency")
+async def get_channel_efficiency(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get channel efficiency reports (different from basic channel analytics)."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    channels = db.query(Conversation.channel).filter(
+        Conversation.created_at >= start_date
+    ).distinct().all()
+    
+    channel_efficiency = []
+    for channel_tuple in channels:
+        channel = channel_tuple[0]
+        
+        # Total conversations
+        total_conv = db.query(func.count(Conversation.id)).filter(
+            Conversation.channel == channel,
+            Conversation.created_at >= start_date
+        ).scalar() or 0
+        
+        # Leads from this channel
+        channel_leads = db.query(func.count(Lead.id)).filter(
+            Lead.channel == channel,
+            Lead.created_at >= start_date
+        ).scalar() or 0
+        
+        # AI resolution rate (all are AI-resolved in Phase 1)
+        ai_resolution_rate = 100.0
+        
+        # Lead quality (simplified - based on status)
+        qualified_leads = db.query(func.count(Lead.id)).filter(
+            Lead.channel == channel,
+            Lead.status.in_(["qualified", "converted"]),
+            Lead.created_at >= start_date
+        ).scalar() or 0
+        
+        lead_quality = (qualified_leads / max(channel_leads, 1)) * 100 if channel_leads > 0 else 0
+        
+        channel_efficiency.append({
+            "channel": channel,
+            "total_conversations": total_conv,
+            "ai_resolution_rate": round(ai_resolution_rate, 1),
+            "lead_quality": round(lead_quality, 1),
+            "leads_generated": channel_leads,
+        })
+    
+    return {
+        "channels": channel_efficiency,
+        "period_days": days,
+    }
+
+
+@router.get("/analytics/automation-effectiveness")
+async def get_automation_effectiveness(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get automation and AI effectiveness analytics."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    total_conversations = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= start_date
+    ).scalar() or 0
+    
+    # Successful AI responses (non-fallback)
+    successful_ai = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= start_date,
+        Conversation.intent != "unknown"
+    ).scalar() or 0
+    
+    # Fallback frequency
+    fallback_count = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= start_date,
+        Conversation.intent == "unknown"
+    ).scalar() or 0
+    
+    fallback_rate = (fallback_count / max(total_conversations, 1)) * 100
+    
+    # Human handoffs (placeholder - 0 in Phase 1)
+    human_handoffs = 0
+    
+    return {
+        "total_conversations": total_conversations,
+        "successful_ai_responses": successful_ai,
+        "success_rate": round((successful_ai / max(total_conversations, 1)) * 100, 1),
+        "fallback_frequency": fallback_count,
+        "fallback_rate": round(fallback_rate, 1),
+        "human_handoffs": human_handoffs,
+        "automation_rate": round(((total_conversations - human_handoffs) / max(total_conversations, 1)) * 100, 1),
+    }
+
+
+@router.get("/analytics/lead-outcomes")
+async def get_lead_outcomes(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get lead and outcome analytics."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Leads over time
+    leads_over_time = (
+        db.query(
+            func.date(Lead.created_at).label("date"),
+            func.count(Lead.id).label("count"),
+        )
+        .filter(Lead.created_at >= start_date)
+        .group_by(func.date(Lead.created_at))
+        .order_by(func.date(Lead.created_at))
+        .all()
+    )
+    
+    # Lead source effectiveness
+    lead_sources = (
+        db.query(
+            Lead.source_intent,
+            func.count(Lead.id).label("count")
+        )
+        .filter(Lead.created_at >= start_date, Lead.source_intent.isnot(None))
+        .group_by(Lead.source_intent)
+        .order_by(func.count(Lead.id).desc())
+        .all()
+    )
+    
+    # Intent to outcome mapping
+    intent_outcomes = []
+    for intent, count in lead_sources:
+        intent_outcomes.append({
+            "intent": intent,
+            "leads_generated": count,
+        })
+    
+    return {
+        "leads_over_time": [{"date": str(date), "count": count} for date, count in leads_over_time],
+        "intent_outcomes": intent_outcomes,
+        "total_leads": sum(count for _, count in leads_over_time),
+        "period_days": days,
+    }
+
+
+@router.get("/analytics/time-behavior")
+async def get_time_behavior(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get time-based behavior insights."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Peak engagement hours
+    hour_distribution = (
+        db.query(
+            func.extract('hour', Conversation.created_at).label("hour"),
+            func.count(Conversation.id).label("count")
+        )
+        .filter(Conversation.created_at >= start_date)
+        .group_by(func.extract('hour', Conversation.created_at))
+        .order_by(func.count(Conversation.id).desc())
+        .all()
+    )
+    
+    peak_hour = int(hour_distribution[0][0]) if hour_distribution else None
+    
+    # Peak engagement days
+    day_distribution = (
+        db.query(
+            func.extract('dow', Conversation.created_at).label("day"),
+            func.count(Conversation.id).label("count")
+        )
+        .filter(Conversation.created_at >= start_date)
+        .group_by(func.extract('dow', Conversation.created_at))
+        .order_by(func.count(Conversation.id).desc())
+        .all()
+    )
+    
+    day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    peak_day = day_names[int(day_distribution[0][0])] if day_distribution else None
+    
+    return {
+        "peak_hour": peak_hour,
+        "peak_day": peak_day,
+        "hour_distribution": [{"hour": int(hour), "count": count} for hour, count in hour_distribution],
+        "day_distribution": [{"day": day_names[int(day)], "count": count} for day, count in day_distribution],
+    }
+
+
+@router.get("/analytics/anomalies")
+async def get_anomalies(
+    days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get anomaly and trend detection (rule-based)."""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    previous_start = datetime.utcnow() - timedelta(days=days * 2)
+    previous_end = start_date
+    
+    # Current vs previous period
+    current_conv = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= start_date
+    ).scalar() or 0
+    
+    previous_conv = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= previous_start,
+        Conversation.created_at < previous_end
+    ).scalar() or 0
+    
+    # Current fallbacks
+    current_fallbacks = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= start_date,
+        Conversation.intent == "unknown"
+    ).scalar() or 0
+    
+    previous_fallbacks = db.query(func.count(Conversation.id)).filter(
+        Conversation.created_at >= previous_start,
+        Conversation.created_at < previous_end,
+        Conversation.intent == "unknown"
+    ).scalar() or 0
+    
+    anomalies = []
+    
+    # Check for conversation spike/drop
+    if previous_conv > 0:
+        conv_change = ((current_conv - previous_conv) / previous_conv) * 100
+        if abs(conv_change) > 20:  # More than 20% change
+            anomalies.append({
+                "type": "conversation_spike" if conv_change > 0 else "conversation_drop",
+                "severity": "info",
+                "message": f"Conversation volume {'increased' if conv_change > 0 else 'decreased'} by {abs(round(conv_change, 1))}%",
+            })
+    
+    # Check for rising fallback trend
+    if previous_fallbacks > 0:
+        fallback_change = ((current_fallbacks - previous_fallbacks) / previous_fallbacks) * 100
+        if fallback_change > 15:  # More than 15% increase
+            anomalies.append({
+                "type": "rising_fallback_trend",
+                "severity": "warning",
+                "message": f"Fallback rate increased by {round(fallback_change, 1)}%",
+            })
+    
+    return {
+        "anomalies": anomalies,
+        "period_days": days,
+    }
+
+
 @router.get("/leads")
 async def get_leads(
     page: int = Query(1, ge=1),
