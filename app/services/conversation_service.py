@@ -111,7 +111,7 @@ async def save_conversation_from_normalized(
         return await save_conversation(
             user_message=normalized_message.message_text,
             bot_reply=bot_reply,
-            channel=normalized_message.channel.value,
+            channel=normalized_message.channel,
             user_id=normalized_message.user_id,
             intent=intent,
         )

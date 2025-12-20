@@ -59,7 +59,7 @@ async def telegram_webhook(update: TelegramUpdate):
             if normalized_message:
                 log.info(
                     f"message_normalized user_id={normalized_message.user_id} "
-                    f"channel={normalized_message.channel.value} "
+                    f"channel={normalized_message.channel} "
                     f"text_length={len(normalized_message.message_text)}"
                 )
         except Exception as e:
