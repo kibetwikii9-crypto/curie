@@ -115,6 +115,8 @@ export default function ConversationsPage() {
   const [showAiReasoning, setShowAiReasoning] = useState(false);
   const [showLeadPreview, setShowLeadPreview] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [internalNotes, setInternalNotes] = useState<Record<number, string>>({});
+  const [showNotes, setShowNotes] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['conversations', page, channelFilter, intentFilter, statusFilter, hasFallbackFilter, hasLeadFilter],
