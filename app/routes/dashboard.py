@@ -8,7 +8,7 @@ from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel
+from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory
 from app.routes.auth import get_current_user
 
 log = logging.getLogger(__name__)
@@ -302,10 +302,13 @@ async def get_conversations(
     limit: int = Query(20, ge=1, le=100),
     channel: Optional[str] = None,
     intent: Optional[str] = None,
+    status: Optional[str] = None,  # ai-handled, human-assisted, escalated
+    has_fallback: Optional[bool] = None,  # Filter by fallback status
+    has_lead: Optional[bool] = None,  # Filter by lead potential
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get paginated conversations list."""
+    """Get paginated conversations list with intelligence data."""
     query = db.query(Conversation)
 
     # Apply filters
@@ -313,6 +316,26 @@ async def get_conversations(
         query = query.filter(Conversation.channel == channel)
     if intent:
         query = query.filter(Conversation.intent == intent)
+    if has_fallback is not None:
+        if has_fallback:
+            query = query.filter(Conversation.intent == "unknown")
+        else:
+            query = query.filter(Conversation.intent != "unknown")
+    if has_lead is not None:
+        # Check if conversation has associated lead
+        # Simplified approach: filter by user_ids that have leads
+        lead_user_ids = db.query(Lead.user_id).distinct().all()
+        lead_user_id_list = [uid[0] for uid in lead_user_ids] if lead_user_ids else []
+        
+        if has_lead:
+            if lead_user_id_list:
+                query = query.filter(Conversation.user_id.in_(lead_user_id_list))
+            else:
+                # No leads exist, return empty result
+                query = query.filter(Conversation.id == -1)  # Impossible condition
+        else:
+            if lead_user_id_list:
+                query = query.filter(~Conversation.user_id.in_(lead_user_id_list))
 
     # Get total count
     total = query.count()
@@ -321,23 +344,230 @@ async def get_conversations(
     offset = (page - 1) * limit
     conversations = query.order_by(Conversation.created_at.desc()).offset(offset).limit(limit).all()
 
+    # Build response with intelligence data
+    result_conversations = []
+    for conv in conversations:
+        # Get conversation memory for context
+        memory = db.query(ConversationMemory).filter(
+            ConversationMemory.user_id == conv.user_id,
+            ConversationMemory.channel == conv.channel
+        ).first()
+
+        # Count messages for this conversation
+        message_count = db.query(func.count(Message.id)).filter(
+            Message.user_id == conv.user_id,
+            Message.channel == conv.channel
+        ).scalar() or 1
+
+        # Check for associated lead
+        lead = db.query(Lead).filter(
+            Lead.user_id == conv.user_id,
+            Lead.channel == conv.channel
+        ).first()
+
+        # Determine conversation status
+        status_value = "ai-handled"  # Default - all are AI-handled in Phase 1
+        if conv.intent == "unknown":
+            status_value = "needs-attention"
+        if lead:
+            status_value = "lead-captured"
+
+        # Calculate fallback count (unknown intents for this user)
+        fallback_count = db.query(func.count(Conversation.id)).filter(
+            Conversation.user_id == conv.user_id,
+            Conversation.channel == conv.channel,
+            Conversation.intent == "unknown"
+        ).scalar() or 0
+
+        # Generate smart labels
+        labels = []
+        if lead:
+            labels.append("Lead Captured")
+        if conv.intent == "pricing":
+            labels.append("Pricing Inquiry")
+        if conv.intent == "unknown":
+            labels.append("Unresolved")
+        if message_count > 3:
+            labels.append("Repeat Customer")
+        if lead and lead.status == "new":
+            labels.append("High Intent")
+
+        # Check for health indicators
+        health_indicators = []
+        if fallback_count > 2:
+            health_indicators.append("repeated_fallbacks")
+        if conv.intent == "unknown":
+            health_indicators.append("unresolved_intent")
+
+        result_conversations.append({
+            "id": conv.id,
+            "user_id": conv.user_id,
+            "channel": conv.channel,
+            "user_message": conv.user_message,
+            "bot_reply": conv.bot_reply,
+            "intent": conv.intent,
+            "created_at": conv.created_at.isoformat(),
+            # Extended intelligence data
+            "status": status_value,
+            "message_count": message_count,
+            "fallback_count": fallback_count,
+            "labels": labels,
+            "health_indicators": health_indicators,
+            "has_lead": lead is not None,
+            "lead_id": lead.id if lead else None,
+        })
+
     return {
-        "conversations": [
-            {
-                "id": conv.id,
-                "user_id": conv.user_id,
-                "channel": conv.channel,
-                "user_message": conv.user_message,
-                "bot_reply": conv.bot_reply,
-                "intent": conv.intent,
-                "created_at": conv.created_at.isoformat(),
-            }
-            for conv in conversations
-        ],
+        "conversations": result_conversations,
         "total": total,
         "page": page,
         "limit": limit,
         "total_pages": (total + limit - 1) // limit,
+    }
+
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation_detail(
+    conversation_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get detailed conversation with full context, AI reasoning, and timeline."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Get all messages for this conversation
+    messages = db.query(Message).filter(
+        Message.user_id == conversation.user_id,
+        Message.channel == conversation.channel
+    ).order_by(Message.created_at.asc()).all()
+
+    # Get conversation memory
+    memory = db.query(ConversationMemory).filter(
+        ConversationMemory.user_id == conversation.user_id,
+        ConversationMemory.channel == conversation.channel
+    ).first()
+
+    # Get associated lead
+    lead = db.query(Lead).filter(
+        Lead.user_id == conversation.user_id,
+        Lead.channel == conversation.channel
+    ).first()
+
+    # Get all conversations from this user for timeline
+    all_user_conversations = db.query(Conversation).filter(
+        Conversation.user_id == conversation.user_id,
+        Conversation.channel == conversation.channel
+    ).order_by(Conversation.created_at.asc()).all()
+
+    # Count fallbacks
+    fallback_count = db.query(func.count(Conversation.id)).filter(
+        Conversation.user_id == conversation.user_id,
+        Conversation.channel == conversation.channel,
+        Conversation.intent == "unknown"
+    ).scalar() or 0
+
+    # Determine status
+    status_value = "ai-handled"
+    if conversation.intent == "unknown":
+        status_value = "needs-attention"
+    if lead:
+        status_value = "lead-captured"
+
+    # Build AI reasoning trace (rule-based)
+    ai_reasoning = {
+        "detected_intent": conversation.intent,
+        "confidence": "high" if conversation.intent != "unknown" else "low",
+        "intent_history": [{"intent": conv.intent, "timestamp": conv.created_at.isoformat()} for conv in all_user_conversations],
+        "rules_matched": [conversation.intent] if conversation.intent != "unknown" else [],
+        "knowledge_base_used": False,  # Can be enhanced later
+        "fallback_reason": "Unknown intent detected" if conversation.intent == "unknown" else None,
+        "context_used": {
+            "last_intent": memory.last_intent if memory else None,
+            "message_count": memory.message_count if memory else 0,
+        }
+    }
+
+    # Build timeline with enhancements
+    timeline = []
+    for conv in all_user_conversations:
+        timeline.append({
+            "type": "conversation",
+            "timestamp": conv.created_at.isoformat(),
+            "intent": conv.intent,
+            "user_message": conv.user_message[:100] + "..." if len(conv.user_message) > 100 else conv.user_message,
+            "bot_reply": conv.bot_reply[:100] + "..." if len(conv.bot_reply) > 100 else conv.bot_reply,
+            "is_fallback": conv.intent == "unknown",
+        })
+
+    # Add lead capture event if exists
+    if lead:
+        timeline.append({
+            "type": "lead_capture",
+            "timestamp": lead.created_at.isoformat(),
+            "lead_id": lead.id,
+            "source_intent": lead.source_intent,
+        })
+
+    # Sort timeline by timestamp
+    timeline.sort(key=lambda x: x["timestamp"])
+
+    # Health indicators
+    health_indicators = []
+    if fallback_count > 2:
+        health_indicators.append({
+            "type": "repeated_fallbacks",
+            "severity": "warning",
+            "message": f"{fallback_count} fallback responses detected",
+        })
+    if conversation.intent == "unknown":
+        health_indicators.append({
+            "type": "unresolved_intent",
+            "severity": "info",
+            "message": "Intent could not be determined",
+        })
+
+    return {
+        "conversation": {
+            "id": conversation.id,
+            "user_id": conversation.user_id,
+            "channel": conversation.channel,
+            "user_message": conversation.user_message,
+            "bot_reply": conversation.bot_reply,
+            "intent": conversation.intent,
+            "created_at": conversation.created_at.isoformat(),
+        },
+        "status": status_value,
+        "intelligence": {
+            "primary_intent": conversation.intent,
+            "confidence": "high" if conversation.intent != "unknown" else "low",
+            "fallback_count": fallback_count,
+            "message_count": len(messages),
+        },
+        "ai_reasoning": ai_reasoning,
+        "timeline": timeline,
+        "health_indicators": health_indicators,
+        "lead": {
+            "id": lead.id,
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "status": lead.status,
+            "source_intent": lead.source_intent,
+            "created_at": lead.created_at.isoformat(),
+        } if lead else None,
+        "messages": [
+            {
+                "id": msg.id,
+                "text": msg.message_text,
+                "is_from_user": msg.is_from_user,
+                "intent": msg.intent,
+                "timestamp": msg.created_at.isoformat(),
+            }
+            for msg in messages
+        ],
     }
 
 
