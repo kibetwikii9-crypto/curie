@@ -34,7 +34,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-4">
             {/* Light mode logo */}
             <img 
-              src="/logo-main.svg" 
+              src="/logo-main.png" 
               alt="Automify AI" 
               className="h-12 w-auto dark:hidden"
               onError={(e) => {
@@ -44,7 +44,7 @@ export default function LoginPage() {
             />
             {/* Dark mode logo (white version) */}
             <img 
-              src="/logo-white.svg" 
+              src="/logo-white.png" 
               alt="Automify AI" 
               className="h-12 w-auto hidden dark:block"
               onError={(e) => {

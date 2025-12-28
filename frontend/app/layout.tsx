@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Automify AI - AI Chatbot Dashboard',
   description: 'Multi-channel AI chatbot, support, and marketing automation platform',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.png',
   },
 };
 
