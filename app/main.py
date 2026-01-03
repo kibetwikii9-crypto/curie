@@ -21,7 +21,7 @@ from app.models import (
 
 init_logging(settings.log_level)
 
-app = FastAPI(title="Automify AI - Multi-Platform Messaging API", version="0.1.0")
+app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
 
 # Add CORS middleware
 # Support both local development and production (Render)
@@ -44,6 +44,8 @@ if hasattr(settings, "frontend_url") and settings.frontend_url:
 # For production, allow common Render frontend URLs
 # Add your specific frontend URL here or via FRONTEND_URL env var
 cors_origins.append("https://curie-frontend-8hvz.onrender.com")
+# Also add automify frontend domain (if you're keeping automify services)
+cors_origins.append("https://automify-ai-frontend.onrender.com")
 
 # In production, if FRONTEND_URL is not set, allow all origins (less secure but works)
 # Remove this in production and set FRONTEND_URL explicitly
@@ -78,7 +80,7 @@ async def startup_event():
         from app.services.auth import create_user, get_user_by_email
         
         with get_db_context() as db:
-            admin_email = "admin@automify.ai"
+            admin_email = "admin@curie.com"
             existing = get_user_by_email(db, admin_email)
             if not existing:
                 admin_user = create_user(
