@@ -47,37 +47,7 @@ export default function Sidebar() {
       <div className="flex flex-col w-64">
         <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           <div className="flex items-center flex-shrink-0 px-4">
-            <div className="flex items-center space-x-2">
-              {/* Light mode logo */}
-              <img 
-                src="/logo-main.png" 
-                alt="Automify AI" 
-                className="h-8 w-auto dark:hidden"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
-              {/* Dark mode logo (white version) */}
-              <img 
-                src="/logo-white.png" 
-                alt="Automify AI" 
-                className="h-8 w-auto hidden dark:block"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  // Show text fallback if both logos fail
-                  const fallback = document.querySelector('.logo-text-fallback') as HTMLElement;
-                  if (fallback) {
-                    fallback.style.display = 'block';
-                  }
-                }}
-              />
-              {/* Text fallback */}
-              <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400 hidden logo-text-fallback">
-                Automify AI
-              </h1>
-            </div>
+            <h1 className="text-2xl font-bold text-primary-600">Automify</h1>
           </div>
           <div className="mt-5 flex-grow flex flex-col">
             <nav className="flex-1 px-2 space-y-1">

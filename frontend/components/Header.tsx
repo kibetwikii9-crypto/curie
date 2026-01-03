@@ -30,7 +30,7 @@ export default function Header() {
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center space-x-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Dashboard
+            Automify
           </h2>
         </div>
         <div className="flex items-center space-x-4">
