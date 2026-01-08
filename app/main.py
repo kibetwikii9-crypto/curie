@@ -38,6 +38,9 @@ if frontend_url_env:
     # Ensure URL has protocol (Render might return just hostname)
     if not frontend_url_env.startswith("http://") and not frontend_url_env.startswith("https://"):
         frontend_url_env = f"https://{frontend_url_env}"
+    # Fix incomplete Render URLs (missing .onrender.com)
+    if frontend_url_env == "https://automify-ai-frontend" or frontend_url_env == "automify-ai-frontend":
+        frontend_url_env = "https://automify-ai-frontend.onrender.com"
     cors_origins.append(frontend_url_env)
     print(f"✅ CORS: Added FRONTEND_URL from env: {frontend_url_env}")
 
@@ -47,6 +50,9 @@ if settings.frontend_url:
     frontend_url = settings.frontend_url.strip()
     if not frontend_url.startswith("http://") and not frontend_url.startswith("https://"):
         frontend_url = f"https://{frontend_url}"
+    # Fix incomplete Render URLs
+    if frontend_url == "https://automify-ai-frontend" or frontend_url == "automify-ai-frontend":
+        frontend_url = "https://automify-ai-frontend.onrender.com"
     if frontend_url not in cors_origins:
         cors_origins.append(frontend_url)
         print(f"✅ CORS: Added frontend_url from settings: {frontend_url}")
@@ -55,10 +61,11 @@ if settings.frontend_url:
 # This is a safety fallback to ensure CORS works
 is_production = os.getenv("ENVIRONMENT", "").lower() in ["production", "prod"] or not settings.public_url.startswith("http://localhost")
 if is_production:
-    # Add common Render frontend URL pattern as fallback
-    if "automify-ai-frontend" not in str(cors_origins):
-        cors_origins.append("https://automify-ai-frontend.onrender.com")
-        print("✅ CORS: Added fallback Render frontend URL")
+    # Always add the full Render frontend URL as fallback
+    render_frontend_url = "https://automify-ai-frontend.onrender.com"
+    if render_frontend_url not in cors_origins:
+        cors_origins.append(render_frontend_url)
+        print(f"✅ CORS: Added fallback Render frontend URL: {render_frontend_url}")
     
     # If no frontend URL is configured, allow all origins (safety fallback)
     if not frontend_url_env and not settings.frontend_url:
