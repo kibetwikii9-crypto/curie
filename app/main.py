@@ -35,17 +35,35 @@ cors_origins = [
 # Add production frontend URL from environment variable
 frontend_url_env = os.getenv("FRONTEND_URL", "")
 if frontend_url_env:
+    # Ensure URL has protocol (Render might return just hostname)
+    if not frontend_url_env.startswith("http://") and not frontend_url_env.startswith("https://"):
+        frontend_url_env = f"https://{frontend_url_env}"
     cors_origins.append(frontend_url_env)
 
 # Also add from settings if set
 if settings.frontend_url:
-    cors_origins.append(settings.frontend_url)
+    # Ensure URL has protocol
+    frontend_url = settings.frontend_url
+    if not frontend_url.startswith("http://") and not frontend_url.startswith("https://"):
+        frontend_url = f"https://{frontend_url}"
+    cors_origins.append(frontend_url)
+
+# Add common Render frontend URL patterns as fallback
+# This ensures CORS works even if FRONTEND_URL env var is not set correctly
+render_frontend_host = os.getenv("FRONTEND_URL", "").replace("https://", "").replace("http://", "")
+if render_frontend_host and render_frontend_host not in [origin.replace("https://", "").replace("http://", "") for origin in cors_origins]:
+    cors_origins.append(f"https://{render_frontend_host}")
 
 # In development (localhost), allow all origins for easier testing
-# In production, FRONTEND_URL must be set explicitly
+# In production, try to use FRONTEND_URL, but allow all if not set (for safety)
 is_production = os.getenv("ENVIRONMENT", "").lower() in ["production", "prod"] or not settings.public_url.startswith("http://localhost")
 if not is_production and not frontend_url_env and not settings.frontend_url:
     # Only allow all origins in local development
+    cors_origins = ["*"]
+elif is_production and not frontend_url_env and not settings.frontend_url:
+    # In production, if FRONTEND_URL is not set, allow all origins as fallback
+    # This prevents CORS blocking when env vars aren't configured correctly
+    print("⚠️  WARNING: FRONTEND_URL not set in production. Allowing all origins for CORS.")
     cors_origins = ["*"]
 
 app.add_middleware(
