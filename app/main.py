@@ -33,38 +33,42 @@ cors_origins = [
 ]
 
 # Add production frontend URL from environment variable
-frontend_url_env = os.getenv("FRONTEND_URL", "")
+frontend_url_env = os.getenv("FRONTEND_URL", "").strip()
 if frontend_url_env:
     # Ensure URL has protocol (Render might return just hostname)
     if not frontend_url_env.startswith("http://") and not frontend_url_env.startswith("https://"):
         frontend_url_env = f"https://{frontend_url_env}"
     cors_origins.append(frontend_url_env)
+    print(f"✅ CORS: Added FRONTEND_URL from env: {frontend_url_env}")
 
 # Also add from settings if set
 if settings.frontend_url:
     # Ensure URL has protocol
-    frontend_url = settings.frontend_url
+    frontend_url = settings.frontend_url.strip()
     if not frontend_url.startswith("http://") and not frontend_url.startswith("https://"):
         frontend_url = f"https://{frontend_url}"
-    cors_origins.append(frontend_url)
+    if frontend_url not in cors_origins:
+        cors_origins.append(frontend_url)
+        print(f"✅ CORS: Added frontend_url from settings: {frontend_url}")
 
-# Add common Render frontend URL patterns as fallback
-# This ensures CORS works even if FRONTEND_URL env var is not set correctly
-render_frontend_host = os.getenv("FRONTEND_URL", "").replace("https://", "").replace("http://", "")
-if render_frontend_host and render_frontend_host not in [origin.replace("https://", "").replace("http://", "") for origin in cors_origins]:
-    cors_origins.append(f"https://{render_frontend_host}")
-
-# In development (localhost), allow all origins for easier testing
-# In production, try to use FRONTEND_URL, but allow all if not set (for safety)
+# In production on Render, always allow the frontend service URL
+# This is a safety fallback to ensure CORS works
 is_production = os.getenv("ENVIRONMENT", "").lower() in ["production", "prod"] or not settings.public_url.startswith("http://localhost")
-if not is_production and not frontend_url_env and not settings.frontend_url:
+if is_production:
+    # Add common Render frontend URL pattern as fallback
+    if "automify-ai-frontend" not in str(cors_origins):
+        cors_origins.append("https://automify-ai-frontend.onrender.com")
+        print("✅ CORS: Added fallback Render frontend URL")
+    
+    # If no frontend URL is configured, allow all origins (safety fallback)
+    if not frontend_url_env and not settings.frontend_url:
+        print("⚠️  WARNING: FRONTEND_URL not set in production. Allowing all origins for CORS.")
+        cors_origins = ["*"]
+elif not frontend_url_env and not settings.frontend_url:
     # Only allow all origins in local development
     cors_origins = ["*"]
-elif is_production and not frontend_url_env and not settings.frontend_url:
-    # In production, if FRONTEND_URL is not set, allow all origins as fallback
-    # This prevents CORS blocking when env vars aren't configured correctly
-    print("⚠️  WARNING: FRONTEND_URL not set in production. Allowing all origins for CORS.")
-    cors_origins = ["*"]
+
+print(f"🌐 CORS origins configured: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
