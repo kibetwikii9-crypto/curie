@@ -160,21 +160,38 @@ async def connect_telegram(
     # Set webhook automatically
     from app.config import settings
     
+    # Normalize PUBLIC_URL - handle common issues
+    public_url = settings.public_url or ""
+    
+    # If PUBLIC_URL is just a service name (e.g., "automify-ai-backend"), construct full URL
+    if public_url and not public_url.startswith(("http://", "https://")):
+        # If it contains a dot, assume it's a hostname missing protocol
+        if "." in public_url:
+            public_url = f"https://{public_url}"
+            log.info(f"Auto-added https:// to PUBLIC_URL: {public_url}")
+        # If it's just a service name (no dots), construct Render URL
+        elif "onrender.com" not in public_url:
+            # Assume it's a Render service name, construct the URL
+            # Note: Render free tier URLs have format: https://service-name-xxxx.onrender.com
+            # We'll use the service name and let Render's DNS handle it
+            public_url = f"https://{public_url}.onrender.com"
+            log.info(f"Auto-constructed Render URL from service name: {public_url}")
+    
     # Validate PUBLIC_URL is set
-    if not settings.public_url or settings.public_url == "http://localhost:8000":
+    if not public_url or public_url == "http://localhost:8000":
         log.error("PUBLIC_URL is not set or is localhost. Cannot set webhook for production.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Backend URL (PUBLIC_URL) is not configured. Please set PUBLIC_URL environment variable to your backend URL (e.g., https://automify-ai-backend.onrender.com)."
+            detail="Backend URL (PUBLIC_URL) is not configured. Please set PUBLIC_URL environment variable in Render dashboard to your full backend URL (e.g., https://automify-ai-backend-xxxx.onrender.com)."
         )
     
     # Ensure webhook URL is HTTPS (Telegram requires HTTPS)
-    webhook_url = f"{settings.public_url.rstrip('/')}/telegram/webhook"
+    webhook_url = f"{public_url.rstrip('/')}/telegram/webhook"
     if not webhook_url.startswith("https://"):
         log.error(f"Webhook URL must be HTTPS, got: {webhook_url}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Webhook URL must use HTTPS. Current URL: {webhook_url}. Please set PUBLIC_URL to an HTTPS URL."
+            detail=f"Webhook URL must use HTTPS. Current PUBLIC_URL: {settings.public_url}, constructed URL: {webhook_url}. Please set PUBLIC_URL in Render dashboard to your full backend URL with https:// (e.g., https://automify-ai-backend-xxxx.onrender.com)."
         )
     
     try:
