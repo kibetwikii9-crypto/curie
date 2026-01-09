@@ -5,7 +5,6 @@ from typing import Optional
 
 import httpx
 
-from app.config import settings
 from app.schemas import MessageChannel, NormalizedMessage, TelegramUpdate
 
 log = logging.getLogger(__name__)
@@ -209,7 +208,7 @@ class TelegramService:
             )
             # Log specific error codes
             if e.response.status_code == 401:
-                log.error("Bot token is invalid or unauthorized. Check BOT_TOKEN environment variable.")
+                log.error("Bot token is invalid or unauthorized. Check the bot token in your channel integration.")
             elif e.response.status_code == 403:
                 log.error("Bot is blocked by user or doesn't have permission to send messages.")
             elif e.response.status_code == 400:
@@ -218,9 +217,5 @@ class TelegramService:
         except Exception as e:
             log.error(f"Failed to send message to chat_id {chat_id}: {type(e).__name__}: {e}", exc_info=True)
             return False
-
-
-# Global service instance
-telegram_service = TelegramService(settings.bot_token)
 
 

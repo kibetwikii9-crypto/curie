@@ -1,13 +1,17 @@
 """Telegram webhook endpoints."""
 import logging
+import json
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Depends
+from sqlalchemy.orm import Session
 
 from app.logging_context import set_request_id
 from app.schemas import TelegramUpdate
 from app.services.processor import process_message
-from app.services.telegram import normalize_telegram_message, telegram_service
+from app.services.telegram import normalize_telegram_message, TelegramService
 from app.services.conversation_service import save_conversation_from_normalized
+from app.database import get_db
+from app.models import ChannelIntegration
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -101,8 +105,36 @@ async def telegram_webhook(update: TelegramUpdate):
                 try:
                     chat_id_int = int(chat_id) if chat_id is not None else None
                     if chat_id_int:
-                        await telegram_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
-                        log.info(f"default_response_sent chat_id={chat_id_int}")
+                        # Try per-business tokens first
+                        send_success = False
+                        db = next(get_db())
+                        try:
+                            integrations = db.query(ChannelIntegration).filter(
+                                ChannelIntegration.channel == "telegram",
+                                ChannelIntegration.is_active == True
+                            ).all()
+                            
+                            for integration in integrations:
+                                try:
+                                    if integration.credentials:
+                                        credentials = json.loads(integration.credentials)
+                                        bot_token = credentials.get("bot_token")
+                                        if bot_token:
+                                            bot_service = TelegramService(bot_token)
+                                            send_success = await bot_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
+                                            if send_success:
+                                                break
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
+                        finally:
+                            db.close()
+                        
+                        if send_success:
+                            log.info(f"default_response_sent chat_id={chat_id_int}")
+                        else:
+                            log.warning(f"no_bot_token_available chat_id={chat_id_int} - No active Telegram integration found")
                 except Exception as e:
                     log.error(f"send_default_failed chat_id={chat_id} error={type(e).__name__}")
             
@@ -165,11 +197,43 @@ async def telegram_webhook(update: TelegramUpdate):
                 chat_id_int = int(chat_id) if chat_id is not None else None
                 if chat_id_int:
                     log.info(f"attempting_reply chat_id={chat_id_int} user_id={normalized_message.user_id} reply_length={len(reply_text)}")
-                    send_success = await telegram_service.send_message(chat_id_int, reply_text)
+                    
+                    # Try to find the correct bot token from database integrations
+                    # This supports per-business bot tokens (new system)
+                    send_success = False
+                    db = next(get_db())
+                    try:
+                        # Get all active Telegram integrations
+                        integrations = db.query(ChannelIntegration).filter(
+                            ChannelIntegration.channel == "telegram",
+                            ChannelIntegration.is_active == True
+                        ).all()
+                        
+                        # Try each bot token until one works
+                        for integration in integrations:
+                            try:
+                                if integration.credentials:
+                                    credentials = json.loads(integration.credentials)
+                                    bot_token = credentials.get("bot_token")
+                                    if bot_token:
+                                        # Create a service instance with this bot's token
+                                        bot_service = TelegramService(bot_token)
+                                        send_success = await bot_service.send_message(chat_id_int, reply_text)
+                                        if send_success:
+                                            log.info(f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id} bot={integration.channel_name}")
+                                            break
+                            except Exception as e:
+                                log.debug(f"tried_bot_token integration_id={integration.id} error={type(e).__name__}")
+                                continue
+                    except Exception as db_error:
+                        log.warning(f"db_lookup_failed error={type(db_error).__name__}")
+                    finally:
+                        db.close()
+                    
                     if send_success:
                         log.info(f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id}")
                     else:
-                        log.error(f"reply_send_failed chat_id={chat_id_int} user_id={normalized_message.user_id} - Check BOT_TOKEN and Render logs")
+                        log.error(f"reply_send_failed chat_id={chat_id_int} user_id={normalized_message.user_id} - No active Telegram integration found. Connect your bot via the dashboard.")
                 else:
                     log.error(f"invalid_chat_id chat_id={chat_id} user_id={normalized_message.user_id} type={type(chat_id)}")
             except (ValueError, TypeError) as e:
@@ -187,8 +251,36 @@ async def telegram_webhook(update: TelegramUpdate):
             try:
                 chat_id_int = int(chat_id) if isinstance(chat_id, (int, str)) else None
                 if chat_id_int:
-                    await telegram_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
-                    log.info(f"fallback_response_sent chat_id={chat_id_int}")
+                    # Try per-business tokens first, then fallback to global
+                    send_success = False
+                    db = next(get_db())
+                    try:
+                        integrations = db.query(ChannelIntegration).filter(
+                            ChannelIntegration.channel == "telegram",
+                            ChannelIntegration.is_active == True
+                        ).all()
+                        
+                        for integration in integrations:
+                            try:
+                                if integration.credentials:
+                                    credentials = json.loads(integration.credentials)
+                                    bot_token = credentials.get("bot_token")
+                                    if bot_token:
+                                        bot_service = TelegramService(bot_token)
+                                        send_success = await bot_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
+                                        if send_success:
+                                            break
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+                    finally:
+                        db.close()
+                    
+                    if send_success:
+                        log.info(f"fallback_response_sent chat_id={chat_id_int}")
+                    else:
+                        log.warning(f"no_bot_token_available chat_id={chat_id_int} - No active Telegram integration found")
             except Exception:
                 pass  # Already logged, don't crash
 
@@ -213,26 +305,51 @@ async def telegram_webhook(update: TelegramUpdate):
 
 
 @router.post("/test-send", status_code=status.HTTP_200_OK)
-async def test_send_message(chat_id: int, message: str = "Test message from Automify bot"):
+async def test_send_message(chat_id: int, message: str = "Test message from Automify bot", db: Session = Depends(get_db)):
     """
     Test endpoint to verify bot can send messages.
     
     This is a diagnostic endpoint to test if:
-    1. BOT_TOKEN is configured correctly
+    1. Per-business bot tokens are configured correctly
     2. Bot can send messages to a specific chat_id
     
     Usage:
     POST /telegram/test-send?chat_id=YOUR_CHAT_ID&message=Your test message
+    
+    Note: Bot must be connected via the dashboard (Integrations → Telegram)
     """
     try:
         log.info(f"test_send_requested chat_id={chat_id} message_length={len(message)}")
-        send_success = await telegram_service.send_message(chat_id, message)
-        if send_success:
-            log.info(f"test_message_sent chat_id={chat_id}")
-            return {"ok": True, "message": "Test message sent successfully", "chat_id": chat_id}
-        else:
+        
+        # Try per-business tokens first
+        send_success = False
+        try:
+            integrations = db.query(ChannelIntegration).filter(
+                ChannelIntegration.channel == "telegram",
+                ChannelIntegration.is_active == True
+            ).all()
+            
+            for integration in integrations:
+                try:
+                    if integration.credentials:
+                        credentials = json.loads(integration.credentials)
+                        bot_token = credentials.get("bot_token")
+                        if bot_token:
+                            bot_service = TelegramService(bot_token)
+                            send_success = await bot_service.send_message(chat_id, message)
+                            if send_success:
+                                log.info(f"test_message_sent chat_id={chat_id} bot={integration.channel_name}")
+                                return {"ok": True, "message": f"Test message sent successfully using {integration.channel_name}", "chat_id": chat_id}
+                except Exception as e:
+                    log.debug(f"test_tried_bot integration_id={integration.id} error={type(e).__name__}")
+                    continue
+        except Exception as db_error:
+            log.warning(f"test_db_lookup_failed error={type(db_error).__name__}")
+        
+        if not send_success:
             log.error(f"test_message_failed chat_id={chat_id}")
-            return {"ok": False, "error": "Failed to send test message. Check BOT_TOKEN and Render logs.", "chat_id": chat_id}
+            return {"ok": False, "error": "Failed to send test message. No active Telegram integration found. Connect your bot via the dashboard (Integrations → Telegram).", "chat_id": chat_id}
+            
     except Exception as e:
         log.error(f"test_send_error chat_id={chat_id} error={type(e).__name__} message={str(e)}", exc_info=True)
         return {"ok": False, "error": f"Error sending test message: {str(e)}", "chat_id": chat_id}

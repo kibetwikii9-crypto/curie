@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment."""
 
-    bot_token: str
     public_url: str = "http://localhost:8000"
     frontend_url: str = ""  # Frontend URL for CORS (optional)
     log_level: str = "INFO"
