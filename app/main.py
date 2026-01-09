@@ -88,6 +88,14 @@ if settings.frontend_url:
             cors_origins.append(frontend_url)
             print(f"[OK] CORS: Added frontend_url from settings: {frontend_url}")
 
+# Always add the Render frontend URL if backend is on Render
+# This ensures CORS works even if FRONTEND_URL env var is not set
+if settings.public_url and "onrender.com" in settings.public_url:
+    render_frontend_url = "https://automify-ai-frontend.onrender.com"
+    if render_frontend_url not in cors_origins:
+        cors_origins.append(render_frontend_url)
+        print(f"[OK] CORS: Added Render frontend URL: {render_frontend_url}")
+
 # In production on Render, always allow the frontend service URL
 # This is a safety fallback to ensure CORS works
 is_production = os.getenv("ENVIRONMENT", "").lower() in ["production", "prod"] or (
@@ -95,12 +103,6 @@ is_production = os.getenv("ENVIRONMENT", "").lower() in ["production", "prod"] o
 )
 allow_all_origins = False
 if is_production:
-    # Always add the full Render frontend URL explicitly (critical for CORS)
-    render_frontend_url = "https://automify-ai-frontend.onrender.com"
-    if render_frontend_url not in cors_origins:
-        cors_origins.append(render_frontend_url)
-        print(f"[OK] CORS: Added fallback Render frontend URL: {render_frontend_url}")
-    
     # Safety: If still no valid frontend URL, we'll allow all origins but disable credentials
     if len(cors_origins) <= 2:  # Only localhost origins
         print("[WARN] No production frontend URL detected. Allowing all origins for CORS (credentials disabled).")
@@ -110,6 +112,13 @@ elif not frontend_url_env and not settings.frontend_url:
     # Only allow all origins in local development if no URL is set
     cors_origins = ["*"]
     allow_all_origins = True
+
+# Final safety check: If backend is on Render, always ensure frontend URL is included
+if settings.public_url and "onrender.com" in settings.public_url:
+    render_frontend_url = "https://automify-ai-frontend.onrender.com"
+    if render_frontend_url not in cors_origins:
+        cors_origins.append(render_frontend_url)
+        print(f"[SAFETY] CORS: Ensured Render frontend URL is included: {render_frontend_url}")
 
 print(f"[INFO] CORS origins configured: {cors_origins}")
 
