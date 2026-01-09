@@ -68,7 +68,7 @@ export default function SalesProductsPage() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
       return;
     }
 
