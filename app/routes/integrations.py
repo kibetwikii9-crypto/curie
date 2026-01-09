@@ -161,21 +161,24 @@ async def connect_telegram(
     from app.config import settings
     
     # Normalize PUBLIC_URL - handle common issues
-    public_url = settings.public_url or ""
+    # Render's fromService with property:host returns just the hostname (e.g., "automify-ai-backend-xxxx.onrender.com")
+    # We need to ensure it has https:// protocol
+    public_url = (settings.public_url or "").strip()
     
-    # If PUBLIC_URL is just a service name (e.g., "automify-ai-backend"), construct full URL
+    # Remove any trailing slashes
+    public_url = public_url.rstrip('/')
+    
+    # If PUBLIC_URL doesn't start with http:// or https://, add https://
     if public_url and not public_url.startswith(("http://", "https://")):
-        # If it contains a dot, assume it's a hostname missing protocol
+        # If it contains a dot, it's likely a hostname (e.g., "automify-ai-backend-xxxx.onrender.com")
         if "." in public_url:
             public_url = f"https://{public_url}"
-            log.info(f"Auto-added https:// to PUBLIC_URL: {public_url}")
+            log.info(f"Auto-added https:// to PUBLIC_URL. Original: {settings.public_url}, Fixed: {public_url}")
         # If it's just a service name (no dots), construct Render URL
-        elif "onrender.com" not in public_url:
-            # Assume it's a Render service name, construct the URL
-            # Note: Render free tier URLs have format: https://service-name-xxxx.onrender.com
-            # We'll use the service name and let Render's DNS handle it
+        elif public_url and "onrender.com" not in public_url:
+            # This shouldn't happen with Render's fromService, but handle it anyway
             public_url = f"https://{public_url}.onrender.com"
-            log.info(f"Auto-constructed Render URL from service name: {public_url}")
+            log.info(f"Auto-constructed Render URL from service name. Original: {settings.public_url}, Fixed: {public_url}")
     
     # Validate PUBLIC_URL is set
     if not public_url or public_url == "http://localhost:8000":
