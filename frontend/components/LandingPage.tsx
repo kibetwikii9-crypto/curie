@@ -1,0 +1,368 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import AuthModal from './AuthModal';
+
+export default function LandingPage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      setPrefersReducedMotion(mediaQuery.matches);
+      
+      const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#007FFF]"></div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-gray-900 relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Gradient Layers */}
+        <div 
+          className="absolute inset-0 opacity-30"
+          style={{
+            background: 'radial-gradient(circle at 20% 50%, rgba(0, 127, 255, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%)',
+          }}
+        />
+        
+        {/* Floating Shapes */}
+        {!prefersReducedMotion && (
+          <>
+            <div 
+              className="absolute w-72 h-72 rounded-full bg-[#007FFF] opacity-5 blur-3xl"
+              style={{
+                top: '10%',
+                left: '10%',
+                animation: 'float 20s ease-in-out infinite',
+              }}
+            />
+            <div 
+              className="absolute w-96 h-96 rounded-full bg-yellow-400 opacity-5 blur-3xl"
+              style={{
+                top: '60%',
+                right: '10%',
+                animation: 'float 25s ease-in-out infinite reverse',
+              }}
+            />
+            <div 
+              className="absolute w-64 h-64 rounded-full bg-gray-400 opacity-5 blur-3xl"
+              style={{
+                bottom: '20%',
+                left: '50%',
+                animation: 'float 30s ease-in-out infinite',
+              }}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="relative z-10 px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#007FFF] to-[#0055CC] flex items-center justify-center">
+              <Sparkles className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">Automify</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                setAuthModalTab('signin');
+                setShowAuthModal(true);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => {
+                setAuthModalTab('signup');
+                setShowAuthModal(true);
+              }}
+              className="px-6 py-2 text-sm font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-colors shadow-lg shadow-[#007FFF]/20"
+            >
+              Sign Up
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="relative z-10 px-4 sm:px-6 lg:px-8 pt-20 pb-32">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-4xl mx-auto">
+            {/* Headline */}
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
+              Multi-Channel AI Business Assistant
+              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] to-[#0055CC] bg-clip-text text-transparent">
+                That Works Everywhere
+              </span>
+            </h1>
+            
+            {/* Subheadline */}
+            <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-300 mb-10 leading-relaxed">
+              Connect with customers across WhatsApp, Telegram, Instagram, and more. 
+              Powered by AI that understands context and delivers personalized experiences.
+            </p>
+
+            {/* CTAs */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+              <button
+                onClick={() => {
+                  setAuthModalTab('signup');
+                  setShowAuthModal(true);
+                }}
+                className="group px-8 py-4 text-lg font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/40 flex items-center gap-2"
+              >
+                Get Started Free
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <button
+                onClick={() => {
+                  setAuthModalTab('signin');
+                  setShowAuthModal(true);
+                }}
+                className="px-8 py-4 text-lg font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-[#007FFF] dark:hover:border-[#007FFF] rounded-lg transition-all"
+              >
+                Sign In
+              </button>
+            </div>
+
+            {/* Optional Visual Element */}
+            <div className="relative mt-16">
+              <div className="relative mx-auto max-w-3xl">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/20 to-yellow-400/20 rounded-2xl blur-3xl" />
+                <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-2xl">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="flex flex-col items-center text-center">
+                      <div className="w-16 h-16 rounded-full bg-[#007FFF]/10 flex items-center justify-center mb-4">
+                        <MessageSquare className="h-8 w-8 text-[#007FFF]" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Multi-Channel</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Connect everywhere your customers are</p>
+                    </div>
+                    <div className="flex flex-col items-center text-center">
+                      <div className="w-16 h-16 rounded-full bg-yellow-400/10 flex items-center justify-center mb-4">
+                        <Zap className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">AI-Powered</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Intelligent responses that understand context</p>
+                    </div>
+                    <div className="flex flex-col items-center text-center">
+                      <div className="w-16 h-16 rounded-full bg-gray-400/10 flex items-center justify-center mb-4">
+                        <Shield className="h-8 w-8 text-gray-600 dark:text-gray-400" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Enterprise-Grade</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Secure, scalable, and reliable</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Learn More Section */}
+      <section className="relative z-10 px-4 sm:px-6 lg:px-8 py-20 bg-gray-50 dark:bg-gray-800/50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Everything You Need to Scale
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+              Powerful features designed to help you engage customers, automate workflows, and grow your business.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                icon: Globe,
+                title: 'Omnichannel Support',
+                description: 'Manage conversations from WhatsApp, Telegram, Instagram, Facebook, and more from one unified dashboard.',
+                color: 'text-[#007FFF]',
+                bgColor: 'bg-[#007FFF]/10',
+              },
+              {
+                icon: Sparkles,
+                title: 'AI-Powered Responses',
+                description: 'Leverage advanced AI to understand context, provide accurate answers, and maintain natural conversations.',
+                color: 'text-yellow-600 dark:text-yellow-400',
+                bgColor: 'bg-yellow-400/10',
+              },
+              {
+                icon: Zap,
+                title: 'Automation & Rules',
+                description: 'Create custom automation rules, handle common queries automatically, and escalate when needed.',
+                color: 'text-[#007FFF]',
+                bgColor: 'bg-[#007FFF]/10',
+              },
+              {
+                icon: Shield,
+                title: 'Security & Compliance',
+                description: 'Enterprise-grade security with role-based access control, audit logs, and data encryption.',
+                color: 'text-gray-600 dark:text-gray-400',
+                bgColor: 'bg-gray-400/10',
+              },
+              {
+                icon: MessageSquare,
+                title: 'Knowledge Base',
+                description: 'Build and maintain a comprehensive knowledge base that your AI can reference for accurate responses.',
+                color: 'text-[#007FFF]',
+                bgColor: 'bg-[#007FFF]/10',
+              },
+              {
+                icon: Zap,
+                title: 'Analytics & Insights',
+                description: 'Track performance, understand customer behavior, and make data-driven decisions with detailed analytics.',
+                color: 'text-yellow-600 dark:text-yellow-400',
+                bgColor: 'bg-yellow-400/10',
+              },
+            ].map((feature, idx) => {
+              const Icon = feature.icon;
+              return (
+                <div
+                  key={idx}
+                  className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:border-[#007FFF] dark:hover:border-[#007FFF] transition-all hover:shadow-lg"
+                >
+                  <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4`}>
+                    <Icon className={`h-6 w-6 ${feature.color}`} />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {feature.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="relative z-10 px-4 sm:px-6 lg:px-8 py-12 bg-gray-900 dark:bg-black border-t border-gray-800">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#007FFF] to-[#0055CC] flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+                <span className="text-lg font-bold text-white">Automify</span>
+              </div>
+              <p className="text-gray-400 text-sm">
+                Multi-channel AI Business Assistant platform for modern businesses.
+              </p>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Product</h4>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Features
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Pricing
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Integrations
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Company</h4>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    About
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Contact
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Blog
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Legal</h4>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                    Cookie Policy
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="pt-8 border-t border-gray-800 text-center">
+            <p className="text-gray-400 text-sm">
+              © {new Date().getFullYear()} Automify. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)}
+        initialTab={authModalTab}
+      />
+    </div>
+  );
+}
+
