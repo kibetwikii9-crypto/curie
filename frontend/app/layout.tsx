@@ -6,7 +6,7 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Curie - AI Chatbot Dashboard',
+  title: 'Automify - AI Chatbot Dashboard',
   description: 'Multi-channel AI chatbot, support, and marketing automation platform',
 };
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -31,8 +32,24 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="max-w-md w-full space-y-8">
         <div>
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/logo-main.png"
+              alt="Automify"
+              width={180}
+              height={60}
+              className="h-16 w-auto dark:hidden"
+            />
+            <Image
+              src="/logo-white.png"
+              alt="Automify"
+              width={180}
+              height={60}
+              className="h-16 w-auto hidden dark:block"
+            />
+          </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Sign in to Curie
+            Sign in to Automify
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             Multi-channel AI chatbot platform

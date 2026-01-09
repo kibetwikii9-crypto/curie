@@ -24,10 +24,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60  # 30 days
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a hash."""
     try:
-        # Handle both bcrypt and passlib formats
-        if hashed_password.startswith("$2b$") or hashed_password.startswith("$2a$"):
-            return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-        # Fallback for passlib format
+        # Bcrypt hashes start with $2b$ or $2a$
+        # All bcrypt hashes use the same verification method
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
         return False

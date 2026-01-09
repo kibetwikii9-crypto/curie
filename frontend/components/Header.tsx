@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/auth';
 import { LogOut, Moon, Sun } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -29,9 +30,20 @@ export default function Header() {
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Curie
-          </h2>
+          <Image
+            src="/logo-main-no-tagline.png"
+            alt="Automify"
+            width={120}
+            height={40}
+            className="h-8 w-auto dark:hidden"
+          />
+          <Image
+            src="/logo-white-no-tagline.png"
+            alt="Automify"
+            width={120}
+            height={40}
+            className="h-8 w-auto hidden dark:block"
+          />
         </div>
         <div className="flex items-center space-x-4">
           <button

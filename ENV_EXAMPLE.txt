@@ -17,7 +17,7 @@ DATABASE_URL=postgresql://user:password@host:port/database
 SECRET_KEY=your-secret-key-change-in-production
 
 # Admin User Configuration (optional - for auto-creation on startup)
-ADMIN_EMAIL=admin@curie.com
+ADMIN_EMAIL=admin@automify.com
 ADMIN_PASSWORD=your_secure_admin_password_here
 
 # Logging
