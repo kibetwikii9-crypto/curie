@@ -1490,7 +1490,7 @@ export default function SalesProductsPage() {
                               </div>
                               {stat.change !== 'N/A' && (
                                 <div className="ml-2 flex items-baseline text-sm font-semibold text-green-600">
-                                  <ArrowUpRight className="h-4 w-4" />
+                                  <TrendingUp className="h-4 w-4" />
                                   {stat.change}
                                 </div>
                               )}
