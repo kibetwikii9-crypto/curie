@@ -97,8 +97,10 @@ async def get_overview(
         lead_rate = (channel_leads / count * 100) if count > 0 else 0
         
         # AI resolution rate (conversations that didn't escalate to human)
-        # For now, assume all are AI-resolved (no human handoff tracking yet)
-        ai_resolution_rate = 95.0  # Placeholder - can be enhanced later
+        # Calculate based on actual data - all conversations are AI-handled in current system
+        # In future, track human handoffs to calculate accurately
+        total_channel_conv = db.query(func.count(Conversation.id)).filter(channel_conv_filter).scalar() or 0
+        ai_resolution_rate = 100.0 if total_channel_conv > 0 else 0.0  # All are AI-resolved currently
         
         # Peak activity (hour with most messages)
         channel_conv_filter = and_(Conversation.channel == channel, conv_filter)
@@ -468,10 +470,16 @@ async def get_knowledge_base(
     from sqlalchemy import or_
     import json
     
-    # For now, use default business_id (can be enhanced with multi-tenant later)
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
     
-    query = db.query(KnowledgeEntry).filter(KnowledgeEntry.business_id == default_business_id)
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    query = db.query(KnowledgeEntry).filter(KnowledgeEntry.business_id == business_id)
     
     # Apply filters
     if intent:
@@ -506,11 +514,13 @@ async def get_knowledge_base(
             try:
                 keywords = json.loads(entry.keywords) if isinstance(entry.keywords, str) else entry.keywords
                 if keywords and isinstance(keywords, list):
-                    # Count conversations with matching keywords
-                    usage_count = db.query(func.count(Conversation.id)).filter(
+                    # Count conversations with matching keywords (filtered by business)
+                    usage_filter = and_(
                         Conversation.created_at >= start_date,
+                        Conversation.business_id == business_id,
                         or_(*[Conversation.user_message.ilike(f"%{kw}%") for kw in keywords[:3]])
-                    ).scalar() or 0
+                    )
+                    usage_count = db.query(func.count(Conversation.id)).filter(usage_filter).scalar() or 0
             except:
                 keywords = []
         
@@ -562,36 +572,46 @@ async def get_knowledge_health(
     db: Session = Depends(get_db),
 ):
     """Get knowledge base health and coverage metrics."""
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
     start_date = datetime.utcnow() - timedelta(days=30)
     
     # Total knowledge entries
     total_entries = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == default_business_id
+        KnowledgeEntry.business_id == business_id
     ).scalar() or 0
     
     # Active entries
     active_entries = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == default_business_id,
+        KnowledgeEntry.business_id == business_id,
         KnowledgeEntry.is_active == True
     ).scalar() or 0
     
     # Entries with intent links
     entries_with_intent = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == default_business_id,
+        KnowledgeEntry.business_id == business_id,
         KnowledgeEntry.intent.isnot(None),
         KnowledgeEntry.intent != ""
     ).scalar() or 0
     
-    # Get all intents from conversations
-    conversation_intents = db.query(Conversation.intent).filter(
-        Conversation.created_at >= start_date
-    ).distinct().all()
+    # Get all intents from conversations (filtered by business)
+    conv_intent_filter = and_(
+        Conversation.created_at >= start_date,
+        Conversation.business_id == business_id
+    )
+    conversation_intents = db.query(Conversation.intent).filter(conv_intent_filter).distinct().all()
     all_intents = [intent[0] for intent in conversation_intents if intent[0] and intent[0] != "unknown"]
     
     # Get intents with knowledge entries
     knowledge_intents = db.query(KnowledgeEntry.intent).filter(
-        KnowledgeEntry.business_id == default_business_id,
+        KnowledgeEntry.business_id == business_id,
         KnowledgeEntry.intent.isnot(None),
         KnowledgeEntry.intent != ""
     ).distinct().all()
@@ -616,17 +636,29 @@ async def get_intent_knowledge_mapping(
     db: Session = Depends(get_db),
 ):
     """Get intent to knowledge entry mapping."""
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
     start_date = datetime.utcnow() - timedelta(days=30)
     
-    # Get all intents from conversations
+    # Get all intents from conversations (filtered by business)
+    conv_intent_filter = and_(
+        Conversation.created_at >= start_date,
+        Conversation.business_id == business_id
+    )
     conversation_intents = db.query(Conversation.intent, func.count(Conversation.id).label("count")).filter(
-        Conversation.created_at >= start_date
+        conv_intent_filter
     ).group_by(Conversation.intent).all()
     
-    # Get all knowledge entries
+    # Get all knowledge entries (filtered by business)
     knowledge_entries = db.query(KnowledgeEntry).filter(
-        KnowledgeEntry.business_id == default_business_id
+        KnowledgeEntry.business_id == business_id
     ).all()
     
     # Build mapping
@@ -660,13 +692,21 @@ async def get_knowledge_entry_detail(
     db: Session = Depends(get_db),
 ):
     """Get detailed knowledge entry with usage data."""
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
     from sqlalchemy import or_
     import json
     
     entry = db.query(KnowledgeEntry).filter(
         KnowledgeEntry.id == entry_id,
-        KnowledgeEntry.business_id == default_business_id
+        KnowledgeEntry.business_id == business_id
     ).first()
     
     if not entry:
@@ -745,30 +785,42 @@ async def get_conversation_detail(
         Message.channel == conversation.channel
     ).order_by(Message.created_at.asc()).all()
 
-    # Get conversation memory
-    memory = db.query(ConversationMemory).filter(
+    # Get conversation memory (filtered by business)
+    memory_filter = and_(
         ConversationMemory.user_id == conversation.user_id,
         ConversationMemory.channel == conversation.channel
-    ).first()
+    )
+    if business_id is not None:
+        memory_filter = and_(memory_filter, ConversationMemory.business_id == business_id)
+    memory = db.query(ConversationMemory).filter(memory_filter).first()
 
-    # Get associated lead
-    lead = db.query(Lead).filter(
+    # Get associated lead (filtered by business)
+    lead_filter = and_(
         Lead.user_id == conversation.user_id,
         Lead.channel == conversation.channel
-    ).first()
+    )
+    if business_id is not None:
+        lead_filter = and_(lead_filter, Lead.business_id == business_id)
+    lead = db.query(Lead).filter(lead_filter).first()
 
-    # Get all conversations from this user for timeline
-    all_user_conversations = db.query(Conversation).filter(
+    # Get all conversations from this user for timeline (filtered by business)
+    all_user_conv_filter = and_(
         Conversation.user_id == conversation.user_id,
         Conversation.channel == conversation.channel
-    ).order_by(Conversation.created_at.asc()).all()
+    )
+    if business_id is not None:
+        all_user_conv_filter = and_(all_user_conv_filter, Conversation.business_id == business_id)
+    all_user_conversations = db.query(Conversation).filter(all_user_conv_filter).order_by(Conversation.created_at.asc()).all()
 
-    # Count fallbacks
-    fallback_count = db.query(func.count(Conversation.id)).filter(
+    # Count fallbacks (filtered by business)
+    fallback_filter = and_(
         Conversation.user_id == conversation.user_id,
         Conversation.channel == conversation.channel,
         Conversation.intent == "unknown"
-    ).scalar() or 0
+    )
+    if business_id is not None:
+        fallback_filter = and_(fallback_filter, Conversation.business_id == business_id)
+    fallback_count = db.query(func.count(Conversation.id)).filter(fallback_filter).scalar() or 0
 
     # Determine status
     status_value = "ai-handled"
@@ -879,12 +931,19 @@ async def get_intent_analytics(
     db: Session = Depends(get_db),
 ):
     """Get intent analytics over time."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
 
-    # Intent frequency
+    # Intent frequency (filtered by business)
+    intent_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        intent_filter = and_(intent_filter, Conversation.business_id == business_id)
+    
     intent_data = (
         db.query(Conversation.intent, func.count(Conversation.id).label("count"))
-        .filter(Conversation.created_at >= start_date)
+        .filter(intent_filter)
         .group_by(Conversation.intent)
         .order_by(func.count(Conversation.id).desc())
         .all()
@@ -903,7 +962,15 @@ async def get_channel_analytics(
     db: Session = Depends(get_db),
 ):
     """Get channel performance analytics."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
+
+    # Channel data (filtered by business)
+    channel_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        channel_filter = and_(channel_filter, Conversation.business_id == business_id)
 
     channel_data = (
         db.query(
@@ -911,7 +978,7 @@ async def get_channel_analytics(
             func.count(Conversation.id).label("total"),
             func.count(func.distinct(Conversation.user_id)).label("unique_users"),
         )
-        .filter(Conversation.created_at >= start_date)
+        .filter(channel_filter)
         .group_by(Conversation.channel)
         .all()
     )
@@ -932,15 +999,22 @@ async def get_timeline_analytics(
     db: Session = Depends(get_db),
 ):
     """Get conversation timeline data."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
 
-    # Group by day
+    # Group by day (filtered by business)
+    timeline_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        timeline_filter = and_(timeline_filter, Conversation.business_id == business_id)
+    
     timeline_data = (
         db.query(
             func.date(Conversation.created_at).label("date"),
             func.count(Conversation.id).label("count"),
         )
-        .filter(Conversation.created_at >= start_date)
+        .filter(timeline_filter)
         .group_by(func.date(Conversation.created_at))
         .order_by(func.date(Conversation.created_at))
         .all()
@@ -959,29 +1033,38 @@ async def get_performance_summary(
     db: Session = Depends(get_db),
 ):
     """Get executive performance summary with trends."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     previous_start = datetime.utcnow() - timedelta(days=days * 2)
     previous_end = start_date
     
-    # Current period metrics
-    current_conversations = db.query(func.count(Conversation.id)).filter(
-        Conversation.created_at >= start_date
-    ).scalar() or 0
+    # Current period metrics (filtered by business)
+    current_conv_filter = Conversation.created_at >= start_date
+    current_lead_filter = Lead.created_at >= start_date
+    if business_id is not None:
+        current_conv_filter = and_(current_conv_filter, Conversation.business_id == business_id)
+        current_lead_filter = and_(current_lead_filter, Lead.business_id == business_id)
     
-    current_leads = db.query(func.count(Lead.id)).filter(
-        Lead.created_at >= start_date
-    ).scalar() or 0
+    current_conversations = db.query(func.count(Conversation.id)).filter(current_conv_filter).scalar() or 0
+    current_leads = db.query(func.count(Lead.id)).filter(current_lead_filter).scalar() or 0
     
-    # Previous period metrics
-    previous_conversations = db.query(func.count(Conversation.id)).filter(
+    # Previous period metrics (filtered by business)
+    previous_conv_filter = and_(
         Conversation.created_at >= previous_start,
         Conversation.created_at < previous_end
-    ).scalar() or 0
-    
-    previous_leads = db.query(func.count(Lead.id)).filter(
+    )
+    previous_lead_filter = and_(
         Lead.created_at >= previous_start,
         Lead.created_at < previous_end
-    ).scalar() or 0
+    )
+    if business_id is not None:
+        previous_conv_filter = and_(previous_conv_filter, Conversation.business_id == business_id)
+        previous_lead_filter = and_(previous_lead_filter, Lead.business_id == business_id)
+    
+    previous_conversations = db.query(func.count(Conversation.id)).filter(previous_conv_filter).scalar() or 0
+    previous_leads = db.query(func.count(Lead.id)).filter(previous_lead_filter).scalar() or 0
     
     # Calculate trends
     conv_trend = ((current_conversations - previous_conversations) / max(previous_conversations, 1)) * 100 if previous_conversations > 0 else 0
@@ -1019,28 +1102,42 @@ async def get_conversation_flow(
     db: Session = Depends(get_db),
 ):
     """Get conversation volume and flow analysis."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     
-    # Daily conversation volume
+    # Daily conversation volume (filtered by business)
+    flow_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        flow_filter = and_(flow_filter, Conversation.business_id == business_id)
+    
     daily_volume = (
         db.query(
             func.date(Conversation.created_at).label("date"),
             func.count(Conversation.id).label("count"),
         )
-        .filter(Conversation.created_at >= start_date)
+        .filter(flow_filter)
         .group_by(func.date(Conversation.created_at))
         .order_by(func.date(Conversation.created_at))
         .all()
     )
     
-    # Message depth per conversation (simplified - count messages per user)
+    # Message depth per conversation (filtered by business)
+    message_depth_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        message_depth_filter = and_(message_depth_filter, Conversation.business_id == business_id)
+    
     message_depth = (
         db.query(
             Conversation.user_id,
             func.count(Message.id).label("message_count")
         )
-        .join(Message, Message.user_id == Conversation.user_id)
-        .filter(Conversation.created_at >= start_date)
+        .join(Message, and_(
+            Message.user_id == Conversation.user_id,
+            Message.channel == Conversation.channel
+        ))
+        .filter(message_depth_filter)
         .group_by(Conversation.user_id)
         .all()
     )
@@ -1061,35 +1158,48 @@ async def get_intent_performance(
     db: Session = Depends(get_db),
 ):
     """Get deep intent performance analytics."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     
-    # Intent frequency over time
+    # Intent frequency over time (filtered by business)
+    intent_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        intent_filter = and_(intent_filter, Conversation.business_id == business_id)
+    
     intent_frequency = (
         db.query(
             Conversation.intent,
             func.count(Conversation.id).label("count")
         )
-        .filter(Conversation.created_at >= start_date)
+        .filter(intent_filter)
         .group_by(Conversation.intent)
         .order_by(func.count(Conversation.id).desc())
         .all()
     )
     
-    # Intent to lead conversion
+    # Intent to lead conversion (filtered by business)
     intent_performance = []
     for intent, count in intent_frequency:
-        intent_leads = db.query(func.count(Lead.id)).filter(
+        lead_filter = and_(
             Lead.source_intent == intent,
             Lead.created_at >= start_date
-        ).scalar() or 0
+        )
+        if business_id is not None:
+            lead_filter = and_(lead_filter, Lead.business_id == business_id)
+        intent_leads = db.query(func.count(Lead.id)).filter(lead_filter).scalar() or 0
         
         conversion_rate = (intent_leads / count * 100) if count > 0 else 0
         
-        # Check for fallbacks
-        fallback_count = db.query(func.count(Conversation.id)).filter(
+        # Check for fallbacks (filtered by business)
+        fallback_filter = and_(
             Conversation.intent == "unknown",
             Conversation.created_at >= start_date
-        ).scalar() or 0
+        )
+        if business_id is not None:
+            fallback_filter = and_(fallback_filter, Conversation.business_id == business_id)
+        fallback_count = db.query(func.count(Conversation.id)).filter(fallback_filter).scalar() or 0
         
         intent_performance.append({
             "intent": intent,
@@ -1113,37 +1223,52 @@ async def get_channel_efficiency(
     db: Session = Depends(get_db),
 ):
     """Get channel efficiency reports (different from basic channel analytics)."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     
-    channels = db.query(Conversation.channel).filter(
-        Conversation.created_at >= start_date
-    ).distinct().all()
+    # Get channels (filtered by business)
+    channel_base_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        channel_base_filter = and_(channel_base_filter, Conversation.business_id == business_id)
+    
+    channels = db.query(Conversation.channel).filter(channel_base_filter).distinct().all()
     
     channel_efficiency = []
     for channel_tuple in channels:
         channel = channel_tuple[0]
         
-        # Total conversations
-        total_conv = db.query(func.count(Conversation.id)).filter(
+        # Total conversations (filtered by business)
+        conv_filter = and_(
             Conversation.channel == channel,
             Conversation.created_at >= start_date
-        ).scalar() or 0
+        )
+        if business_id is not None:
+            conv_filter = and_(conv_filter, Conversation.business_id == business_id)
+        total_conv = db.query(func.count(Conversation.id)).filter(conv_filter).scalar() or 0
         
-        # Leads from this channel
-        channel_leads = db.query(func.count(Lead.id)).filter(
+        # Leads from this channel (filtered by business)
+        lead_filter = and_(
             Lead.channel == channel,
             Lead.created_at >= start_date
-        ).scalar() or 0
+        )
+        if business_id is not None:
+            lead_filter = and_(lead_filter, Lead.business_id == business_id)
+        channel_leads = db.query(func.count(Lead.id)).filter(lead_filter).scalar() or 0
         
         # AI resolution rate (all are AI-resolved in Phase 1)
         ai_resolution_rate = 100.0
         
-        # Lead quality (simplified - based on status)
-        qualified_leads = db.query(func.count(Lead.id)).filter(
+        # Lead quality (simplified - based on status, filtered by business)
+        qualified_lead_filter = and_(
             Lead.channel == channel,
             Lead.status.in_(["qualified", "converted"]),
             Lead.created_at >= start_date
-        ).scalar() or 0
+        )
+        if business_id is not None:
+            qualified_lead_filter = and_(qualified_lead_filter, Lead.business_id == business_id)
+        qualified_leads = db.query(func.count(Lead.id)).filter(qualified_lead_filter).scalar() or 0
         
         lead_quality = (qualified_leads / max(channel_leads, 1)) * 100 if channel_leads > 0 else 0
         
@@ -1168,23 +1293,37 @@ async def get_automation_effectiveness(
     db: Session = Depends(get_db),
 ):
     """Get automation and AI effectiveness analytics."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     
-    total_conversations = db.query(func.count(Conversation.id)).filter(
-        Conversation.created_at >= start_date
-    ).scalar() or 0
+    # Total conversations (filtered by business)
+    total_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        total_filter = and_(total_filter, Conversation.business_id == business_id)
     
-    # Successful AI responses (non-fallback)
-    successful_ai = db.query(func.count(Conversation.id)).filter(
+    total_conversations = db.query(func.count(Conversation.id)).filter(total_filter).scalar() or 0
+    
+    # Successful AI responses (non-fallback, filtered by business)
+    successful_filter = and_(
         Conversation.created_at >= start_date,
         Conversation.intent != "unknown"
-    ).scalar() or 0
+    )
+    if business_id is not None:
+        successful_filter = and_(successful_filter, Conversation.business_id == business_id)
     
-    # Fallback frequency
-    fallback_count = db.query(func.count(Conversation.id)).filter(
+    successful_ai = db.query(func.count(Conversation.id)).filter(successful_filter).scalar() or 0
+    
+    # Fallback frequency (filtered by business)
+    fallback_filter = and_(
         Conversation.created_at >= start_date,
         Conversation.intent == "unknown"
-    ).scalar() or 0
+    )
+    if business_id is not None:
+        fallback_filter = and_(fallback_filter, Conversation.business_id == business_id)
+    
+    fallback_count = db.query(func.count(Conversation.id)).filter(fallback_filter).scalar() or 0
     
     fallback_rate = (fallback_count / max(total_conversations, 1)) * 100
     
@@ -1258,15 +1397,22 @@ async def get_time_behavior(
     db: Session = Depends(get_db),
 ):
     """Get time-based behavior insights."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     
-    # Peak engagement hours
+    # Peak engagement hours (filtered by business)
+    time_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        time_filter = and_(time_filter, Conversation.business_id == business_id)
+    
     hour_distribution = (
         db.query(
             func.extract('hour', Conversation.created_at).label("hour"),
             func.count(Conversation.id).label("count")
         )
-        .filter(Conversation.created_at >= start_date)
+        .filter(time_filter)
         .group_by(func.extract('hour', Conversation.created_at))
         .order_by(func.count(Conversation.id).desc())
         .all()
@@ -1274,13 +1420,13 @@ async def get_time_behavior(
     
     peak_hour = int(hour_distribution[0][0]) if hour_distribution else None
     
-    # Peak engagement days
+    # Peak engagement days (filtered by business)
     day_distribution = (
         db.query(
             func.extract('dow', Conversation.created_at).label("day"),
             func.count(Conversation.id).label("count")
         )
-        .filter(Conversation.created_at >= start_date)
+        .filter(time_filter)
         .group_by(func.extract('dow', Conversation.created_at))
         .order_by(func.count(Conversation.id).desc())
         .all()
@@ -1304,31 +1450,42 @@ async def get_anomalies(
     db: Session = Depends(get_db),
 ):
     """Get anomaly and trend detection (rule-based)."""
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     previous_start = datetime.utcnow() - timedelta(days=days * 2)
     previous_end = start_date
     
-    # Current vs previous period
-    current_conv = db.query(func.count(Conversation.id)).filter(
-        Conversation.created_at >= start_date
-    ).scalar() or 0
-    
-    previous_conv = db.query(func.count(Conversation.id)).filter(
+    # Current vs previous period (filtered by business)
+    current_conv_filter = Conversation.created_at >= start_date
+    previous_conv_filter = and_(
         Conversation.created_at >= previous_start,
         Conversation.created_at < previous_end
-    ).scalar() or 0
+    )
+    if business_id is not None:
+        current_conv_filter = and_(current_conv_filter, Conversation.business_id == business_id)
+        previous_conv_filter = and_(previous_conv_filter, Conversation.business_id == business_id)
     
-    # Current fallbacks
-    current_fallbacks = db.query(func.count(Conversation.id)).filter(
+    current_conv = db.query(func.count(Conversation.id)).filter(current_conv_filter).scalar() or 0
+    previous_conv = db.query(func.count(Conversation.id)).filter(previous_conv_filter).scalar() or 0
+    
+    # Current fallbacks (filtered by business)
+    current_fallback_filter = and_(
         Conversation.created_at >= start_date,
         Conversation.intent == "unknown"
-    ).scalar() or 0
-    
-    previous_fallbacks = db.query(func.count(Conversation.id)).filter(
+    )
+    previous_fallback_filter = and_(
         Conversation.created_at >= previous_start,
         Conversation.created_at < previous_end,
         Conversation.intent == "unknown"
-    ).scalar() or 0
+    )
+    if business_id is not None:
+        current_fallback_filter = and_(current_fallback_filter, Conversation.business_id == business_id)
+        previous_fallback_filter = and_(previous_fallback_filter, Conversation.business_id == business_id)
+    
+    current_fallbacks = db.query(func.count(Conversation.id)).filter(current_fallback_filter).scalar() or 0
+    previous_fallbacks = db.query(func.count(Conversation.id)).filter(previous_fallback_filter).scalar() or 0
     
     anomalies = []
     
@@ -1419,10 +1576,16 @@ async def get_knowledge_base(
     from sqlalchemy import or_
     import json
     
-    # For now, use default business_id (can be enhanced with multi-tenant later)
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
     
-    query = db.query(KnowledgeEntry).filter(KnowledgeEntry.business_id == default_business_id)
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    query = db.query(KnowledgeEntry).filter(KnowledgeEntry.business_id == business_id)
     
     # Apply filters
     if intent:
@@ -1457,11 +1620,13 @@ async def get_knowledge_base(
             try:
                 keywords = json.loads(entry.keywords) if isinstance(entry.keywords, str) else entry.keywords
                 if keywords and isinstance(keywords, list):
-                    # Count conversations with matching keywords
-                    usage_count = db.query(func.count(Conversation.id)).filter(
+                    # Count conversations with matching keywords (filtered by business)
+                    usage_filter = and_(
                         Conversation.created_at >= start_date,
+                        Conversation.business_id == business_id,
                         or_(*[Conversation.user_message.ilike(f"%{kw}%") for kw in keywords[:3]])
-                    ).scalar() or 0
+                    )
+                    usage_count = db.query(func.count(Conversation.id)).filter(usage_filter).scalar() or 0
             except:
                 keywords = []
         
@@ -1513,36 +1678,46 @@ async def get_knowledge_health(
     db: Session = Depends(get_db),
 ):
     """Get knowledge base health and coverage metrics."""
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
     start_date = datetime.utcnow() - timedelta(days=30)
     
     # Total knowledge entries
     total_entries = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == default_business_id
+        KnowledgeEntry.business_id == business_id
     ).scalar() or 0
     
     # Active entries
     active_entries = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == default_business_id,
+        KnowledgeEntry.business_id == business_id,
         KnowledgeEntry.is_active == True
     ).scalar() or 0
     
     # Entries with intent links
     entries_with_intent = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == default_business_id,
+        KnowledgeEntry.business_id == business_id,
         KnowledgeEntry.intent.isnot(None),
         KnowledgeEntry.intent != ""
     ).scalar() or 0
     
-    # Get all intents from conversations
-    conversation_intents = db.query(Conversation.intent).filter(
-        Conversation.created_at >= start_date
-    ).distinct().all()
+    # Get all intents from conversations (filtered by business)
+    conv_intent_filter = and_(
+        Conversation.created_at >= start_date,
+        Conversation.business_id == business_id
+    )
+    conversation_intents = db.query(Conversation.intent).filter(conv_intent_filter).distinct().all()
     all_intents = [intent[0] for intent in conversation_intents if intent[0] and intent[0] != "unknown"]
     
     # Get intents with knowledge entries
     knowledge_intents = db.query(KnowledgeEntry.intent).filter(
-        KnowledgeEntry.business_id == default_business_id,
+        KnowledgeEntry.business_id == business_id,
         KnowledgeEntry.intent.isnot(None),
         KnowledgeEntry.intent != ""
     ).distinct().all()
@@ -1567,17 +1742,29 @@ async def get_intent_knowledge_mapping(
     db: Session = Depends(get_db),
 ):
     """Get intent to knowledge entry mapping."""
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
     start_date = datetime.utcnow() - timedelta(days=30)
     
-    # Get all intents from conversations
+    # Get all intents from conversations (filtered by business)
+    conv_intent_filter = and_(
+        Conversation.created_at >= start_date,
+        Conversation.business_id == business_id
+    )
     conversation_intents = db.query(Conversation.intent, func.count(Conversation.id).label("count")).filter(
-        Conversation.created_at >= start_date
+        conv_intent_filter
     ).group_by(Conversation.intent).all()
     
-    # Get all knowledge entries
+    # Get all knowledge entries (filtered by business)
     knowledge_entries = db.query(KnowledgeEntry).filter(
-        KnowledgeEntry.business_id == default_business_id
+        KnowledgeEntry.business_id == business_id
     ).all()
     
     # Build mapping
@@ -1611,13 +1798,21 @@ async def get_knowledge_entry_detail(
     db: Session = Depends(get_db),
 ):
     """Get detailed knowledge entry with usage data."""
-    default_business_id = 1
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knowledge base access requires a business account"
+        )
+    
     from sqlalchemy import or_
     import json
     
     entry = db.query(KnowledgeEntry).filter(
         KnowledgeEntry.id == entry_id,
-        KnowledgeEntry.business_id == default_business_id
+        KnowledgeEntry.business_id == business_id
     ).first()
     
     if not entry:
@@ -2340,10 +2535,14 @@ async def create_ad_asset(
     else:
         extra_data = {"campaign_name": campaign_name}
     
-    # Get business_id (default to 1 if not available)
-    # In a multi-tenant system, this would come from current_user.business_id
-    default_business_id = 1
-    business_id = getattr(current_user, 'business_id', default_business_id)
+    # Get user's business_id (None for admin = can see all)
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ad assets require a business account"
+        )
     
     asset = AdAsset(
         business_id=business_id,
