@@ -201,16 +201,28 @@ async def telegram_webhook(update: TelegramUpdate):
                     
                     # Try to find the correct bot token from database integrations
                     # This supports per-business bot tokens (new system)
+                    # IMPORTANT: We try integrations in order, but we need to be deterministic
+                    # If multiple integrations exist, we prefer the most recently updated one
                     send_success = False
                     db = next(get_db())
                     try:
-                        # Get all active Telegram integrations
+                        # Get all active Telegram integrations, ordered by most recently updated first
+                        # This makes the selection more deterministic
                         integrations = db.query(ChannelIntegration).filter(
                             ChannelIntegration.channel == "telegram",
                             ChannelIntegration.is_active == True
-                        ).all()
+                        ).order_by(ChannelIntegration.updated_at.desc()).all()
+                        
+                        # Log if multiple integrations exist (potential issue)
+                        if len(integrations) > 1:
+                            log.warning(
+                                f"Multiple active Telegram integrations found ({len(integrations)}). "
+                                f"This can cause non-deterministic business_id assignment. "
+                                f"Integration IDs: {[i.id for i in integrations]}, Business IDs: {[i.business_id for i in integrations]}"
+                            )
                         
                         # Try each bot token until one works
+                        # We use the first one that successfully sends (most recently updated)
                         for integration in integrations:
                             try:
                                 if integration.credentials:
@@ -222,9 +234,15 @@ async def telegram_webhook(update: TelegramUpdate):
                                         send_success = await bot_service.send_message(chat_id_int, reply_text)
                                         if send_success:
                                             used_business_id = integration.business_id  # Track which business's bot was used
-                                            log.info(f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id} bot={integration.channel_name} business_id={used_business_id}")
+                                            log.info(
+                                                f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id} "
+                                                f"bot={integration.channel_name} business_id={used_business_id} integration_id={integration.id}"
+                                            )
                                             # Log for debugging
-                                            log.info(f"CONVERSATION_SAVE_INFO: business_id={used_business_id} integration_id={integration.id} bot_username={integration.channel_name}")
+                                            log.info(
+                                                f"CONVERSATION_SAVE_INFO: business_id={used_business_id} "
+                                                f"integration_id={integration.id} bot_username={integration.channel_name}"
+                                            )
                                             break
                             except Exception as e:
                                 log.debug(f"tried_bot_token integration_id={integration.id} error={type(e).__name__}")

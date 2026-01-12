@@ -25,6 +25,40 @@ async def get_overview(
     # Get user's business_id (None for admin = can see all)
     business_id = get_user_business_id(current_user, db)
     
+    # If business_owner has no business_id, return empty results with helpful message
+    if current_user.role == "business_owner" and business_id is None:
+        log.warning(f"User {current_user.id} ({current_user.email}) is business_owner but has no business_id. No data will be returned.")
+        # Return empty structure but don't raise error - let frontend show empty state
+        return {
+            "total_conversations": 0,
+            "active_chats": 0,
+            "total_leads": 0,
+            "most_common_intents": [],
+            "channel_distribution": [],
+            "system_health": {
+                "ai_engine_status": "operational",
+                "fallback_rate": 0,
+                "rule_coverage": 0,
+                "channel_connectivity": 0,
+            },
+            "channel_performance": [],
+            "intent_quality": [],
+            "conversation_flow": {
+                "total_incoming": 0,
+                "ai_responses": 0,
+                "engaged_conversations": 0,
+                "leads_captured": 0,
+                "human_handoffs": 0,
+            },
+            "alerts": [{
+                "type": "warning",
+                "priority": "high",
+                "title": "No Business Associated",
+                "message": "Your account is not linked to a business. Please contact support or check your account settings.",
+            }],
+            "period_days": days,
+        }
+    
     start_date = datetime.utcnow() - timedelta(days=days)
     last_24h = datetime.utcnow() - timedelta(hours=24)
 

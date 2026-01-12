@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.auth import Token, UserCreate, UserResponse
-from app.models import User as UserModel
+from app.models import User as UserModel, Business
 from app.services.auth import (
     authenticate_user,
     create_access_token,
@@ -57,12 +57,33 @@ def get_user_business_id(current_user: UserModel, db: Session) -> int | None:
     - Admin users: return None (can access all businesses)
     - Business owners and agents: return their business_id
     
+    If user has business_id set, returns it.
+    If user is business_owner but business_id is None, tries to find business by owner_id.
+    If found, updates user's business_id and returns it.
+    
     Returns:
         business_id if user is linked to a business, None for admin users
     """
     if current_user.role == "admin":
         return None  # Admin can access all businesses
-    return current_user.business_id
+    
+    # If user already has business_id, return it
+    if current_user.business_id is not None:
+        return current_user.business_id
+    
+    # Fallback: If user is business_owner but business_id is None, try to find business by owner_id
+    if current_user.role == "business_owner":
+        business = db.query(Business).filter(Business.owner_id == current_user.id).first()
+        if business:
+            # Update user's business_id for future requests
+            current_user.business_id = business.id
+            db.add(current_user)
+            db.commit()
+            db.refresh(current_user)
+            return business.id
+    
+    # If no business found, return None (will cause queries to return empty results)
+    return None
 
 
 @router.post("/login", response_model=Token)

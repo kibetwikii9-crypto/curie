@@ -275,7 +275,8 @@ async def connect_telegram(
             detail=f"Unexpected error setting webhook: {str(e)}. Please check Render logs for details."
         )
     
-    # Check if integration already exists (with retry)
+    # Check if integration already exists for this business and channel (with retry)
+    # This prevents duplicate integrations for the same business+channel combination
     existing = None
     for attempt in range(max_retries):
         try:
@@ -294,6 +295,38 @@ async def connect_telegram(
                     pass
                 continue
             raise
+    
+    # Additional check: Warn if there are other active integrations with the same bot token
+    # This helps identify duplicate integrations across different businesses
+    try:
+        all_telegram_integrations = db.query(ChannelIntegration).filter(
+            ChannelIntegration.channel == "telegram",
+            ChannelIntegration.is_active == True
+        ).all()
+        
+        duplicate_bot_tokens = []
+        for other_integration in all_telegram_integrations:
+            if other_integration.id != (existing.id if existing else None):
+                try:
+                    other_credentials = json.loads(other_integration.credentials) if other_integration.credentials else {}
+                    other_bot_token = other_credentials.get("bot_token")
+                    if other_bot_token == request.bot_token:
+                        duplicate_bot_tokens.append({
+                            "integration_id": other_integration.id,
+                            "business_id": other_integration.business_id,
+                            "channel_name": other_integration.channel_name
+                        })
+                except Exception:
+                    pass
+        
+        if duplicate_bot_tokens:
+            log.warning(
+                f"Duplicate bot token detected! Bot @{bot_username} is already connected to other businesses: {duplicate_bot_tokens}. "
+                f"This can cause conversations to be saved to the wrong business. Consider removing duplicate integrations."
+            )
+    except Exception as e:
+        log.warning(f"Error checking for duplicate bot tokens: {e}")
+        # Don't fail the connection, just log the warning
     
     # Store credentials (in production, use proper encryption)
     # For now, store as JSON string - in production, encrypt this
