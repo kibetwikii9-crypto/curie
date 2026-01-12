@@ -114,8 +114,25 @@ async def connect_telegram(
             detail="Invalid bot token format. Please check your token and try again."
         )
     
-    # Get user's business_id
-    business_id = get_user_business_id(current_user, db)
+    # Get user's business_id with retry logic for DuplicatePreparedStatement errors
+    business_id = None
+    business = None
+    max_retries = 3
+    
+    for attempt in range(max_retries):
+        try:
+            business_id = get_user_business_id(current_user, db)
+            break
+        except Exception as e:
+            if "DuplicatePreparedStatement" in str(e) and attempt < max_retries - 1:
+                log.warning(f"DuplicatePreparedStatement error on attempt {attempt + 1}, retrying...")
+                db.rollback()
+                try:
+                    db.connection().invalidate()
+                except Exception:
+                    pass
+                continue
+            raise
     
     if business_id is None:
         raise HTTPException(
@@ -123,8 +140,22 @@ async def connect_telegram(
             detail="Integrations require a business account. Admin users cannot manage integrations."
         )
     
-    # Verify business exists
-    business = db.query(Business).filter(Business.id == business_id).first()
+    # Verify business exists with retry logic
+    for attempt in range(max_retries):
+        try:
+            business = db.query(Business).filter(Business.id == business_id).first()
+            break
+        except Exception as e:
+            if "DuplicatePreparedStatement" in str(e) and attempt < max_retries - 1:
+                log.warning(f"DuplicatePreparedStatement error querying business on attempt {attempt + 1}, retrying...")
+                db.rollback()
+                try:
+                    db.connection().invalidate()
+                except Exception:
+                    pass
+                continue
+            raise
+    
     if not business:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
