@@ -142,37 +142,100 @@ app.add_middleware(
 class CORSHeaderMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin", "")
-        response = await call_next(request)
         
-        # Add CORS headers if origin is allowed
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            # If there's an error, create a response with CORS headers
+            response = JSONResponse(
+                content={"detail": str(e)},
+                status_code=500
+            )
+        
+        # Always add CORS headers if origin is allowed
         if origin in cors_origins or "*" in cors_origins:
             response.headers["Access-Control-Allow-Origin"] = origin if origin in cors_origins else "*"
             response.headers["Access-Control-Allow-Credentials"] = "true" if not allow_all_origins and origin in cors_origins else "false"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
             response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Expose-Headers"] = "*"
         
         return response
 
 app.add_middleware(CORSHeaderMiddleware)
+
+# Global exception handler to ensure CORS headers are always sent
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle all exceptions and ensure CORS headers are present."""
+    origin = request.headers.get("origin", "")
+    
+    # Determine allowed origin
+    allowed_origin = None
+    if origin in cors_origins:
+        allowed_origin = origin
+    elif "*" in cors_origins:
+        allowed_origin = "*"
+    elif origin == "https://automify-ai-frontend.onrender.com":
+        allowed_origin = origin
+    elif "onrender.com" in str(settings.public_url):
+        allowed_origin = "https://automify-ai-frontend.onrender.com"
+    
+    headers = {}
+    if allowed_origin:
+        headers = {
+            "Access-Control-Allow-Origin": allowed_origin,
+            "Access-Control-Allow-Credentials": "true" if allowed_origin != "*" else "false",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "*",
+        }
+    
+    return JSONResponse(
+        content={"detail": str(exc)},
+        status_code=500,
+        headers=headers
+    )
 
 # Add explicit OPTIONS handler for all routes to ensure CORS preflight works
 @app.options("/{full_path:path}")
 async def options_handler(full_path: str, request: Request):
     """Handle OPTIONS preflight requests explicitly."""
     origin = request.headers.get("origin", "")
-    # Check if origin is allowed
-    if origin in cors_origins or "*" in cors_origins:
+    
+    # Always allow the Render frontend URL
+    allowed_origin = None
+    if origin in cors_origins:
+        allowed_origin = origin
+    elif "*" in cors_origins:
+        allowed_origin = "*"
+    elif origin == "https://automify-ai-frontend.onrender.com":
+        allowed_origin = origin
+    elif not origin and "onrender.com" in str(settings.public_url):
+        # If no origin header but we're on Render, allow the frontend
+        allowed_origin = "https://automify-ai-frontend.onrender.com"
+    
+    if allowed_origin:
         return JSONResponse(
             content={"message": "OK"},
             headers={
-                "Access-Control-Allow-Origin": origin if origin in cors_origins else "*",
-                "Access-Control-Allow-Credentials": "true" if not allow_all_origins and origin in cors_origins else "false",
+                "Access-Control-Allow-Origin": allowed_origin,
+                "Access-Control-Allow-Credentials": "true" if allowed_origin != "*" else "false",
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
                 "Access-Control-Allow-Headers": "*",
                 "Access-Control-Max-Age": "3600",
             }
         )
-    return JSONResponse(content={"message": "OK"})
+    
+    # Default response
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "https://automify-ai-frontend.onrender.com",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 app.include_router(api_router)
 
