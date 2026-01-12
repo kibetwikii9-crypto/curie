@@ -98,17 +98,14 @@ def get_db() -> Generator[Session, None, None]:
         # Handle DuplicatePreparedStatement errors by invalidating the connection
         if "DuplicatePreparedStatement" in str(e) or "prepared statement" in str(e).lower():
             db.rollback()
-            # Invalidate the connection to force a new one
-            db.connection().invalidate()
-            # Retry once
             try:
-                yield db
+                # Invalidate the connection to force a new one on next use
+                db.connection().invalidate()
             except Exception:
-                db.rollback()
-                raise
+                pass
         else:
             db.rollback()
-            raise
+        raise
     finally:
         db.close()
 
