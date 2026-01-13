@@ -181,3 +181,5 @@ if business_id is not None:
 1. `app/routes/dashboard.py` - Already correctly uses `get_user_business_id()`
 2. `app/routes/auth.py` - Already has fallback logic in `get_user_business_id()`
 
+
+

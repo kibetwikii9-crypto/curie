@@ -96,3 +96,5 @@ All data is now properly scoped to the user's business:
 
 Admin users can see all data across all businesses (no filtering applied when `business_id` is `None`).
 
+
+

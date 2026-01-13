@@ -215,3 +215,5 @@ SELECT
     CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversation_memory' AND column_name = 'business_id') 
          THEN '✓ conversation_memory.business_id' ELSE '✗ conversation_memory.business_id' END as memory_col;
 
+
+

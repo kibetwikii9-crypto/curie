@@ -17,3 +17,5 @@ export default function TimeAgo({ timestamp, className = '' }: TimeAgoProps) {
   return <span className={className}>{timeAgo}</span>;
 }
 
+
+

@@ -99,3 +99,5 @@ GROUP BY business_id, channel
 HAVING COUNT(*) > 1;
 -- Should return 0 rows
 
+
+

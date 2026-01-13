@@ -24,3 +24,4 @@ You need to replace `frontend/public/favicon.png` with a larger version:
 
 The metadata configuration is already set up correctly - you just need a larger source file!
 
+
