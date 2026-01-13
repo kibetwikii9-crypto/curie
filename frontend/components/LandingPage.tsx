@@ -106,6 +106,9 @@ export default function LandingPage() {
               className="h-14 w-auto hidden dark:block"
               priority
             />
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              Automify
+            </span>
           </div>
           <div className="flex items-center gap-4">
             <button
