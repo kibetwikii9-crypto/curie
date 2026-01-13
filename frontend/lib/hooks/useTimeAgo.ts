@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 /**
  * Hook that returns a formatted "time ago" string that updates in real-time
  * Updates every second for recent times, less frequently for older times
+ * Always updates to show the exact current relative time
  */
 export function useTimeAgo(timestamp: string | null | undefined): string {
   const [timeAgo, setTimeAgo] = useState<string>('');
@@ -56,29 +57,18 @@ export function useTimeAgo(timestamp: string | null | undefined): string {
     // Format immediately
     formatTime();
 
-    // Determine update interval based on age
-    const diffMs = new Date().getTime() - new Date(timestamp).getTime();
-    let interval: number;
-    
-    if (diffMs < 60000) {
-      // Less than 1 minute: update every second
-      interval = 1000;
-    } else if (diffMs < 3600000) {
-      // Less than 1 hour: update every 10 seconds
-      interval = 10000;
-    } else if (diffMs < 86400000) {
-      // Less than 1 day: update every minute
-      interval = 60000;
-    } else {
-      // Older: update every 5 minutes
-      interval = 300000;
-    }
-
-    const timer = setInterval(formatTime, interval);
+    // Use a shorter interval for all times to ensure updates are visible
+    // For hours, update every 30 seconds so "3h ago" becomes "3h 1m ago" visibly
+    // For minutes, update every 10 seconds
+    // For seconds, update every second
+    const timer = setInterval(() => {
+      formatTime();
+    }, 10000); // Update every 10 seconds for all times - ensures visibility
 
     return () => clearInterval(timer);
   }, [timestamp]);
 
   return timeAgo;
 }
+
 
