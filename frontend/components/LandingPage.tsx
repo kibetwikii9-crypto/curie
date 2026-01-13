@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import Image from 'next/image';
 import AuthModal from './AuthModal';
 
 export default function LandingPage() {
@@ -88,11 +89,23 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="relative z-10 px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#007FFF] to-[#0055CC] flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white">Automify</span>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/logo-main-no-tagline.png"
+              alt="Automify"
+              width={140}
+              height={46}
+              className="h-10 w-auto dark:hidden"
+              priority
+            />
+            <Image
+              src="/logo-white-no-tagline.png"
+              alt="Automify"
+              width={140}
+              height={46}
+              className="h-10 w-auto hidden dark:block"
+              priority
+            />
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -278,10 +291,14 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#007FFF] to-[#0055CC] flex items-center justify-center">
-                  <Sparkles className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-lg font-bold text-white">Automify</span>
+                <Image
+                  src="/logo-white-no-tagline.png"
+                  alt="Automify"
+                  width={120}
+                  height={40}
+                  className="h-8 w-auto"
+                  priority
+                />
               </div>
               <p className="text-gray-400 text-sm">
                 Multi-channel AI Business Assistant platform for modern businesses.

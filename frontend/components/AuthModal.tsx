@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { X } from 'lucide-react';
+import Image from 'next/image';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -284,6 +285,26 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
           >
             <X className="h-6 w-6" />
           </button>
+
+          {/* Logo */}
+          <div className="flex justify-center pt-6 pb-4">
+            <Image
+              src="/logo-main-no-tagline.png"
+              alt="Automify"
+              width={120}
+              height={40}
+              className="h-10 w-auto dark:hidden"
+              priority
+            />
+            <Image
+              src="/logo-white-no-tagline.png"
+              alt="Automify"
+              width={120}
+              height={40}
+              className="h-10 w-auto hidden dark:block"
+              priority
+            />
+          </div>
 
           {/* Tabs */}
           <div className="flex border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="Authentication tabs">
