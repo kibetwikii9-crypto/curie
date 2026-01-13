@@ -25,20 +25,6 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Coming Soon Banner */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
-              Advanced Settings Coming Soon
-            </h3>
-            <p className="text-sm text-blue-700 dark:text-blue-400">
-              Additional configuration options, localization settings, and advanced controls are in development.
-            </p>
-          </div>
-        </div>
-      </div>
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Sidebar */}

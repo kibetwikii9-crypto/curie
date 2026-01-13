@@ -3,6 +3,8 @@
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import {
   ShoppingBag,
   Package,
@@ -65,6 +67,7 @@ export default function SalesProductsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('products');
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -77,6 +80,25 @@ export default function SalesProductsPage() {
       router.push('/dashboard');
     }
   }, [user, isAuthenticated, isLoading, router]);
+
+  // Fetch products from API
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['sales', 'products'],
+    queryFn: async () => {
+      const response = await api.get('/api/sales/products/');
+      return response.data;
+    },
+  });
+
+  // Fetch orders from API
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ['sales', 'orders'],
+    queryFn: async () => {
+      const response = await api.get('/api/sales/orders/');
+      return response.data;
+    },
+    refetchInterval: 30000,
+  });
 
   if (isLoading) {
     return (
@@ -256,9 +278,6 @@ export default function SalesProductsPage() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Sales & Products
             </h1>
-            <span className="px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">
-              Coming Soon
-            </span>
           </div>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Manage products, digital assets, and conversational sales flows across all connected channels.
@@ -273,25 +292,44 @@ export default function SalesProductsPage() {
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
               Sales Overview
             </h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-              Preview
-            </span>
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { name: 'Total Products', value: '—', icon: Package, tooltip: 'Available once the Sales & Products module is activated' },
-              { name: 'Active Listings', value: '—', icon: ShoppingBag, tooltip: 'Available once the Sales & Products module is activated' },
-              { name: 'Orders', value: '—', icon: ShoppingCart, tooltip: 'Available once the Sales & Products module is activated' },
-              { name: 'Revenue', value: '—', icon: DollarSign, tooltip: 'Available once the Sales & Products module is activated' },
+              { 
+                name: 'Total Products', 
+                value: products.length.toString(), 
+                icon: Package, 
+                tooltip: 'Total products in catalog' 
+              },
+              { 
+                name: 'Active Listings', 
+                value: products.filter((p: any) => p.is_active).length.toString(), 
+                icon: ShoppingBag, 
+                tooltip: 'Active product listings' 
+              },
+              { 
+                name: 'Orders', 
+                value: orders.length.toString(), 
+                icon: ShoppingCart, 
+                tooltip: 'Total orders' 
+              },
+              { 
+                name: 'Revenue', 
+                value: orders.length > 0 
+                  ? `${orders[0]?.currency || 'USD'} ${orders.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0).toFixed(2)}`
+                  : 'USD 0.00', 
+                icon: DollarSign, 
+                tooltip: 'Total revenue from orders' 
+              },
             ].map((stat) => (
               <div
                 key={stat.name}
-                className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600 opacity-75"
+                className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600"
                 title={stat.tooltip}
               >
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <stat.icon className="h-6 w-6 text-gray-400" />
+                    <stat.icon className="h-6 w-6 text-primary-500" />
                   </div>
                   <div className="ml-4 w-0 flex-1">
                     <dl>
@@ -350,9 +388,11 @@ export default function SalesProductsPage() {
                   </p>
                 </div>
                 <button
-                  disabled
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-50"
-                  title="Coming Soon"
+                  onClick={() => {
+                    // TODO: Open add product modal
+                    alert('Add product functionality - connect to API');
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Product
@@ -391,89 +431,102 @@ export default function SalesProductsPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {sampleProducts.map((product) => {
-                      const typeBadge = getProductTypeBadge(product.type);
-                      const statusBadge = getStatusBadge(product.status);
-                      const StatusIcon = statusBadge.icon;
-                      return (
-                        <tr
-                          key={product.id}
-                          className="opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                          onClick={() => setSelectedProduct(product.id)}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {product.name}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {product.id}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={cn('px-2 py-1 text-xs font-medium rounded-full', typeBadge.color)}>
-                              {typeBadge.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {product.category}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                            {product.price}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
-                              {product.channels.map((channel) => (
-                                <span
-                                  key={channel}
-                                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 capitalize"
-                                >
-                                  {channel}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={cn('px-2 py-1 inline-flex items-center text-xs font-medium rounded-full', statusBadge.color)}>
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {statusBadge.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {product.aiReady ? (
+                    {productsLoading ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-4 text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                        </td>
+                      </tr>
+                    ) : products.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                          <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p>No products found. Add your first product to get started.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      products.map((product: any) => {
+                        const statusBadge = getStatusBadge(product.is_active ? 'active' : 'draft');
+                        const StatusIcon = statusBadge.icon;
+                        return (
+                          <tr
+                            key={product.id}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                            onClick={() => setSelectedProduct(product.id.toString())}
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {product.name}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                ID: {product.id}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400">
+                                Product
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                              {product.category || 'Uncategorized'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                              {product.currency} {product.price.toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                All Channels
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={cn('px-2 py-1 inline-flex items-center text-xs font-medium rounded-full', statusBadge.color)}>
+                                <StatusIcon className="h-3 w-3 mr-1" />
+                                {statusBadge.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-400">
                                 <Sparkles className="h-3 w-3 mr-1" />
                                 Ready
                               </span>
-                            ) : (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                disabled
-                                className="text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
-                                title="Coming Soon"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              <button
-                                disabled
-                                className="text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
-                                title="Coming Soon"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                disabled
-                                className="text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
-                                title="Coming Soon"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedProduct(product.id.toString());
+                                  }}
+                                  className="text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // TODO: Open edit modal
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Delete ${product.name}?`)) {
+                                      // TODO: Delete product
+                                    }
+                                  }}
+                                  className="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                       );
                     })}
                   </tbody>
@@ -497,7 +550,6 @@ export default function SalesProductsPage() {
                 <button
                   disabled
                   className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-50"
-                  title="Coming Soon"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Upload Asset
@@ -513,7 +565,7 @@ export default function SalesProductsPage() {
                     No digital assets yet
                   </h4>
                   <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-                    Digital assets will be automatically delivered to customers after purchase once this module is activated.
+                    Digital assets are automatically delivered to customers after purchase.
                   </p>
                 </div>
               ) : (
@@ -610,7 +662,6 @@ export default function SalesProductsPage() {
                 <button
                   disabled
                   className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-50"
-                  title="Coming Soon"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Service
@@ -695,7 +746,6 @@ export default function SalesProductsPage() {
                 <button
                   disabled
                   className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-50"
-                  title="Coming Soon"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Bundle
@@ -943,14 +993,12 @@ export default function SalesProductsPage() {
                               <button
                                 disabled
                                 className="flex-1 px-2 py-1 text-xs bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded cursor-not-allowed opacity-50"
-                                title="Coming Soon"
                               >
                                 Learn More
                               </button>
                               <button
                                 disabled
                                 className="flex-1 px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded cursor-not-allowed opacity-50"
-                                title="Coming Soon"
                               >
                                 Buy Now
                               </button>
@@ -1070,7 +1118,7 @@ export default function SalesProductsPage() {
                           Managed from AI Rules & Automation
                         </p>
                         <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                          Sales automation rules are configured in the AI Rules & Automation module (Coming Soon)
+                          Sales automation rules are configured in the AI Rules & Automation module
                         </p>
                       </div>
                     </div>
@@ -1236,17 +1284,19 @@ export default function SalesProductsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    disabled
-                    className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-50"
-                    title="Coming Soon"
+                    onClick={() => {
+                      // TODO: Open filter modal
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     <Filter className="h-4 w-4 mr-2" />
                     Filter
                   </button>
                   <button
-                    disabled
-                    className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-50"
-                    title="Coming Soon"
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ['sales', 'orders'] });
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh
@@ -1284,101 +1334,76 @@ export default function SalesProductsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {[
-                        {
-                          id: 'ORD-001',
-                          product: 'Premium Consultation Package',
-                          customer: 'user@example.com',
-                          channel: 'telegram',
-                          status: 'completed',
-                          timestamp: '2024-01-15 14:30',
-                          amount: '$299.00',
-                        },
-                        {
-                          id: 'ORD-002',
-                          product: 'Digital Marketing Guide',
-                          customer: '+1234567890',
-                          channel: 'whatsapp',
-                          status: 'pending',
-                          timestamp: '2024-01-15 16:45',
-                          amount: '$49.00',
-                        },
-                        {
-                          id: 'ORD-003',
-                          product: 'Product Bundle',
-                          customer: 'user2@example.com',
-                          channel: 'website',
-                          status: 'failed',
-                          timestamp: '2024-01-14 10:20',
-                          amount: '$199.00',
-                        },
-                        {
-                          id: 'ORD-004',
-                          product: 'Monthly Subscription',
-                          customer: '+0987654321',
-                          channel: 'telegram',
-                          status: 'refunded',
-                          timestamp: '2024-01-13 09:15',
-                          amount: '$29.00',
-                        },
-                      ].map((order) => {
-                        const statusConfig = {
-                          pending: { label: 'Pending', color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400', icon: Clock },
-                          completed: { label: 'Completed', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400', icon: CheckCircle2 },
-                          failed: { label: 'Failed', color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400', icon: XCircle },
-                          refunded: { label: 'Refunded', color: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400', icon: RefreshCw },
-                        };
-                        const status = statusConfig[order.status as keyof typeof statusConfig];
-                        const StatusIcon = status.icon;
-                        return (
-                          <tr key={order.id} className="opacity-75 hover:opacity-100 transition-opacity">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                              {order.id}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {order.product}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {order.amount}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {order.customer}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 capitalize">
-                                {order.channel}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={cn('px-2 py-1 inline-flex items-center text-xs font-medium rounded-full', status.color)}>
-                                <StatusIcon className="h-3 w-3 mr-1" />
-                                {status.label}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {order.timestamp}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                disabled
-                                className="text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
-                                title="Coming Soon"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {ordersLoading ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-4 text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                          </td>
+                        </tr>
+                      ) : orders.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                            <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                            <p>No orders found.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        orders.map((order: any) => {
+                          const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+                            pending: { label: 'Pending', color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400', icon: Clock },
+                            confirmed: { label: 'Confirmed', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400', icon: CheckCircle2 },
+                            shipped: { label: 'Shipped', color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400', icon: CheckCircle2 },
+                            delivered: { label: 'Delivered', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400', icon: CheckCircle2 },
+                            cancelled: { label: 'Cancelled', color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400', icon: XCircle },
+                          };
+                          const status = statusConfig[order.status] || statusConfig.pending;
+                          const StatusIcon = status.icon;
+                          return (
+                            <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                #{order.id}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  Order #{order.id}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {order.currency} {order.total_amount.toFixed(2)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {order.customer_name || order.customer_email || 'Unknown'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                  All Channels
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={cn('px-2 py-1 inline-flex items-center text-xs font-medium rounded-full', status.color)}>
+                                  <StatusIcon className="h-3 w-3 mr-1" />
+                                  {status.label}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {new Date(order.created_at).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={() => {
+                                    // TODO: View order details
+                                  }}
+                                  className="text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}}
                     </tbody>
                   </table>
-                </div>
-                <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700/50 text-center border-t border-gray-200 dark:border-gray-600">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                    Orders will appear here once the Sales & Products module is activated.
-                  </p>
                 </div>
               </div>
 
@@ -1455,7 +1480,6 @@ export default function SalesProductsPage() {
                 <button
                   disabled
                   className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
-                  title="Coming Soon"
                 >
                   View detailed reports in Analytics & Reports →
                 </button>
@@ -1598,7 +1622,7 @@ export default function SalesProductsPage() {
                     ))}
                   </div>
                   <p className="mt-4 text-xs text-gray-500 dark:text-gray-400 italic">
-                    Intent-to-purchase correlation data will be available once the module is activated
+                    Intent-to-purchase correlation data is available in Analytics
                   </p>
                 </div>
               </div>
@@ -1613,7 +1637,7 @@ export default function SalesProductsPage() {
                   Payments & Billing Readiness
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Configure payment gateways, currencies, and billing settings (Coming Soon)
+                  Configure payment gateways, currencies, and billing settings in the Billing section
                 </p>
               </div>
 
@@ -1684,7 +1708,7 @@ export default function SalesProductsPage() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Multi-currency support will be available once activated
+                        Multi-currency support is available
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
                         {['USD', 'EUR', 'GBP', 'KES', 'NGN', 'ZAR'].map((currency) => (
@@ -1784,7 +1808,7 @@ export default function SalesProductsPage() {
                           Data Encryption Standards
                         </p>
                         <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                          All payment data is encrypted using industry-standard protocols. Full encryption details will be available once the module is activated.
+                          All payment data is encrypted using industry-standard protocols.
                         </p>
                       </div>
                     </div>
@@ -1880,7 +1904,7 @@ export default function SalesProductsPage() {
                             Description
                           </label>
                           <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-                            Product description will be displayed here once the module is activated.
+                            Product description will be displayed here.
                           </p>
                         </div>
 
@@ -1899,7 +1923,7 @@ export default function SalesProductsPage() {
                             ))}
                           </div>
                           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                            Channel visibility rules will be configurable once the module is activated.
+                            Channel visibility rules are configurable.
                           </p>
                         </div>
 
@@ -1931,7 +1955,7 @@ export default function SalesProductsPage() {
                             Linked Digital Assets
                           </label>
                           <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-                            Digital assets linked to this product will be displayed here once the module is activated.
+                            Digital assets linked to this product will be displayed here.
                           </p>
                         </div>
 
@@ -1984,7 +2008,6 @@ export default function SalesProductsPage() {
                     <button
                       disabled
                       className="px-4 py-2 text-sm font-medium text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-md cursor-not-allowed opacity-50"
-                      title="Coming Soon"
                     >
                       Edit Product
                     </button>

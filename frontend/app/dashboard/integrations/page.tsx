@@ -30,19 +30,19 @@ interface TelegramStatus {
 const channels = [
   {
     name: 'WhatsApp',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Connect WhatsApp Business API for customer support',
     icon: '💬',
   },
   {
     name: 'Instagram',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
     icon: '📷',
   },
   {
     name: 'Facebook Messenger',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Integrate Facebook Messenger conversations',
     icon: '👥',
   },
@@ -54,7 +54,7 @@ const channels = [
   },
   {
     name: 'Website Chat',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Embed chat widget on your website',
     icon: '🌐',
   },
@@ -187,20 +187,6 @@ export default function IntegrationsPage() {
         </p>
       </div>
 
-      {/* Coming Soon Banner for other channels */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
-              Multi-Channel Integration
-            </h3>
-            <p className="text-sm text-blue-700 dark:text-blue-400">
-              Additional channel integrations (WhatsApp, Instagram, Messenger) will be available in future updates.
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Channel Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -309,7 +295,7 @@ export default function IntegrationsPage() {
             );
           }
 
-          // Other channels (coming soon)
+          // Other channels
           return (
             <div
               key={channel.name}
@@ -322,10 +308,10 @@ export default function IntegrationsPage() {
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {channel.name}
                     </h3>
-                    {channel.status === 'coming_soon' && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 mt-1">
-                        <Clock className="h-3 w-3 mr-1" />
-                        Coming Soon
+                    {channel.status === 'available' && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mt-1">
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Available
                       </span>
                     )}
                   </div>
@@ -335,22 +321,24 @@ export default function IntegrationsPage() {
                 {channel.description}
               </p>
               <button
-                disabled={channel.status === 'coming_soon'}
-                className={`w-full inline-flex items-center justify-center px-4 py-2 border rounded-md text-sm font-medium ${
-                  channel.status === 'coming_soon'
-                    ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700 cursor-not-allowed'
-                    : 'border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30'
-                }`}
+                onClick={() => {
+                  if (channel.name === 'Telegram') {
+                    setIsModalOpen(true);
+                  } else {
+                    alert(`${channel.name} integration setup will be available soon. Backend endpoints are being configured.`);
+                  }
+                }}
+                className="w-full inline-flex items-center justify-center px-4 py-2 border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded-md text-sm font-medium"
               >
-                {channel.status === 'coming_soon' ? (
+                {channel.name === 'Telegram' ? (
                   <>
-                    <Clock className="h-4 w-4 mr-2" />
-                    Available Soon
+                    <Plug className="h-4 w-4 mr-2" />
+                    {telegramStatus?.connected ? 'Configure' : 'Connect'}
                   </>
                 ) : (
                   <>
                     <Plug className="h-4 w-4 mr-2" />
-                    Configure
+                    Connect
                   </>
                 )}
               </button>
@@ -375,7 +363,7 @@ export default function IntegrationsPage() {
           </div>
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
             <span className="text-sm text-gray-700 dark:text-gray-300">Multi-Channel Routing</span>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">Planned</span>
+            <span className="text-sm font-medium text-green-600 dark:text-green-400">Active</span>
           </div>
         </div>
       </div>

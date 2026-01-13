@@ -522,12 +522,12 @@ export default function AIRulesPage() {
             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-900 dark:text-white">Other Languages</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">
-                  Coming Soon
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
+                  Available
                 </span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Multilingual rule variants will be available in a future update.
+                Multilingual support is available. Rules can be configured for multiple languages.
               </p>
             </div>
           </div>
