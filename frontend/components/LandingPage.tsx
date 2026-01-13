@@ -106,7 +106,7 @@ export default function LandingPage() {
               className="h-14 w-auto hidden dark:block"
               priority
             />
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+            <span className="text-2xl font-bold text-[#007FFF]">
               Automify
             </span>
           </div>
