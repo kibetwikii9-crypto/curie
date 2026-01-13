@@ -93,17 +93,17 @@ export default function LandingPage() {
             <Image
               src="/logo-main-no-tagline.png"
               alt="Automify"
-              width={120}
-              height={40}
-              className="h-8 w-auto dark:hidden"
+              width={200}
+              height={66}
+              className="h-14 w-auto dark:hidden"
               priority
             />
             <Image
               src="/logo-white-no-tagline.png"
               alt="Automify"
-              width={120}
-              height={40}
-              className="h-8 w-auto hidden dark:block"
+              width={200}
+              height={66}
+              className="h-14 w-auto hidden dark:block"
               priority
             />
           </div>
@@ -294,9 +294,9 @@ export default function LandingPage() {
                 <Image
                   src="/logo-white-no-tagline.png"
                   alt="Automify"
-                  width={120}
-                  height={40}
-                  className="h-8 w-auto"
+                  width={180}
+                  height={60}
+                  className="h-12 w-auto"
                   priority
                 />
               </div>

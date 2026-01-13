@@ -291,17 +291,17 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
             <Image
               src="/logo-main-no-tagline.png"
               alt="Automify"
-              width={120}
-              height={40}
-              className="h-8 w-auto dark:hidden"
+              width={200}
+              height={66}
+              className="h-16 w-auto dark:hidden"
               priority
             />
             <Image
               src="/logo-white-no-tagline.png"
               alt="Automify"
-              width={120}
-              height={40}
-              className="h-8 w-auto hidden dark:block"
+              width={200}
+              height={66}
+              className="h-16 w-auto hidden dark:block"
               priority
             />
           </div>
