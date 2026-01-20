@@ -10,6 +10,8 @@ import axios from 'axios';
  * 1. If NEXT_PUBLIC_API_URL is a full URL (starts with http:// or https://) → use it
  * 2. If it's just a service name (e.g., "automify-ai-backend") → construct Render URL
  * 3. If not set → use localhost for development
+ * 
+ * Version: 2.0.0 - Updated 2024-01-XX (Permanent fix for Render URL truncation)
  */
 
 function getApiUrl(): string {
