@@ -227,17 +227,13 @@ export default function IntegrationsPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    {channel.icon ? (
-                      <Image
-                        src={channel.icon}
-                        alt={`${channel.name} icon`}
-                        width={48}
-                        height={48}
-                        className="object-contain"
-                      />
-                    ) : (
-                      <Globe className="w-12 h-12 text-gray-400" />
-                    )}
+                    <Image
+                      src={channel.icon}
+                      alt={`${channel.name} icon`}
+                      width={48}
+                      height={48}
+                      className="object-contain"
+                    />
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {channel.name}
@@ -390,17 +386,13 @@ export default function IntegrationsPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    {channel.icon ? (
-                      <Image
-                        src={channel.icon}
-                        alt={`${channel.name} icon`}
-                        width={48}
-                        height={48}
-                        className="object-contain"
-                      />
-                    ) : (
-                      <Globe className="w-12 h-12 text-gray-400" />
-                    )}
+                    <Image
+                      src={channel.icon}
+                      alt={`${channel.name} icon`}
+                      width={48}
+                      height={48}
+                      className="object-contain"
+                    />
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {channel.name}
