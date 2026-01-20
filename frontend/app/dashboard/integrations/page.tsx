@@ -618,7 +618,13 @@ export default function IntegrationsPage() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="text-3xl">{channel.icon}</div>
+                  <Image
+                    src={channel.icon}
+                    alt={`${channel.name} icon`}
+                    width={48}
+                    height={48}
+                    className="object-contain"
+                  />
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {channel.name}
