@@ -283,6 +283,70 @@ export default function IntegrationsPage() {
                     <>
                       <button
                         onClick={async () => {
+                          // Open popup immediately for faster perceived response
+                          const width = 600;
+                          const height = 700;
+                          const left = (window.screen.width - width) / 2;
+                          const top = (window.screen.height - height) / 2;
+                          
+                          const popup = window.open(
+                            'about:blank',
+                            'WhatsApp OAuth',
+                            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                          );
+                          
+                          if (!popup) {
+                            alert('Please allow popups for this site to reconnect WhatsApp');
+                            return;
+                          }
+                          
+                          // Show loading message immediately
+                          popup.document.write(`
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                              <title>Reconnecting WhatsApp...</title>
+                              <style>
+                                body {
+                                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                  display: flex;
+                                  justify-content: center;
+                                  align-items: center;
+                                  height: 100vh;
+                                  margin: 0;
+                                  background: #f5f5f5;
+                                }
+                                .container {
+                                  text-align: center;
+                                  padding: 2rem;
+                                }
+                                .spinner {
+                                  border: 4px solid #f3f3f3;
+                                  border-top: 4px solid #25D366;
+                                  border-radius: 50%;
+                                  width: 40px;
+                                  height: 40px;
+                                  animation: spin 1s linear infinite;
+                                  margin: 0 auto 1rem;
+                                }
+                                @keyframes spin {
+                                  0% { transform: rotate(0deg); }
+                                  100% { transform: rotate(360deg); }
+                                }
+                                h2 { color: #333; margin: 0.5rem 0; }
+                                p { color: #666; margin: 0; }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="container">
+                                <div class="spinner"></div>
+                                <h2>Reconnecting WhatsApp...</h2>
+                                <p>Please wait while we prepare the connection.</p>
+                              </div>
+                            </body>
+                            </html>
+                          `);
+                          
                           try {
                             // Use API call to get OAuth URL (includes auth headers)
                             const response = await api.get('/api/integrations/whatsapp/connect', {
@@ -292,64 +356,51 @@ export default function IntegrationsPage() {
                             });
                             
                             if (response.data?.auth_url) {
-                              // Open OAuth in popup window
-                              const width = 600;
-                              const height = 700;
-                              const left = (window.screen.width - width) / 2;
-                              const top = (window.screen.height - height) / 2;
-                              
-                              const popup = window.open(
-                                response.data.auth_url,
-                                'WhatsApp OAuth',
-                                `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                              );
-                              
-                              if (!popup) {
-                                alert('Please allow popups for this site to reconnect WhatsApp');
-                                return;
-                              }
-                              
-                              // Listen for message from popup
-                              const handleMessage = (event: MessageEvent) => {
-                                // Verify origin for security - allow messages from backend (callback page) or same origin
-                                const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-                                const backendOrigin = new URL(backendUrl).origin;
-                                
-                                // Allow messages from same origin or backend origin
-                                if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-                                  return;
-                                }
-                                
-                                // Only process WhatsApp OAuth messages
-                                if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
-                                  return;
-                                }
-                                
-                                if (event.data.type === 'whatsapp-oauth-success') {
-                                  popup.close();
-                                  fetchIntegrations();
-                                  alert('WhatsApp reconnected successfully!');
-                                  window.removeEventListener('message', handleMessage);
-                                } else if (event.data.type === 'whatsapp-oauth-error') {
-                                  popup.close();
-                                  alert(`WhatsApp reconnection failed: ${event.data.error || 'Unknown error'}`);
-                                  window.removeEventListener('message', handleMessage);
-                                }
-                              };
-                              
-                              window.addEventListener('message', handleMessage);
-                              
-                              const checkClosed = setInterval(() => {
-                                if (popup.closed) {
-                                  clearInterval(checkClosed);
-                                  window.removeEventListener('message', handleMessage);
-                                }
-                              }, 1000);
+                              // Navigate popup to OAuth URL immediately
+                              popup.location.href = response.data.auth_url;
                             } else {
                               throw new Error('No auth_url in response');
                             }
+                            
+                            // Listen for message from popup
+                            const handleMessage = (event: MessageEvent) => {
+                              // Verify origin for security - allow messages from backend (callback page) or same origin
+                              const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
+                              const backendOrigin = new URL(backendUrl).origin;
+                              
+                              // Allow messages from same origin or backend origin
+                              if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
+                                return;
+                              }
+                              
+                              // Only process WhatsApp OAuth messages
+                              if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
+                                return;
+                              }
+                              
+                              if (event.data.type === 'whatsapp-oauth-success') {
+                                popup.close();
+                                fetchIntegrations();
+                                alert('WhatsApp reconnected successfully!');
+                                window.removeEventListener('message', handleMessage);
+                              } else if (event.data.type === 'whatsapp-oauth-error') {
+                                popup.close();
+                                alert(`WhatsApp reconnection failed: ${event.data.error || 'Unknown error'}`);
+                                window.removeEventListener('message', handleMessage);
+                              }
+                            };
+                            
+                            window.addEventListener('message', handleMessage);
+                            
+                            const checkClosed = setInterval(() => {
+                              if (popup.closed) {
+                                clearInterval(checkClosed);
+                                window.removeEventListener('message', handleMessage);
+                              }
+                            }, 1000);
                           } catch (error: any) {
                             console.error('WhatsApp reconnect error:', error);
+                            popup.close();
                             if (error.response?.status === 401) {
                               alert('Please log in first');
                             } else if (error.response?.status === 403) {
@@ -385,6 +436,70 @@ export default function IntegrationsPage() {
                   ) : (
                     <button
                       onClick={async () => {
+                        // Open popup immediately for faster perceived response
+                        const width = 600;
+                        const height = 700;
+                        const left = (window.screen.width - width) / 2;
+                        const top = (window.screen.height - height) / 2;
+                        
+                        const popup = window.open(
+                          'about:blank',
+                          'WhatsApp OAuth',
+                          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                        );
+                        
+                        if (!popup) {
+                          alert('Please allow popups for this site to connect WhatsApp');
+                          return;
+                        }
+                        
+                        // Show loading message immediately
+                        popup.document.write(`
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <title>Connecting WhatsApp...</title>
+                            <style>
+                              body {
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                display: flex;
+                                justify-content: center;
+                                align-items: center;
+                                height: 100vh;
+                                margin: 0;
+                                background: #f5f5f5;
+                              }
+                              .container {
+                                text-align: center;
+                                padding: 2rem;
+                              }
+                              .spinner {
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #25D366;
+                                border-radius: 50%;
+                                width: 40px;
+                                height: 40px;
+                                animation: spin 1s linear infinite;
+                                margin: 0 auto 1rem;
+                              }
+                              @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                              }
+                              h2 { color: #333; margin: 0.5rem 0; }
+                              p { color: #666; margin: 0; }
+                            </style>
+                          </head>
+                          <body>
+                            <div class="container">
+                              <div class="spinner"></div>
+                              <h2>Connecting WhatsApp...</h2>
+                              <p>Please wait while we prepare the connection.</p>
+                            </div>
+                          </body>
+                          </html>
+                        `);
+                        
                         try {
                           // Use API call to get OAuth URL (includes auth headers)
                           const response = await api.get('/api/integrations/whatsapp/connect', {
@@ -395,76 +510,64 @@ export default function IntegrationsPage() {
                           
                           // Backend returns JSON with auth_url
                           if (response.data?.auth_url) {
-                            // Open OAuth in popup window
-                            const width = 600;
-                            const height = 700;
-                            const left = (window.screen.width - width) / 2;
-                            const top = (window.screen.height - height) / 2;
-                            
-                            const popup = window.open(
-                              response.data.auth_url,
-                              'WhatsApp OAuth',
-                              `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                            );
-                            
-                            if (!popup) {
-                              alert('Please allow popups for this site to connect WhatsApp');
-                              return;
-                            }
-                            
-                            // Listen for message from popup
-                            const handleMessage = (event: MessageEvent) => {
-                              // Verify origin for security - allow messages from backend (callback page) or same origin
-                              const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-                              const backendOrigin = new URL(backendUrl).origin;
-                              
-                              // Allow messages from same origin or backend origin
-                              if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-                                return;
-                              }
-                              
-                              // Only process WhatsApp OAuth messages
-                              if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
-                                return;
-                              }
-                              
-                              if (event.data.type === 'whatsapp-oauth-success') {
-                                // Close popup
-                                popup.close();
-                                
-                                // Refresh integrations
-                                fetchIntegrations();
-                                
-                                // Show success message
-                                alert('WhatsApp connected successfully!');
-                                
-                                // Remove listener
-                                window.removeEventListener('message', handleMessage);
-                              } else if (event.data.type === 'whatsapp-oauth-error') {
-                                // Close popup
-                                popup.close();
-                                
-                                // Show error
-                                alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
-                                
-                                // Remove listener
-                                window.removeEventListener('message', handleMessage);
-                              }
-                            };
-                            
-                            window.addEventListener('message', handleMessage);
-                            
-                            // Check if popup was closed manually
-                            const checkClosed = setInterval(() => {
-                              if (popup.closed) {
-                                clearInterval(checkClosed);
-                                window.removeEventListener('message', handleMessage);
-                              }
-                            }, 1000);
+                            // Navigate popup to OAuth URL immediately
+                            popup.location.href = response.data.auth_url;
                           } else {
                             throw new Error('No auth_url in response');
                           }
+                          
+                          // Listen for message from popup
+                          const handleMessage = (event: MessageEvent) => {
+                            // Verify origin for security - allow messages from backend (callback page) or same origin
+                            const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
+                            const backendOrigin = new URL(backendUrl).origin;
+                            
+                            // Allow messages from same origin or backend origin
+                            if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
+                              return;
+                            }
+                            
+                            // Only process WhatsApp OAuth messages
+                            if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
+                              return;
+                            }
+                            
+                            if (event.data.type === 'whatsapp-oauth-success') {
+                              // Close popup
+                              popup.close();
+                              
+                              // Refresh integrations
+                              fetchIntegrations();
+                              
+                              // Show success message
+                              alert('WhatsApp connected successfully!');
+                              
+                              // Remove listener
+                              window.removeEventListener('message', handleMessage);
+                            } else if (event.data.type === 'whatsapp-oauth-error') {
+                              // Close popup
+                              popup.close();
+                              
+                              // Show error
+                              alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
+                              
+                              // Remove listener
+                              window.removeEventListener('message', handleMessage);
+                            }
+                          };
+                          
+                          window.addEventListener('message', handleMessage);
+                          
+                          // Check if popup was closed manually
+                          const checkClosed = setInterval(() => {
+                            if (popup.closed) {
+                              clearInterval(checkClosed);
+                              window.removeEventListener('message', handleMessage);
+                            }
+                          }, 1000);
                         } catch (error: any) {
+                          console.error('WhatsApp connection error:', error);
+                          popup.close();
                           console.error('WhatsApp connection error:', error);
                           if (error.response?.status === 401) {
                             alert('Please log in first');
