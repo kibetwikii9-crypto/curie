@@ -12,6 +12,8 @@ asyncpg==0.29.0
 httpx==0.25.1
 
 # Configuration
+# Using flexible versions to allow pip to select pre-built wheels
+# This prevents Rust compilation errors on Render
 pydantic>=2.5.0,<3.0.0
 pydantic-settings>=2.1.0
 
