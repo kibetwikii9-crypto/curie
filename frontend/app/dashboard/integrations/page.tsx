@@ -57,7 +57,7 @@ const channels = [
     name: 'Website Chat',
     status: 'available',
     description: 'Embed chat widget on your website',
-    icon: null, // No icon file provided, will use fallback
+    icon: '/chat-icon.png',
   },
 ];
 
