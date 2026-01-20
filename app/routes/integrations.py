@@ -626,9 +626,9 @@ oauth_states = {}
 
 @router.get("/whatsapp/connect")
 async def initiate_whatsapp_oauth(
+    request: Request,
     current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    accept: Optional[str] = None
+    db: Session = Depends(get_db)
 ):
     """
     Start Meta OAuth flow for WhatsApp connection.
@@ -638,49 +638,61 @@ async def initiate_whatsapp_oauth(
     - Browser redirect: Returns RedirectResponse (302)
     - API call: Returns JSON with auth_url (for frontend to redirect)
     """
-    # Check user role
-    if current_user.role not in ["admin", "business_owner"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Admin and Business Owner roles can connect integrations"
-        )
-    
-    # Get user's business_id
-    business_id = get_user_business_id(current_user, db)
-    
-    if business_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Integrations require a business account. Admin users cannot manage integrations."
-        )
-    
-    # Check if Meta OAuth is configured
-    if not hasattr(settings, 'meta_app_id') or not settings.meta_app_id:
+    try:
+        # Check user role
+        if current_user.role not in ["admin", "business_owner"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Admin and Business Owner roles can connect integrations"
+            )
+        
+        # Get user's business_id
+        business_id = get_user_business_id(current_user, db)
+        
+        if business_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Integrations require a business account. Admin users cannot manage integrations."
+            )
+        
+        # Check if Meta OAuth is configured
+        if not hasattr(settings, 'meta_app_id') or not settings.meta_app_id:
+            log.error("Meta OAuth not configured: meta_app_id is missing or empty")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Meta OAuth is not configured. Please contact support."
+            )
+        
+        # Generate state token (include user_id and business_id for security)
+        state = secrets.token_urlsafe(32)
+        oauth_states[state] = {
+            "user_id": current_user.id,
+            "business_id": business_id
+        }
+        
+        # Initialize OAuth service
+        oauth = MetaOAuthService()
+        
+        # Get authorization URL
+        auth_url = oauth.get_authorization_url(state)
+        
+        # Check Accept header to determine response format
+        accept_header = request.headers.get("Accept", "")
+        
+        # If request wants JSON (API call from frontend), return JSON
+        if "application/json" in accept_header:
+            return JSONResponse(content={"auth_url": auth_url, "state": state})
+        
+        # Redirect to Meta (for direct browser navigation)
+        return RedirectResponse(url=auth_url)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error initiating WhatsApp OAuth: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Meta OAuth is not configured. Please contact support."
+            detail=f"Internal server error: {str(e)}"
         )
-    
-    # Generate state token (include user_id and business_id for security)
-    state = secrets.token_urlsafe(32)
-    oauth_states[state] = {
-        "user_id": current_user.id,
-        "business_id": business_id
-    }
-    
-    # Initialize OAuth service
-    oauth = MetaOAuthService()
-    
-    # Get authorization URL
-    auth_url = oauth.get_authorization_url(state)
-    
-    # If request wants JSON (API call from frontend), return JSON
-    # Otherwise, redirect directly (for direct browser navigation)
-    if accept and "application/json" in accept:
-        return {"auth_url": auth_url, "state": state}
-    
-    # Redirect to Meta (for direct browser navigation)
-    return RedirectResponse(url=auth_url)
 
 
 @router.get("/whatsapp/callback")

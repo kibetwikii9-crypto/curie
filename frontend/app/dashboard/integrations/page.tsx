@@ -329,6 +329,8 @@ export default function IntegrationsPage() {
                           
                           // Backend returns JSON with auth_url
                           if (response.data?.auth_url) {
+                            // Use window.location.href for external redirect (Facebook OAuth)
+                            // This avoids CORS issues with XMLHttpRequest
                             window.location.href = response.data.auth_url;
                           } else {
                             throw new Error('No auth_url in response');
@@ -341,7 +343,13 @@ export default function IntegrationsPage() {
                           } else if (error.response?.status === 403) {
                             alert(error.response?.data?.detail || 'You do not have permission to connect integrations');
                           } else if (error.response?.status === 500) {
-                            alert(error.response?.data?.detail || 'Meta OAuth is not configured. Please contact support.');
+                            const errorMsg = error.response?.data?.detail || 'Meta OAuth is not configured. Please contact support.';
+                            alert(errorMsg);
+                            console.error('Backend error details:', error.response?.data);
+                          } else if (error.code === 'ERR_NETWORK' || error.message?.includes('CORS')) {
+                            // Network/CORS error - backend might be down or URL wrong
+                            alert('Cannot connect to backend. Please check your connection and try again.');
+                            console.error('Network error:', error);
                           } else {
                             alert('Failed to connect WhatsApp. Please try again.');
                             console.error('Full error:', error);
