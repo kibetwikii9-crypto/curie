@@ -1,60 +1,99 @@
 import axios from 'axios';
 
-// Normalize NEXT_PUBLIC_API_URL so accidental relative values (like
-// "/automify-ai-backend" or bare hostnames) don't produce requests
-// that target the frontend host and produce 404s. This will also
-// remove trailing slashes.
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+/**
+ * SINGLE SOURCE OF TRUTH: API URL Configuration
+ * 
+ * This is the ONLY place where API URL normalization happens.
+ * All other files should import `api` from this file.
+ * 
+ * Strategy:
+ * 1. If NEXT_PUBLIC_API_URL is a full URL (starts with http:// or https://) → use it
+ * 2. If it's just a service name (e.g., "automify-ai-backend") → construct Render URL
+ * 3. If not set → use localhost for development
+ */
 
-function normalizeApiUrl(raw: string): string {
-  if (!raw) return 'http://localhost:8000';
+function getApiUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  
+  // Development fallback
+  if (!raw || raw === 'http://localhost:8000') {
+    return 'http://localhost:8000';
+  }
 
-  // Already an absolute URL (http:// or https://) or protocol-relative //
-  if (/^https?:\/\//i.test(raw) || /^\/\//.test(raw)) {
+  // Already a full URL - use as-is (remove trailing slashes)
+  if (/^https?:\/\//i.test(raw)) {
     return raw.replace(/\/+$/u, '');
   }
 
-  // Leading slash: treat as path on current frontend host -> convert to full URL
+  // Protocol-relative URL (//example.com)
+  if (/^\/\//.test(raw)) {
+    return `https:${raw.replace(/\/+$/u, '')}`;
+  }
+
+  // Leading slash - treat as path on current host
   if (raw.startsWith('/')) {
     if (typeof window !== 'undefined') {
       return `${window.location.protocol}//${window.location.host}${raw.replace(/^\/+|\/+$/gu, '')}`;
     }
-    // At build-time / server-side, assume https for safety
     return `https://${raw.replace(/^\/+/, '')}`;
   }
 
-  // Bare hostname (e.g. automify-ai-backend.onrender.com or just automify-ai-backend)
-  // Render's fromService with property:host returns hostname without protocol
-  if (/^[\w.-]+(\.[\w.-]+)*$/.test(raw)) {
-    // If it contains a dot, it's likely a full hostname (e.g., automify-ai-backend.onrender.com)
-    // If no dot, it might be just the service name (e.g., automify-ai-backend)
-    // For Render, we assume https://
+  // Service name or hostname without protocol
+  // Render's fromService returns just the service name (e.g., "automify-ai-backend")
+  // We need to construct the full URL
+  
+  // If it contains a dot, it's likely a full hostname
+  if (raw.includes('.')) {
     return `https://${raw.replace(/\/+$/u, '')}`;
   }
 
-  // Fallback: return without trailing slashes
-  return raw.replace(/\/+$/u, '');
+  // Just a service name (no dots) - construct Render URL
+  // Render URLs follow pattern: https://{service-name}.onrender.com
+  // But actual URLs might be: https://{service-name}-{random}.onrender.com
+  // We'll try the simple pattern first, and if that fails, the frontend will show an error
+  
+  // In browser: try to infer from current hostname
+  if (typeof window !== 'undefined') {
+    const currentHost = window.location.hostname;
+    // If we're on Render, extract the pattern
+    const renderMatch = currentHost.match(/^([^-]+)-[^-]+\.onrender\.com$/);
+    if (renderMatch) {
+      // Current host is like "automify-ai-frontend-xxxx.onrender.com"
+      // Backend should be "automify-ai-backend-xxxx.onrender.com"
+      // But we don't know the random suffix, so we'll use the service name pattern
+      // This is a limitation - the user MUST set the full URL manually
+      console.warn('⚠️ Cannot auto-detect backend URL suffix. Please set NEXT_PUBLIC_API_URL to full URL in Render dashboard.');
+    }
+  }
+
+  // Fallback: construct simple Render URL (may not work if service has random suffix)
+  // This is why manual setup is recommended
+  return `https://${raw}.onrender.com`;
 }
 
-const API_BASE_URL = normalizeApiUrl(rawApiUrl);
+const API_BASE_URL = getApiUrl();
 
-// Debug: Log the API URL being used (remove after debugging)
+// Runtime validation and helpful error messages
 if (typeof window !== 'undefined') {
-  console.log('🔍 API Configuration Debug:');
-  console.log('  Raw API URL from env:', rawApiUrl || '(not set)');
-  console.log('  Normalized API Base URL:', API_BASE_URL);
+  const raw = process.env.NEXT_PUBLIC_API_URL;
   
-  // Warn if URL looks wrong
-  if (!rawApiUrl || rawApiUrl === 'http://localhost:8000') {
-    console.warn('⚠️ NEXT_PUBLIC_API_URL is not set or using localhost default!');
-    console.warn('   This will fail on Render. Set it in Render dashboard environment variables.');
-  }
-  
-  if (rawApiUrl && !rawApiUrl.includes('://') && !rawApiUrl.includes('.')) {
-    console.error('❌ ERROR: NEXT_PUBLIC_API_URL appears to be just a service name!');
-    console.error('   Current value:', rawApiUrl);
-    console.error('   Expected format: https://automify-ai-backend-xxxx.onrender.com');
-    console.error('   Fix: Set NEXT_PUBLIC_API_URL in Render dashboard to the full backend URL');
+  // Only log in development or if there's an issue
+  if (!raw || raw === 'http://localhost:8000' || (!raw.includes('://') && !raw.includes('.'))) {
+    console.group('🔧 API Configuration');
+    console.log('Raw env value:', raw || '(not set)');
+    console.log('Resolved URL:', API_BASE_URL);
+    
+    if (!raw || raw === 'http://localhost:8000') {
+      console.warn('⚠️ Using localhost (development mode)');
+      console.info('For production: Set NEXT_PUBLIC_API_URL in Render dashboard');
+    } else if (!raw.includes('://')) {
+      console.error('❌ NEXT_PUBLIC_API_URL is missing protocol (http:// or https://)');
+      console.error('Current value:', raw);
+      console.error('Expected format: https://automify-ai-backend-xxxx.onrender.com');
+      console.info('Fix: Go to Render Dashboard → automify-ai-frontend → Environment → Set NEXT_PUBLIC_API_URL to full URL');
+    }
+    
+    console.groupEnd();
   }
 }
 
@@ -82,13 +121,32 @@ api.interceptors.response.use(
   (error) => {
     // Handle network errors (like ERR_NAME_NOT_RESOLVED)
     if (error.code === 'ERR_NETWORK' || error.message?.includes('ERR_NAME_NOT_RESOLVED')) {
-      console.error('❌ Network Error: Cannot connect to backend API');
-      console.error('   API URL:', API_BASE_URL);
-      console.error('   This usually means:');
-      console.error('   1. NEXT_PUBLIC_API_URL is not set correctly in Render');
-      console.error('   2. Frontend needs to be rebuilt after setting env var');
-      console.error('   3. Backend service is not running');
-      console.error('   Fix: Check Render dashboard → automify-ai-frontend → Environment tab');
+      const raw = process.env.NEXT_PUBLIC_API_URL;
+      
+      console.group('❌ Network Error: Cannot connect to backend');
+      console.error('Attempted URL:', API_BASE_URL);
+      console.error('Raw env value:', raw || '(not set)');
+      
+      if (!raw || !raw.includes('://')) {
+        console.error('');
+        console.error('🔴 ROOT CAUSE: NEXT_PUBLIC_API_URL is not set correctly');
+        console.error('');
+        console.error('📋 FIX STEPS:');
+        console.error('1. Go to Render Dashboard → automify-ai-backend service');
+        console.error('2. Copy the full URL from Settings tab (e.g., https://automify-ai-backend-xxxx.onrender.com)');
+        console.error('3. Go to automify-ai-frontend service → Environment tab');
+        console.error('4. Add/Edit: NEXT_PUBLIC_API_URL = https://automify-ai-backend-xxxx.onrender.com');
+        console.error('5. Save and wait for automatic redeploy');
+        console.error('');
+        console.error('⚠️ IMPORTANT: The URL must include https:// and the full domain');
+      } else {
+        console.error('Possible causes:');
+        console.error('1. Backend service is not running');
+        console.error('2. Frontend needs rebuild after env var change');
+        console.error('3. CORS or network firewall issue');
+      }
+      
+      console.groupEnd();
     }
     
     if (error.response?.status === 401) {

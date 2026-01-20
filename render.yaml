@@ -44,9 +44,20 @@ services:
     buildCommand: cd frontend && npm install && npm run build
     startCommand: cd frontend && npm start
     envVars:
+      # CRITICAL: NEXT_PUBLIC_API_URL MUST be set manually in Render Dashboard
+      # 
+      # Why: Render's fromService with property:host returns only the service name
+      # (e.g., "automify-ai-backend") instead of the full URL, causing ERR_NAME_NOT_RESOLVED
+      #
+      # Setup Instructions:
+      # 1. Deploy backend first and note its full URL (e.g., https://automify-ai-backend-xxxx.onrender.com)
+      # 2. In Render Dashboard → automify-ai-frontend → Environment tab
+      # 3. Add environment variable:
+      #    Key: NEXT_PUBLIC_API_URL
+      #    Value: https://automify-ai-backend-xxxx.onrender.com (your actual backend URL)
+      # 4. Save - Render will automatically redeploy
+      #
+      # The frontend code will handle validation and show helpful error messages if misconfigured
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: automify-ai-backend
-          property: host
+        sync: false  # MUST be set manually - cannot use fromService
 
