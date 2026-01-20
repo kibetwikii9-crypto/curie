@@ -43,21 +43,18 @@ services:
     plan: free  # Change to 'starter' or 'standard' for production
     buildCommand: cd frontend && npm install && npm run build
     startCommand: cd frontend && npm start
-    envVars:
-      # CRITICAL: NEXT_PUBLIC_API_URL MUST be set manually in Render Dashboard
-      # 
-      # Why: Render's fromService with property:host returns only the service name
-      # (e.g., "automify-ai-backend") instead of the full URL, causing ERR_NAME_NOT_RESOLVED
-      #
-      # Setup Instructions:
-      # 1. Deploy backend first and note its full URL (e.g., https://automify-ai-backend-xxxx.onrender.com)
-      # 2. In Render Dashboard → automify-ai-frontend → Environment tab
-      # 3. Add environment variable:
-      #    Key: NEXT_PUBLIC_API_URL
-      #    Value: https://automify-ai-backend-xxxx.onrender.com (your actual backend URL)
-      # 4. Save - Render will automatically redeploy
-      #
-      # The frontend code will handle validation and show helpful error messages if misconfigured
-      - key: NEXT_PUBLIC_API_URL
-        sync: false  # MUST be set manually - cannot use fromService
+    # NOTE: NEXT_PUBLIC_API_URL is intentionally NOT listed here
+    # 
+    # Why: Render's Blueprint system can overwrite manual env vars on redeploy.
+    # Even with sync: false, Blueprint redeploys can reset it to just the service name.
+    #
+    # SOLUTION: Set NEXT_PUBLIC_API_URL ONLY in Render Dashboard (not in render.yaml)
+    # 
+    # Steps:
+    # 1. Go to Render Dashboard → automify-ai-frontend → Environment tab
+    # 2. Add: NEXT_PUBLIC_API_URL = https://automify-ai-backend-xxxx.onrender.com
+    # 3. Make sure it's NOT managed by Blueprint (should show as "Manual" not "Blueprint")
+    #
+    # This prevents Render from overwriting it during Blueprint redeploys.
+    envVars: []
 
