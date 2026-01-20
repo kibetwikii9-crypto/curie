@@ -4,7 +4,7 @@ import json
 import secrets
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -18,6 +18,77 @@ import httpx
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _get_error_html(error_message: str) -> str:
+    """Generate HTML page that posts error message to parent window (for popup OAuth)."""
+    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    # Escape single quotes in error message for JavaScript
+    escaped_error = error_message.replace("'", "\\'").replace("\n", "\\n")
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>WhatsApp Connection Error</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background: #f5f5f5;
+            }}
+            .container {{
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }}
+            .error {{
+                color: #ef4444;
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }}
+            h1 {{
+                color: #333;
+                margin: 0.5rem 0;
+            }}
+            p {{
+                color: #666;
+                margin: 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="error">✗</div>
+            <h1>Connection Failed</h1>
+            <p>{error_message}</p>
+            <p style="margin-top: 1rem; font-size: 0.9rem; color: #999;">This window will close automatically...</p>
+        </div>
+        <script>
+            // Post error message to parent window
+            if (window.opener) {{
+                window.opener.postMessage({{
+                    type: 'whatsapp-oauth-error',
+                    error: '{escaped_error}'
+                }}, '*');
+                
+                // Close popup after a short delay
+                setTimeout(function() {{
+                    window.close();
+                }}, 2000);
+            }} else {{
+                // If no opener (direct navigation), redirect
+                window.location.href = '{frontend_url}/dashboard/integrations?error={escaped_error}';
+            }}
+        </script>
+    </body>
+    </html>
+    """
 
 
 class TelegramConnectRequest(BaseModel):
@@ -710,10 +781,8 @@ async def whatsapp_oauth_callback(
     # Check for errors
     if error:
         log.error(f"OAuth error: {error_reason}")
-        frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
-        return RedirectResponse(
-            url=f"{frontend_url}/dashboard/integrations?error={error_reason}"
-        )
+        error_message = error_reason or error
+        return Response(content=_get_error_html(error_message), media_type="text/html")
     
     # Verify state
     if state not in oauth_states:
@@ -745,10 +814,7 @@ async def whatsapp_oauth_callback(
         business_accounts = await oauth.get_business_accounts(access_token)
         
         if not business_accounts:
-            frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
-            return RedirectResponse(
-                url=f"{frontend_url}/dashboard/integrations?error=No business accounts found"
-            )
+            return Response(content=_get_error_html("No business accounts found"), media_type="text/html")
         
         # 4. Use first business account (in production, let user select)
         business_account = business_accounts[0]
@@ -761,10 +827,7 @@ async def whatsapp_oauth_callback(
         )
         
         if not whatsapp_accounts:
-            frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
-            return RedirectResponse(
-                url=f"{frontend_url}/dashboard/integrations?error=No WhatsApp Business Accounts found"
-            )
+            return Response(content=_get_error_html("No WhatsApp Business Accounts found"), media_type="text/html")
         
         # 6. Use first WhatsApp account (or let user select)
         whatsapp_account = whatsapp_accounts[0]
@@ -777,10 +840,7 @@ async def whatsapp_oauth_callback(
         )
         
         if not phone_numbers:
-            frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
-            return RedirectResponse(
-                url=f"{frontend_url}/dashboard/integrations?error=No phone numbers found"
-            )
+            return Response(content=_get_error_html("No phone numbers found"), media_type="text/html")
         
         # 8. Use first phone number (or let user select)
         phone_number = phone_numbers[0]
@@ -849,18 +909,77 @@ async def whatsapp_oauth_callback(
         
         log.info(f"WhatsApp integration created/updated: {integration_id} by user {user_id}")
         
-        # 12. Redirect to dashboard with success
+        # 12. Return HTML page that posts message to parent window and closes popup
         frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
-        return RedirectResponse(
-            url=f"{frontend_url}/dashboard/integrations?success=true&channel=whatsapp"
-        )
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>WhatsApp Connected</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background: #f5f5f5;
+                }}
+                .container {{
+                    text-align: center;
+                    padding: 2rem;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }}
+                .success {{
+                    color: #25D366;
+                    font-size: 3rem;
+                    margin-bottom: 1rem;
+                }}
+                h1 {{
+                    color: #333;
+                    margin: 0.5rem 0;
+                }}
+                p {{
+                    color: #666;
+                    margin: 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="success">✓</div>
+                <h1>WhatsApp Connected!</h1>
+                <p>This window will close automatically...</p>
+            </div>
+            <script>
+                // Post message to parent window
+                if (window.opener) {{
+                    window.opener.postMessage({{
+                        type: 'whatsapp-oauth-success',
+                        channel: 'whatsapp'
+                    }}, '*');
+                    
+                    // Close popup after a short delay
+                    setTimeout(function() {{
+                        window.close();
+                    }}, 1500);
+                }} else {{
+                    // If no opener (direct navigation), redirect
+                    window.location.href = '{frontend_url}/dashboard/integrations?success=true&channel=whatsapp';
+                }}
+            </script>
+        </body>
+        </html>
+        """
+        return Response(content=html_content, media_type="text/html")
     
     except Exception as e:
         log.error(f"OAuth callback error: {e}", exc_info=True)
-        frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
-        return RedirectResponse(
-            url=f"{frontend_url}/dashboard/integrations?error=Failed to connect WhatsApp"
-        )
+        error_message = f"Failed to connect WhatsApp: {str(e)}"
+        return Response(content=_get_error_html(error_message), media_type="text/html")
 
 
 @router.get("/whatsapp/status", response_model=IntegrationResponse)

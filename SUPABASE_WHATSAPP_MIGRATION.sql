@@ -58,3 +58,5 @@ WHERE channel = 'whatsapp' AND is_active = true;
 -- 4. No schema changes needed - existing structure works!
 -- ============================================================================
 
+
+
