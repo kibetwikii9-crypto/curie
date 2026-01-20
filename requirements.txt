@@ -1,28 +1,32 @@
 # Multi-Tenant Messaging SaaS - Phase 1
 # Production-ready dependencies
+# Verified complete dependency list for Python 3.11.9
 
 # Web Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
 # Database
-asyncpg>=0.29.0,<0.30.0
-sqlalchemy>=2.0.0,<3.0.0
+asyncpg>=0.29.0,<0.30.0  # Async PostgreSQL driver
+sqlalchemy>=2.0.0,<3.0.0  # SQL ORM
 psycopg[binary]>=3.1.0,<4.0.0  # PostgreSQL driver for SQLAlchemy (psycopg3)
 
 # HTTP Client
-httpx==0.25.1
+httpx==0.25.1  # Async HTTP client for Meta OAuth and WhatsApp API
 
-# Configuration
+# Configuration & Validation
 # Using flexible versions to allow pip to select pre-built wheels
 # This prevents Rust compilation errors on Render
-pydantic>=2.5.0,<3.0.0
-pydantic-settings>=2.1.0
+pydantic>=2.5.0,<3.0.0  # Data validation
+pydantic-settings>=2.1.0  # Settings management
 email-validator>=2.0.0  # Required for Pydantic EmailStr validation
 
 # Authentication & Security
-python-jose[cryptography]>=3.3.0  # JWT token handling
+python-jose[cryptography]>=3.3.0  # JWT token handling (includes cryptography)
 bcrypt>=4.0.0  # Password hashing
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv==1.0.0  # Environment variable management
+
+# Note: All standard library imports (logging, json, os, sys, datetime, typing, etc.)
+# are included in Python 3.11.9 and do not need to be listed here.
