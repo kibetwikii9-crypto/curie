@@ -3,8 +3,8 @@
 # Verified complete dependency list for Python 3.11.9
 
 # Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi>=0.110.0,<0.120.0  # Upgraded for Pydantic 2.x compatibility
+uvicorn[standard]>=0.24.0,<0.30.0
 
 # Database
 asyncpg>=0.29.0,<0.30.0  # Async PostgreSQL driver
