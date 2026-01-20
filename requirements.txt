@@ -6,6 +6,7 @@
 fastapi>=0.110.0,<0.120.0  # Upgraded for Pydantic 2.x compatibility
 uvicorn[standard]>=0.24.0,<0.30.0
 python-multipart>=0.0.6  # Required for FastAPI form data handling (OAuth2PasswordRequestForm)
+# Note: starlette and annotated-doc are auto-installed as FastAPI dependencies
 
 # Database
 asyncpg>=0.29.0,<0.30.0  # Async PostgreSQL driver
