@@ -270,7 +270,9 @@ export default function IntegrationsPage() {
                       <button
                         onClick={() => {
                           // Redirect to reconnect (will update existing connection)
-                          window.location.href = '/api/integrations/whatsapp/connect';
+                          // Use full backend URL, not relative path
+                          const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
+                          window.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
                         }}
                         className="w-full inline-flex items-center justify-center px-4 py-2 border border-[#25D366] text-[#25D366] dark:text-[#25D366] bg-[#25D366]/10 dark:bg-[#25D366]/20 hover:bg-[#25D366]/20 dark:hover:bg-[#25D366]/30 rounded-md text-sm font-medium transition-colors"
                       >
@@ -299,7 +301,9 @@ export default function IntegrationsPage() {
                     <button
                       onClick={() => {
                         // Redirect to backend OAuth endpoint (self-serve, no tokens needed)
-                        window.location.href = '/api/integrations/whatsapp/connect';
+                        // Use full backend URL, not relative path
+                        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
+                        window.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
                       }}
                       className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent bg-[#25D366] hover:bg-[#20b558] text-white rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
