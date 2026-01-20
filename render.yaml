@@ -5,12 +5,11 @@ services:
     runtime: python
     plan: free  # Change to 'starter' or 'standard' for production
     buildCommand: pip install -r requirements.txt
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     dockerfilePath: null  # Use buildpacks, not Dockerfile
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: BOT_TOKEN
         sync: false  # You'll set this manually in Render dashboard
       - key: PUBLIC_URL
