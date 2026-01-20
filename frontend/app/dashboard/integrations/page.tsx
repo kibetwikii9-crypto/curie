@@ -33,31 +33,31 @@ const channels = [
     name: 'WhatsApp',
     status: 'available',
     description: 'Connect WhatsApp Business API for customer support',
-    icon: '💬',
+    icon: '/whatsapp-icon.png',
   },
   {
     name: 'Instagram',
     status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
-    icon: '📷',
+    icon: '/intagram-icon.png', // Note: using filename as provided
   },
   {
     name: 'Facebook Messenger',
     status: 'available',
     description: 'Integrate Facebook Messenger conversations',
-    icon: '👥',
+    icon: '/messenger-icon.png',
   },
   {
     name: 'Telegram',
     status: 'available', // Will be updated dynamically
     description: 'Telegram bot integration',
-    icon: '✈️',
+    icon: '/telegram-icon.png',
   },
   {
     name: 'Website Chat',
     status: 'available',
     description: 'Embed chat widget on your website',
-    icon: '🌐',
+    icon: null, // No icon file provided, will use fallback
   },
 ];
 
@@ -227,7 +227,17 @@ export default function IntegrationsPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">{channel.icon}</div>
+                    {channel.icon ? (
+                      <Image
+                        src={channel.icon}
+                        alt={`${channel.name} icon`}
+                        width={48}
+                        height={48}
+                        className="object-contain"
+                      />
+                    ) : (
+                      <Globe className="w-12 h-12 text-gray-400" />
+                    )}
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {channel.name}
@@ -380,7 +390,17 @@ export default function IntegrationsPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">{channel.icon}</div>
+                    {channel.icon ? (
+                      <Image
+                        src={channel.icon}
+                        alt={`${channel.name} icon`}
+                        width={48}
+                        height={48}
+                        className="object-contain"
+                      />
+                    ) : (
+                      <Globe className="w-12 h-12 text-gray-400" />
+                    )}
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {channel.name}
