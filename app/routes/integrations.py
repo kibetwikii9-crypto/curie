@@ -627,11 +627,16 @@ oauth_states = {}
 @router.get("/whatsapp/connect")
 async def initiate_whatsapp_oauth(
     current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept: Optional[str] = None
 ):
     """
     Start Meta OAuth flow for WhatsApp connection.
     User clicks "Connect WhatsApp" → redirects here → redirects to Meta
+    
+    Supports both:
+    - Browser redirect: Returns RedirectResponse (302)
+    - API call: Returns JSON with auth_url (for frontend to redirect)
     """
     # Check user role
     if current_user.role not in ["admin", "business_owner"]:
@@ -669,7 +674,12 @@ async def initiate_whatsapp_oauth(
     # Get authorization URL
     auth_url = oauth.get_authorization_url(state)
     
-    # Redirect to Meta
+    # If request wants JSON (API call from frontend), return JSON
+    # Otherwise, redirect directly (for direct browser navigation)
+    if accept and "application/json" in accept:
+        return {"auth_url": auth_url, "state": state}
+    
+    # Redirect to Meta (for direct browser navigation)
     return RedirectResponse(url=auth_url)
 
 

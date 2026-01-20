@@ -268,11 +268,30 @@ export default function IntegrationsPage() {
                   {isWhatsAppConnected ? (
                     <>
                       <button
-                        onClick={() => {
-                          // Redirect to reconnect (will update existing connection)
-                          // Use full backend URL, not relative path
-                          const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-                          window.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
+                        onClick={async () => {
+                          try {
+                            // Use API call to get OAuth URL (includes auth headers)
+                            const response = await api.get('/api/integrations/whatsapp/connect', {
+                              headers: {
+                                'Accept': 'application/json'
+                              }
+                            });
+                            
+                            if (response.data?.auth_url) {
+                              window.location.href = response.data.auth_url;
+                            } else {
+                              throw new Error('No auth_url in response');
+                            }
+                          } catch (error: any) {
+                            console.error('WhatsApp reconnect error:', error);
+                            if (error.response?.status === 401) {
+                              alert('Please log in first');
+                            } else if (error.response?.status === 403) {
+                              alert(error.response?.data?.detail || 'You do not have permission');
+                            } else {
+                              alert('Failed to reconnect WhatsApp. Please try again.');
+                            }
+                          }
                         }}
                         className="w-full inline-flex items-center justify-center px-4 py-2 border border-[#25D366] text-[#25D366] dark:text-[#25D366] bg-[#25D366]/10 dark:bg-[#25D366]/20 hover:bg-[#25D366]/20 dark:hover:bg-[#25D366]/30 rounded-md text-sm font-medium transition-colors"
                       >
@@ -299,11 +318,35 @@ export default function IntegrationsPage() {
                     </>
                   ) : (
                     <button
-                      onClick={() => {
-                        // Redirect to backend OAuth endpoint (self-serve, no tokens needed)
-                        // Use full backend URL, not relative path
-                        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-                        window.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
+                      onClick={async () => {
+                        try {
+                          // Use API call to get OAuth URL (includes auth headers)
+                          const response = await api.get('/api/integrations/whatsapp/connect', {
+                            headers: {
+                              'Accept': 'application/json'
+                            }
+                          });
+                          
+                          // Backend returns JSON with auth_url
+                          if (response.data?.auth_url) {
+                            window.location.href = response.data.auth_url;
+                          } else {
+                            throw new Error('No auth_url in response');
+                          }
+                        } catch (error: any) {
+                          console.error('WhatsApp connection error:', error);
+                          if (error.response?.status === 401) {
+                            alert('Please log in first');
+                            window.location.href = '/';
+                          } else if (error.response?.status === 403) {
+                            alert(error.response?.data?.detail || 'You do not have permission to connect integrations');
+                          } else if (error.response?.status === 500) {
+                            alert(error.response?.data?.detail || 'Meta OAuth is not configured. Please contact support.');
+                          } else {
+                            alert('Failed to connect WhatsApp. Please try again.');
+                            console.error('Full error:', error);
+                          }
+                        }
                       }}
                       className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent bg-[#25D366] hover:bg-[#20b558] text-white rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
