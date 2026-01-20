@@ -57,3 +57,5 @@ You need to crop/resize your favicon to a **square format**.
 The favicon should now display at the correct size!
 
 
+
+

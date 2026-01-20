@@ -88,3 +88,5 @@ After replacing the file, test it:
 The favicon should now appear much larger and clearer!
 
 
+
+

@@ -66,6 +66,7 @@ export default function IntegrationsPage() {
   const queryClient = useQueryClient();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
+  const [whatsappStatus, setWhatsappStatus] = useState<Integration | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTestLoading, setIsTestLoading] = useState(false);
@@ -83,13 +84,15 @@ export default function IntegrationsPage() {
     }
 
     try {
-      const [integrationsRes, statusRes] = await Promise.all([
+      const [integrationsRes, telegramStatusRes, whatsappStatusRes] = await Promise.all([
         api.get('/api/integrations/'),
         api.get('/api/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
+        api.get('/api/integrations/whatsapp/status').catch(() => ({ data: null })),
       ]);
 
       setIntegrations(integrationsRes.data || []);
-      setTelegramStatus(statusRes.data);
+      setTelegramStatus(telegramStatusRes.data);
+      setWhatsappStatus(whatsappStatusRes.data || null);
     } catch (error: any) {
       console.error('Error fetching integrations:', error);
       // If 403, user doesn't have permission - that's okay
@@ -103,6 +106,25 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     fetchIntegrations();
+    
+    // Handle OAuth callback success/error from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const channel = urlParams.get('channel');
+    
+    if (success === 'true' && channel === 'whatsapp') {
+      // Refresh integrations to show WhatsApp as connected
+      setTimeout(() => {
+        fetchIntegrations();
+      }, 1000);
+      // Clean URL
+      window.history.replaceState({}, '', '/dashboard/integrations');
+    } else if (error) {
+      alert(`WhatsApp connection failed: ${error}`);
+      // Clean URL
+      window.history.replaceState({}, '', '/dashboard/integrations');
+    }
   }, [canManage]);
 
   const handleConnectSuccess = () => {
@@ -195,6 +217,105 @@ export default function IntegrationsPage() {
       {/* Channel Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {channels.map((channel) => {
+          if (channel.name === 'WhatsApp') {
+            const isWhatsAppConnected = whatsappStatus?.is_active === true;
+            
+            return (
+              <div
+                key={channel.name}
+                className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="text-3xl">{channel.icon}</div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {channel.name}
+                      </h3>
+                      {isWhatsAppConnected ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mt-1">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 mt-1">
+                          Not Connected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {channel.description}
+                  {whatsappStatus?.channel_name && (
+                    <span className="block mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {whatsappStatus.channel_name}
+                    </span>
+                  )}
+                </p>
+
+                {/* Status Details */}
+                {isWhatsAppConnected && (
+                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      ✅ Your WhatsApp is connected and ready to handle conversations
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="space-y-2">
+                  {isWhatsAppConnected ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          // Redirect to reconnect (will update existing connection)
+                          window.location.href = '/api/integrations/whatsapp/connect';
+                        }}
+                        className="w-full inline-flex items-center justify-center px-4 py-2 border border-[#25D366] text-[#25D366] dark:text-[#25D366] bg-[#25D366]/10 dark:bg-[#25D366]/20 hover:bg-[#25D366]/20 dark:hover:bg-[#25D366]/30 rounded-md text-sm font-medium transition-colors"
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Reconnect / Configure
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('Are you sure you want to disconnect WhatsApp? This will stop receiving messages.')) {
+                            return;
+                          }
+                          try {
+                            await api.delete('/api/integrations/whatsapp/disconnect');
+                            fetchIntegrations();
+                          } catch (error: any) {
+                            alert(error.response?.data?.detail || 'Failed to disconnect WhatsApp');
+                          }
+                        }}
+                        className="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md text-sm font-medium transition-colors"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Disconnect
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        // Redirect to backend OAuth endpoint (self-serve, no tokens needed)
+                        window.location.href = '/api/integrations/whatsapp/connect';
+                      }}
+                      className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent bg-[#25D366] hover:bg-[#20b558] text-white rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Plug className="h-4 w-4 mr-2" />
+                      Connect WhatsApp
+                    </button>
+                  )}
+                </div>
+                {!isWhatsAppConnected && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    No tokens or code needed. You'll be redirected to Meta to authorize.
+                  </p>
+                )}
+              </div>
+            );
+          }
           // Special handling for Telegram
           if (channel.name === 'Telegram') {
             return (

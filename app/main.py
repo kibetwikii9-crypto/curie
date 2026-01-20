@@ -164,6 +164,43 @@ class CORSHeaderMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(CORSHeaderMiddleware)
 
+# Maintenance Mode Middleware - MUST be added after CORS but before routes
+class MaintenanceModeMiddleware(BaseHTTPMiddleware):
+    """Block all requests when maintenance mode is enabled."""
+    async def dispatch(self, request: Request, call_next):
+        # Allow health check endpoint even in maintenance mode
+        if request.url.path == "/health":
+            return await call_next(request)
+        
+        # Check if maintenance mode is enabled
+        if settings.maintenance_mode:
+            # Add CORS headers for maintenance response
+            origin = request.headers.get("origin", "")
+            headers = {
+                "Retry-After": "3600",  # Suggest retry after 1 hour
+            }
+            
+            # Add CORS headers if origin is allowed
+            if origin in cors_origins or "*" in cors_origins:
+                headers["Access-Control-Allow-Origin"] = origin if origin in cors_origins else "*"
+                headers["Access-Control-Allow-Credentials"] = "true" if not allow_all_origins and origin in cors_origins else "false"
+                headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                headers["Access-Control-Allow-Headers"] = "*"
+            
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "Service Unavailable",
+                    "message": "The website is currently under maintenance. Please check back later.",
+                    "maintenance_mode": True
+                },
+                headers=headers
+            )
+        
+        return await call_next(request)
+
+app.add_middleware(MaintenanceModeMiddleware)
+
 # Global exception handler to ensure CORS headers are always sent
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-change-in-production"  # JWT secret key (set via SECRET_KEY env var)
     admin_email: str = "admin@automify.com"  # Admin user email (set via ADMIN_EMAIL env var)
     admin_password: str = ""  # Admin user password (set via ADMIN_PASSWORD env var, required for auto-creation)
+    maintenance_mode: bool = False  # Maintenance mode - blocks all access when True (set via MAINTENANCE_MODE env var)
+    
+    # Meta OAuth for WhatsApp (self-serve connection)
+    meta_app_id: str = ""  # Meta App ID (set via META_APP_ID env var)
+    meta_app_secret: str = ""  # Meta App Secret (set via META_APP_SECRET env var)
+    meta_redirect_uri: str = ""  # OAuth redirect URI (set via META_REDIRECT_URI env var)
+    
+    # WhatsApp Webhook
+    whatsapp_verify_token: str = ""  # Webhook verification token (set via WHATSAPP_VERIFY_TOKEN env var)
+    whatsapp_app_secret: str = ""  # App secret for signature verification (set via WHATSAPP_APP_SECRET env var)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

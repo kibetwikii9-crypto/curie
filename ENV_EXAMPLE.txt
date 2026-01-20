@@ -26,3 +26,9 @@ LOG_LEVEL=INFO
 # OpenAI API Key (optional - leave empty for rule-based AI)
 OPENAI_API_KEY=
 
+# Maintenance Mode (set to 'true' to pause the website)
+# Backend: Blocks all API requests except /health
+# Frontend: Shows maintenance page to all visitors
+MAINTENANCE_MODE=false
+NEXT_PUBLIC_MAINTENANCE_MODE=false
+

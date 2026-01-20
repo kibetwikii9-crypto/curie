@@ -10,3 +10,5 @@ INSERT INTO onboarding_steps (step_key, title, description, "order", is_required
     ('invite_team', 'Invite Team Members', 'Add team members to your workspace', 6, false)
 ON CONFLICT (step_key) DO NOTHING;
 
+
+

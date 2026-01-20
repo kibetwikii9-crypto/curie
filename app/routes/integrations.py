@@ -1,8 +1,10 @@
 """Channel integration API endpoints."""
 import logging
 import json
+import secrets
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -10,6 +12,8 @@ from datetime import datetime
 from app.database import get_db
 from app.models import ChannelIntegration, Business, User as UserModel
 from app.routes.auth import get_current_user, get_user_business_id
+from app.services.meta_oauth import MetaOAuthService
+from app.config import settings
 import httpx
 
 log = logging.getLogger(__name__)
@@ -610,4 +614,314 @@ async def disconnect_telegram(
     log.info(f"Telegram integration disconnected: {integration.id} by user {current_user.id}")
     
     return {"success": True, "message": "Telegram integration disconnected successfully"}
+
+
+# ============================================================================
+# WHATSAPP OAUTH INTEGRATION (Self-Serve)
+# ============================================================================
+
+# Store OAuth state temporarily (use Redis in production)
+oauth_states = {}
+
+
+@router.get("/whatsapp/connect")
+async def initiate_whatsapp_oauth(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Start Meta OAuth flow for WhatsApp connection.
+    User clicks "Connect WhatsApp" → redirects here → redirects to Meta
+    """
+    # Check user role
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admin and Business Owner roles can connect integrations"
+        )
+    
+    # Get user's business_id
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account. Admin users cannot manage integrations."
+        )
+    
+    # Check if Meta OAuth is configured
+    if not hasattr(settings, 'meta_app_id') or not settings.meta_app_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Meta OAuth is not configured. Please contact support."
+        )
+    
+    # Generate state token (include user_id and business_id for security)
+    state = secrets.token_urlsafe(32)
+    oauth_states[state] = {
+        "user_id": current_user.id,
+        "business_id": business_id
+    }
+    
+    # Initialize OAuth service
+    oauth = MetaOAuthService()
+    
+    # Get authorization URL
+    auth_url = oauth.get_authorization_url(state)
+    
+    # Redirect to Meta
+    return RedirectResponse(url=auth_url)
+
+
+@router.get("/whatsapp/callback")
+async def whatsapp_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    error: Optional[str] = Query(None),
+    error_reason: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Meta OAuth callback.
+    Meta redirects here after user authorizes.
+    """
+    # Check for errors
+    if error:
+        log.error(f"OAuth error: {error_reason}")
+        frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/integrations?error={error_reason}"
+        )
+    
+    # Verify state
+    if state not in oauth_states:
+        raise HTTPException(status_code=400, detail="Invalid state")
+    
+    oauth_data = oauth_states[state]
+    user_id = oauth_data["user_id"]
+    business_id = oauth_data["business_id"]
+    
+    # Get business
+    business = db.query(Business).filter(Business.id == business_id).first()
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+    
+    # Initialize OAuth service
+    oauth = MetaOAuthService()
+    
+    try:
+        # 1. Exchange code for token
+        token_response = await oauth.exchange_code_for_token(code)
+        short_lived_token = token_response["access_token"]
+        
+        # 2. Get long-lived token (60 days)
+        long_lived_response = await oauth.get_long_lived_token(short_lived_token)
+        access_token = long_lived_response["access_token"]
+        expires_in = long_lived_response.get("expires_in", 5184000)  # 60 days
+        
+        # 3. Get business accounts
+        business_accounts = await oauth.get_business_accounts(access_token)
+        
+        if not business_accounts:
+            frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+            return RedirectResponse(
+                url=f"{frontend_url}/dashboard/integrations?error=No business accounts found"
+            )
+        
+        # 4. Use first business account (in production, let user select)
+        business_account = business_accounts[0]
+        business_account_id = business_account["id"]
+        
+        # 5. Get WhatsApp accounts
+        whatsapp_accounts = await oauth.get_whatsapp_accounts(
+            business_account_id,
+            access_token
+        )
+        
+        if not whatsapp_accounts:
+            frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+            return RedirectResponse(
+                url=f"{frontend_url}/dashboard/integrations?error=No WhatsApp Business Accounts found"
+            )
+        
+        # 6. Use first WhatsApp account (or let user select)
+        whatsapp_account = whatsapp_accounts[0]
+        whatsapp_account_id = whatsapp_account["id"]
+        
+        # 7. Get phone numbers
+        phone_numbers = await oauth.get_phone_numbers(
+            whatsapp_account_id,
+            access_token
+        )
+        
+        if not phone_numbers:
+            frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+            return RedirectResponse(
+                url=f"{frontend_url}/dashboard/integrations?error=No phone numbers found"
+            )
+        
+        # 8. Use first phone number (or let user select)
+        phone_number = phone_numbers[0]
+        phone_number_id = phone_number["id"]
+        display_phone_number = phone_number.get("display_phone_number", "")
+        
+        # 9. Set up webhook automatically
+        public_url = settings.public_url.rstrip('/')
+        webhook_url = f"{public_url}/api/webhooks/whatsapp"
+        verify_token = getattr(settings, 'whatsapp_verify_token', '')
+        
+        webhook_setup = await oauth.setup_webhook(
+            phone_number_id,
+            access_token,
+            webhook_url,
+            verify_token
+        )
+        
+        if not webhook_setup:
+            log.warning(f"Webhook setup failed for {phone_number_id}")
+        
+        # 10. Store credentials in ChannelIntegration (following Telegram pattern)
+        credentials = json.dumps({
+            "access_token": access_token,
+            "expires_in": expires_in,
+            "business_account_id": business_account_id,
+            "whatsapp_account_id": whatsapp_account_id,
+            "phone_number_id": phone_number_id
+        })
+        
+        # Check if integration already exists
+        existing = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business.id,
+            ChannelIntegration.channel == "whatsapp"
+        ).first()
+        
+        webhook_url_full = f"{webhook_url}?hub.mode=subscribe&hub.verify_token={verify_token}"
+        
+        if existing:
+            # Update existing integration
+            existing.credentials = credentials
+            existing.is_active = True
+            existing.webhook_url = webhook_url_full
+            existing.channel_name = f"WhatsApp ({display_phone_number})"
+            existing.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(existing)
+            integration_id = existing.id
+        else:
+            # Create new integration
+            integration = ChannelIntegration(
+                business_id=business.id,
+                channel="whatsapp",
+                channel_name=f"WhatsApp ({display_phone_number})",
+                credentials=credentials,
+                is_active=True,
+                webhook_url=webhook_url_full
+            )
+            db.add(integration)
+            db.commit()
+            db.refresh(integration)
+            integration_id = integration.id
+        
+        # 11. Clean up state
+        del oauth_states[state]
+        
+        log.info(f"WhatsApp integration created/updated: {integration_id} by user {user_id}")
+        
+        # 12. Redirect to dashboard with success
+        frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/integrations?success=true&channel=whatsapp"
+        )
+    
+    except Exception as e:
+        log.error(f"OAuth callback error: {e}", exc_info=True)
+        frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/integrations?error=Failed to connect WhatsApp"
+        )
+
+
+@router.get("/whatsapp/status", response_model=IntegrationResponse)
+async def get_whatsapp_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get WhatsApp integration status.
+    """
+    # Get user's business_id
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "whatsapp",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="WhatsApp not connected"
+        )
+    
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=integration.webhook_url,
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat(),
+    )
+
+
+@router.delete("/whatsapp/disconnect")
+async def disconnect_whatsapp(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Disconnect WhatsApp integration.
+    """
+    # Check user role
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admin and Business Owner roles can disconnect integrations"
+        )
+    
+    # Get user's business_id
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "whatsapp"
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="WhatsApp integration not found"
+        )
+    
+    # Deactivate integration
+    integration.is_active = False
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    
+    log.info(f"WhatsApp integration disconnected: {integration.id} by user {current_user.id}")
+    
+    return {"success": True, "message": "WhatsApp integration disconnected successfully"}
 
