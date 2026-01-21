@@ -40,7 +40,7 @@ const channels: Channel[] = [
   {
     name: 'WhatsApp',
     status: 'available',
-    description: 'Connect WhatsApp Business API for customer support',
+    description: 'Connect WhatsApp Business API with one-click OAuth - just log in with Facebook',
     icon: '/whatsapp-icon.png',
   },
   {
@@ -607,12 +607,13 @@ export default function IntegrationsPage() {
                     </p>
                     <ol className="text-xs text-blue-600 dark:text-blue-400 space-y-1 ml-4 list-decimal">
                       <li>Log in with Facebook</li>
-                      <li>Add your phone number</li>
-                      <li>Verify with SMS code</li>
-                      <li>Done! Your WhatsApp Business Account will be created automatically</li>
+                      <li>Select your business (or create one)</li>
+                      <li>Select your WhatsApp Business Account</li>
+                      <li>Authorize permissions</li>
+                      <li>Done! You're connected automatically</li>
                     </ol>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      No tokens or manual setup needed. Takes ~2 minutes.
+                      No tokens, developer accounts, or manual setup needed. Takes ~2 minutes.
                     </p>
                   </div>
                 )}

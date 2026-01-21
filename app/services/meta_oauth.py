@@ -1,6 +1,7 @@
 """
-Meta Embedded Signup Service for WhatsApp Business API
-Handles Embedded Signup flow to create and connect WhatsApp Business Accounts automatically.
+Meta OAuth Service for WhatsApp Business API
+Handles standard OAuth redirect flow for WhatsApp Business connections.
+Users log in with Facebook and select/create business and WhatsApp accounts.
 """
 import logging
 import httpx
@@ -12,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class MetaOAuthService:
-    """Handles Meta Embedded Signup for WhatsApp connection"""
+    """Handles Meta OAuth for WhatsApp Business connection"""
     
-    BASE_URL = "https://graph.facebook.com/v21.0"  # Updated to latest version for Embedded Signup
+    BASE_URL = "https://graph.facebook.com/v21.0"
     
     def __init__(self):
         """Initialize with settings from config"""
@@ -24,35 +25,33 @@ class MetaOAuthService:
     
     def get_authorization_url(self, state: str) -> str:
         """
-        Generate Meta Embedded Signup authorization URL.
-        This creates a WABA during the signup process.
+        Generate Meta OAuth authorization URL (Standard OAuth Redirect Flow).
+        
+        User will:
+        1. Log in with Facebook
+        2. Select/create a business account (if prompted)
+        3. Select/create a WhatsApp Business account (if prompted)
+        4. Grant permissions
+        
+        Meta handles the account creation automatically during the flow.
         
         Args:
             state: CSRF protection token (should include user_id)
             
         Returns:
-            Embedded Signup authorization URL
+            OAuth authorization URL
         """
-        # Embedded Signup configuration
-        config = {
-            "business_config": {
-                "vertical": "NOT_A_BUSINESS"  # For testing; use appropriate vertical in production
-            }
-        }
-        
-        # Convert config to query parameter (Meta expects JSON in setup param)
-        import json
-        from urllib.parse import quote
-        setup_config = quote(json.dumps(config))
-        
-        # Build Embedded Signup URL
+        # Standard OAuth URL with WhatsApp-specific scopes
+        # The scope "whatsapp_business_management" allows the app to:
+        # - Read and manage WhatsApp Business Account settings
+        # - Send messages via WhatsApp Business API
+        # - Read phone numbers and business profiles
         url = (
             f"https://www.facebook.com/v21.0/dialog/oauth?"
             f"client_id={self.app_id}&"
             f"redirect_uri={self.redirect_uri}&"
             f"state={state}&"
-            f"scope=whatsapp_business_management,whatsapp_business_messaging,business_management&"
-            f"extras={{\"feature\":\"whatsapp_embedded_signup\",\"setup\":{setup_config}}}&"
+            f"scope=whatsapp_business_management,whatsapp_business_messaging&"
             f"response_type=code"
         )
         
@@ -147,7 +146,7 @@ class MetaOAuthService:
     ) -> List[Dict[str, Any]]:
         """
         Get WhatsApp Business Accounts for a business.
-        With Embedded Signup, this will return the newly created WABA.
+        Returns existing WhatsApp Business Accounts that the user has access to.
         
         Args:
             business_account_id: Meta Business Account ID
@@ -174,45 +173,6 @@ class MetaOAuthService:
                 return data.get("data", [])
         except Exception as e:
             logger.error(f"Error getting WhatsApp accounts: {e}")
-            raise
-    
-    async def register_phone_number(
-        self,
-        phone_number_id: str,
-        access_token: str,
-        pin: str = "000000"  # 6-digit PIN for verification
-    ) -> Dict[str, Any]:
-        """
-        Register a phone number for WhatsApp Business.
-        This is part of Embedded Signup flow.
-        
-        Args:
-            phone_number_id: Phone number ID from Meta
-            access_token: User's access token
-            pin: 6-digit PIN for two-step verification
-            
-        Returns:
-            Registration response
-        """
-        url = f"{self.BASE_URL}/{phone_number_id}/register"
-        
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "messaging_product": "whatsapp",
-            "pin": pin
-        }
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, headers=headers, json=data, timeout=30.0)
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.error(f"Error registering phone number: {e}")
             raise
     
     async def get_phone_numbers(
@@ -257,13 +217,13 @@ class MetaOAuthService:
         """
         Get debug information about the access token.
         This includes scopes, data access expiration, and app/user info.
-        After Embedded Signup, this can extract the WABA ID.
+        Useful for debugging OAuth flow and verifying permissions.
         
         Args:
             access_token: User's access token
             
         Returns:
-            Debug token information including granular_scopes with whatsapp_business_management
+            Debug token information including scopes and app/user details
         """
         url = f"{self.BASE_URL}/debug_token"
         

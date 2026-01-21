@@ -811,7 +811,7 @@ async def whatsapp_oauth_callback(
         expires_in = long_lived_response.get("expires_in", 5184000)  # 60 days
         
         # 3. Get business accounts
-        # With Embedded Signup, Meta creates a business account automatically if needed
+        # User selected their business account during OAuth flow
         business_accounts = await oauth.get_business_accounts(access_token)
         
         if not business_accounts:
@@ -822,18 +822,17 @@ async def whatsapp_oauth_callback(
         business_account_id = business_account["id"]
         
         # 5. Get WhatsApp accounts
-        # Embedded Signup automatically creates a WABA during OAuth
+        # User must have selected/created a WhatsApp Business Account during OAuth
         whatsapp_accounts = await oauth.get_whatsapp_accounts(
             business_account_id,
             access_token
         )
         
         if not whatsapp_accounts:
-            # This should not happen with Embedded Signup
-            # It means the WABA wasn't created during signup
             return Response(content=_get_error_html(
-                "WhatsApp Business Account was not created. "
-                "Please ensure you completed the signup process including phone number verification."
+                "No WhatsApp Business Account found. "
+                "Please ensure you have a WhatsApp Business Account set up with your Facebook account. "
+                "You can create one at business.facebook.com or during the connection flow."
             ), media_type="text/html")
         
         # 6. Use first WhatsApp account
@@ -849,9 +848,9 @@ async def whatsapp_oauth_callback(
         
         if not phone_numbers:
             return Response(content=_get_error_html(
-                "No phone numbers found. "
-                "If you just completed signup, the phone number may take a few minutes to appear. "
-                "Please try reconnecting in a moment."
+                "No phone numbers found for your WhatsApp Business Account. "
+                "Please add a phone number to your WhatsApp Business Account at business.facebook.com, "
+                "then try reconnecting."
             ), media_type="text/html")
         
         # 8. Use first phone number
@@ -860,7 +859,7 @@ async def whatsapp_oauth_callback(
         display_phone_number = phone_number.get("display_phone_number", "")
         verified_name = phone_number.get("verified_name", "")
         
-        log.info(f"Embedded Signup completed: WABA={whatsapp_account_id}, Phone={display_phone_number}")
+        log.info(f"WhatsApp OAuth completed: WABA={whatsapp_account_id}, Phone={display_phone_number}")
         
         # 9. Set up webhook automatically
         public_url = settings.public_url.rstrip('/')
