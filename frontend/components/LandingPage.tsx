@@ -52,24 +52,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
-      {/* 3D Animated Background */}
-      {!prefersReducedMotion && (
-        <Suspense fallback={null}>
-          <AnimatedBackground3D />
-        </Suspense>
-      )}
-      
-      {/* Fallback gradient for reduced motion */}
-      {prefersReducedMotion && (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div 
-            className="absolute inset-0 opacity-30"
-            style={{
-              background: 'radial-gradient(circle at 20% 50%, rgba(0, 127, 255, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%)',
-            }}
-          />
-        </div>
-      )}
+      {/* 3D Animated Background - ALWAYS SHOW FOR TESTING */}
+      <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
+        <AnimatedBackground3D />
+      </Suspense>
 
       {/* Navigation */}
       <nav className="relative z-10 px-4 sm:px-6 lg:px-8 py-6">
