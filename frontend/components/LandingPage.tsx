@@ -1,11 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import AuthModal from './AuthModal';
+import dynamic from 'next/dynamic';
+
+// Dynamically import 3D background for better performance
+const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
+  ssr: false,
+  loading: () => null,
+});
 
 export default function LandingPage() {
   const router = useRouter();
@@ -44,47 +51,25 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Layers */}
-        <div 
-          className="absolute inset-0 opacity-30"
-          style={{
-            background: 'radial-gradient(circle at 20% 50%, rgba(0, 127, 255, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%)',
-          }}
-        />
-        
-        {/* Floating Shapes */}
-        {!prefersReducedMotion && (
-          <>
-            <div 
-              className="absolute w-72 h-72 rounded-full bg-[#007FFF] opacity-5 blur-3xl"
-              style={{
-                top: '10%',
-                left: '10%',
-                animation: 'float 20s ease-in-out infinite',
-              }}
-            />
-            <div 
-              className="absolute w-96 h-96 rounded-full bg-yellow-400 opacity-5 blur-3xl"
-              style={{
-                top: '60%',
-                right: '10%',
-                animation: 'float 25s ease-in-out infinite reverse',
-              }}
-            />
-            <div 
-              className="absolute w-64 h-64 rounded-full bg-gray-400 opacity-5 blur-3xl"
-              style={{
-                bottom: '20%',
-                left: '50%',
-                animation: 'float 30s ease-in-out infinite',
-              }}
-            />
-          </>
-        )}
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
+      {/* 3D Animated Background */}
+      {!prefersReducedMotion && (
+        <Suspense fallback={null}>
+          <AnimatedBackground3D />
+        </Suspense>
+      )}
+      
+      {/* Fallback gradient for reduced motion */}
+      {prefersReducedMotion && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div 
+            className="absolute inset-0 opacity-30"
+            style={{
+              background: 'radial-gradient(circle at 20% 50%, rgba(0, 127, 255, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.1) 0%, transparent 50%)',
+            }}
+          />
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="relative z-10 px-4 sm:px-6 lg:px-8 py-6">
@@ -116,7 +101,7 @@ export default function LandingPage() {
                 setAuthModalTab('signin');
                 setShowAuthModal(true);
               }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-200 hover:text-white transition-colors"
             >
               Sign In
             </button>
@@ -138,15 +123,15 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
               Multi-Channel AI Business Assistant
-              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] to-[#0055CC] bg-clip-text text-transparent">
+              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent">
                 That Works Everywhere
               </span>
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-300 mb-10 leading-relaxed">
+            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed">
               Connect with customers across WhatsApp, Telegram, Instagram, and more. 
               Powered by AI that understands context and delivers personalized experiences.
             </p>
@@ -168,7 +153,7 @@ export default function LandingPage() {
                   setAuthModalTab('signin');
                   setShowAuthModal(true);
                 }}
-                className="px-8 py-4 text-lg font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-[#007FFF] dark:hover:border-[#007FFF] rounded-lg transition-all"
+                className="px-8 py-4 text-lg font-semibold text-white bg-white/10 backdrop-blur-sm border-2 border-white/20 hover:border-[#007FFF] hover:bg-white/20 rounded-lg transition-all"
               >
                 Sign In
               </button>
@@ -177,29 +162,29 @@ export default function LandingPage() {
             {/* Optional Visual Element */}
             <div className="relative mt-16">
               <div className="relative mx-auto max-w-3xl">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/20 to-yellow-400/20 rounded-2xl blur-3xl" />
-                <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/30 to-[#D4AF37]/30 rounded-2xl blur-3xl" />
+                <div className="relative bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 rounded-full bg-[#007FFF]/10 flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-[#007FFF]/20 flex items-center justify-center mb-4">
                         <MessageSquare className="h-8 w-8 text-[#007FFF]" />
                       </div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Multi-Channel</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Connect everywhere your customers are</p>
+                      <h3 className="font-semibold text-white mb-2">Multi-Channel</h3>
+                      <p className="text-sm text-gray-300">Connect everywhere your customers are</p>
                     </div>
                     <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 rounded-full bg-yellow-400/10 flex items-center justify-center mb-4">
-                        <Zap className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
+                      <div className="w-16 h-16 rounded-full bg-yellow-400/20 flex items-center justify-center mb-4">
+                        <Zap className="h-8 w-8 text-yellow-400" />
                       </div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">AI-Powered</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Intelligent responses that understand context</p>
+                      <h3 className="font-semibold text-white mb-2">AI-Powered</h3>
+                      <p className="text-sm text-gray-300">Intelligent responses that understand context</p>
                     </div>
                     <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 rounded-full bg-gray-400/10 flex items-center justify-center mb-4">
-                        <Shield className="h-8 w-8 text-gray-600 dark:text-gray-400" />
+                      <div className="w-16 h-16 rounded-full bg-gray-400/20 flex items-center justify-center mb-4">
+                        <Shield className="h-8 w-8 text-gray-300" />
                       </div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Enterprise-Grade</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Secure, scalable, and reliable</p>
+                      <h3 className="font-semibold text-white mb-2">Enterprise-Grade</h3>
+                      <p className="text-sm text-gray-300">Secure, scalable, and reliable</p>
                     </div>
                   </div>
                 </div>
@@ -210,13 +195,13 @@ export default function LandingPage() {
       </section>
 
       {/* Learn More Section */}
-      <section className="relative z-10 px-4 sm:px-6 lg:px-8 py-20 bg-gray-50 dark:bg-gray-800/50">
+      <section className="relative z-10 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
               Everything You Need to Scale
             </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-200 max-w-2xl mx-auto">
               Powerful features designed to help you engage customers, automate workflows, and grow your business.
             </p>
           </div>
@@ -270,15 +255,15 @@ export default function LandingPage() {
               return (
                 <div
                   key={idx}
-                  className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:border-[#007FFF] dark:hover:border-[#007FFF] transition-all hover:shadow-lg"
+                  className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all hover:shadow-lg"
                 >
                   <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4`}>
                     <Icon className={`h-6 w-6 ${feature.color}`} />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  <h3 className="text-xl font-semibold text-white mb-2">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400">
+                  <p className="text-gray-300">
                     {feature.description}
                   </p>
                 </div>
@@ -289,7 +274,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 px-4 sm:px-6 lg:px-8 py-12 bg-gray-900 dark:bg-black border-t border-gray-800">
+      <footer className="relative z-10 px-4 sm:px-6 lg:px-8 py-12 bg-black/50 backdrop-blur-sm border-t border-white/10">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
