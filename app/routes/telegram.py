@@ -379,5 +379,3 @@ async def test_send_message(chat_id: int, message: str = "Test message from Auto
     except Exception as e:
         log.error(f"test_send_error chat_id={chat_id} error={type(e).__name__} message={str(e)}", exc_info=True)
         return {"ok": False, "error": f"Error sending test message: {str(e)}", "chat_id": chat_id}
-
-

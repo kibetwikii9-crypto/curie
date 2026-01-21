@@ -189,25 +189,8 @@ async def connect_telegram(
             detail="Invalid bot token format. Please check your token and try again."
         )
     
-    # Get user's business_id with retry logic for DuplicatePreparedStatement errors
-    business_id = None
-    business = None
-    max_retries = 3
-    
-    for attempt in range(max_retries):
-        try:
-            business_id = get_user_business_id(current_user, db)
-            break
-        except Exception as e:
-            if "DuplicatePreparedStatement" in str(e) and attempt < max_retries - 1:
-                log.warning(f"DuplicatePreparedStatement error on attempt {attempt + 1}, retrying...")
-                db.rollback()
-                try:
-                    db.connection().invalidate()
-                except Exception:
-                    pass
-                continue
-            raise
+    # Get user's business_id
+    business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
         raise HTTPException(
@@ -215,21 +198,8 @@ async def connect_telegram(
             detail="Integrations require a business account. Admin users cannot manage integrations."
         )
     
-    # Verify business exists with retry logic
-    for attempt in range(max_retries):
-        try:
-            business = db.query(Business).filter(Business.id == business_id).first()
-            break
-        except Exception as e:
-            if "DuplicatePreparedStatement" in str(e) and attempt < max_retries - 1:
-                log.warning(f"DuplicatePreparedStatement error querying business on attempt {attempt + 1}, retrying...")
-                db.rollback()
-                try:
-                    db.connection().invalidate()
-                except Exception:
-                    pass
-                continue
-            raise
+    # Verify business exists
+    business = db.query(Business).filter(Business.id == business_id).first()
     
     if not business:
         raise HTTPException(
@@ -350,26 +320,12 @@ async def connect_telegram(
             detail=f"Unexpected error setting webhook: {str(e)}. Please check Render logs for details."
         )
     
-    # Check if integration already exists for this business and channel (with retry)
+    # Check if integration already exists for this business and channel
     # This prevents duplicate integrations for the same business+channel combination
-    existing = None
-    for attempt in range(max_retries):
-        try:
-            existing = db.query(ChannelIntegration).filter(
-                ChannelIntegration.business_id == business.id,
-                ChannelIntegration.channel == "telegram"
-            ).first()
-            break
-        except Exception as e:
-            if "DuplicatePreparedStatement" in str(e) and attempt < max_retries - 1:
-                log.warning(f"DuplicatePreparedStatement error checking existing integration on attempt {attempt + 1}, retrying...")
-                db.rollback()
-                try:
-                    db.connection().invalidate()
-                except Exception:
-                    pass
-                continue
-            raise
+    existing = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business.id,
+        ChannelIntegration.channel == "telegram"
+    ).first()
     
     # Additional check: Warn if there are other active integrations with the same bot token
     # This helps identify duplicate integrations across different businesses
@@ -411,27 +367,14 @@ async def connect_telegram(
     })
     
     if existing:
-        # Update existing integration (with retry)
-        for attempt in range(max_retries):
-            try:
-                existing.credentials = credentials
-                existing.is_active = True
-                existing.webhook_url = webhook_url
-                existing.channel_name = request.channel_name or f"Telegram (@{bot_username})"
-                existing.updated_at = datetime.utcnow()
-                db.commit()
-                db.refresh(existing)
-                break
-            except Exception as e:
-                if "DuplicatePreparedStatement" in str(e) and attempt < max_retries - 1:
-                    log.warning(f"DuplicatePreparedStatement error updating integration on attempt {attempt + 1}, retrying...")
-                    db.rollback()
-                    try:
-                        db.connection().invalidate()
-                    except Exception:
-                        pass
-                    continue
-                raise
+        # Update existing integration
+        existing.credentials = credentials
+        existing.is_active = True
+        existing.webhook_url = webhook_url
+        existing.channel_name = request.channel_name or f"Telegram (@{bot_username})"
+        existing.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
         
         log.info(f"Telegram integration updated: {existing.id} by user {current_user.id}")
         
