@@ -8,8 +8,6 @@ import {
   Users,
   TrendingUp,
   Zap,
-  ArrowUpRight,
-  ArrowDownRight,
   Activity,
   AlertCircle,
   CheckCircle2,
@@ -127,34 +125,31 @@ export default function DashboardPage() {
     );
   }
 
+  // Calculate response rate from conversation flow data
+  const responseRate = data?.conversation_flow 
+    ? Math.round((data.conversation_flow.ai_responses / data.conversation_flow.incoming) * 100) || 0
+    : 0;
+
   const stats = [
     {
       name: 'Total Conversations',
       value: data?.total_conversations || 0,
       icon: MessageSquare,
-      change: '+12%',
-      changeType: 'positive',
     },
     {
       name: 'Active Chats',
       value: data?.active_chats || 0,
       icon: Zap,
-      change: '+5%',
-      changeType: 'positive',
     },
     {
       name: 'Leads Captured',
       value: data?.leads_captured || 0,
       icon: Users,
-      change: '+8%',
-      changeType: 'positive',
     },
     {
       name: 'Response Rate',
-      value: '98%',
+      value: `${responseRate}%`,
       icon: TrendingUp,
-      change: '+2%',
-      changeType: 'positive',
     },
   ];
 
@@ -250,24 +245,6 @@ export default function DashboardPage() {
                     <dd className="flex items-baseline">
                       <div className="text-2xl font-semibold text-gray-900 dark:text-white">
                         {stat.value}
-                      </div>
-                      <div
-                        className={`ml-2 flex items-baseline text-sm font-semibold ${
-                          stat.changeType === 'positive'
-                            ? 'text-green-600'
-                            : 'text-red-600'
-                        }`}
-                      >
-                        {stat.changeType === 'positive' ? (
-                          <ArrowUpRight className="h-4 w-4" />
-                        ) : (
-                          <ArrowDownRight className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">
-                          {' '}
-                          {stat.changeType === 'positive' ? 'Increased' : 'Decreased'} by{' '}
-                        </span>
-                        {stat.change}
                       </div>
                     </dd>
                   </dl>

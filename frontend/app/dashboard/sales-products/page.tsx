@@ -1486,10 +1486,10 @@ export default function SalesProductsPage() {
               {/* Analytics Summary Cards */}
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { name: 'Revenue', value: '—', icon: DollarSign, change: '+12%', tooltip: 'Available in future phases' },
-                  { name: 'Conversion Rate', value: '—', icon: TrendingUp, change: '+5%', tooltip: 'Available in future phases' },
-                  { name: 'Top Product', value: '—', icon: Package, change: 'N/A', tooltip: 'Available in future phases' },
-                  { name: 'Channel Performance', value: '—', icon: Globe, change: 'N/A', tooltip: 'Available in future phases' },
+                  { name: 'Revenue', value: '—', icon: DollarSign, tooltip: 'Available in future phases' },
+                  { name: 'Conversion Rate', value: '—', icon: TrendingUp, tooltip: 'Available in future phases' },
+                  { name: 'Top Product', value: '—', icon: Package, tooltip: 'Available in future phases' },
+                  { name: 'Channel Performance', value: '—', icon: Globe, tooltip: 'Available in future phases' },
                 ].map((stat) => (
                   <div
                     key={stat.name}
@@ -1510,12 +1510,6 @@ export default function SalesProductsPage() {
                               <div className="text-2xl font-semibold text-gray-900 dark:text-white">
                                 {stat.value}
                               </div>
-                              {stat.change !== 'N/A' && (
-                                <div className="ml-2 flex items-baseline text-sm font-semibold text-green-600">
-                                  <TrendingUp className="h-4 w-4" />
-                                  {stat.change}
-                                </div>
-                              )}
                             </dd>
                           </dl>
                         </div>
