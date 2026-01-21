@@ -58,7 +58,7 @@ export default function LandingPage() {
       </Suspense>
 
       {/* Navigation */}
-      <nav className="relative z-10 px-4 sm:px-6 lg:px-8 py-6">
+      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
@@ -105,7 +105,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative z-10 px-4 sm:px-6 lg:px-8 pt-20 pb-32">
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 pt-20 pb-32">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
@@ -181,7 +181,7 @@ export default function LandingPage() {
       </section>
 
       {/* Learn More Section */}
-      <section className="relative z-10 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
@@ -260,7 +260,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 px-4 sm:px-6 lg:px-8 py-12 bg-black/50 backdrop-blur-sm border-t border-white/10">
+      <footer className="relative z-40 px-4 sm:px-6 lg:px-8 py-12 bg-black/50 backdrop-blur-sm border-t border-white/10">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>

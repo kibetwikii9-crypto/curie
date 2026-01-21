@@ -349,8 +349,10 @@ function Scene({ performanceLevel }: { performanceLevel: 'high' | 'medium' | 'lo
 export default function AnimatedBackground3D() {
   const performanceLevel = usePerformanceLevel();
   
+  console.log('🎨 AnimatedBackground3D mounting with performance level:', performanceLevel);
+  
   return (
-    <div className="fixed inset-0 -z-10">
+    <div className="fixed inset-0 z-0" style={{ pointerEvents: 'none' }}>
       <Canvas
         camera={{ position: [0, 0, 8], fov: 75 }}
         gl={{ 
