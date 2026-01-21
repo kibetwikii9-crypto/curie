@@ -24,35 +24,62 @@ function usePerformanceLevel() {
   return level;
 }
 
-// Animated sphere with brand colors
-function AnimatedSphere({ position, color, scale = 1, speed = 1 }: { 
+// Animated sphere with brand colors - now with orbital motion
+function AnimatedSphere({ position, color, scale = 1, speed = 1, orbit = false }: { 
   position: [number, number, number]; 
   color: string; 
   scale?: number;
   speed?: number;
+  orbit?: boolean;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
   useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    
+    if (orbit && groupRef.current) {
+      // Orbital motion around center
+      groupRef.current.rotation.y = time * speed * 0.3;
+      groupRef.current.rotation.x = Math.sin(time * speed * 0.2) * 0.3;
+    }
+    
     if (meshRef.current) {
-      meshRef.current.rotation.x += 0.001 * speed;
-      meshRef.current.rotation.y += 0.002 * speed;
-      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 0.5 * speed) * 0.3;
+      // Rotation
+      meshRef.current.rotation.x += 0.01 * speed;
+      meshRef.current.rotation.y += 0.015 * speed;
+      
+      // Floating motion
+      if (!orbit) {
+        meshRef.current.position.y = position[1] + Math.sin(time * speed) * 0.5;
+        meshRef.current.position.x = position[0] + Math.cos(time * speed * 0.7) * 0.3;
+        meshRef.current.position.z = position[2] + Math.sin(time * speed * 0.5) * 0.3;
+      }
     }
   });
 
-  return (
-    <Float speed={speed * 1.5} rotationIntensity={0.5} floatIntensity={0.5}>
-      <Sphere ref={meshRef} args={[1, 64, 64]} position={position} scale={scale}>
-        <MeshDistortMaterial
-          color={color}
-          attach="material"
-          distort={0.4}
-          speed={2 * speed}
-          roughness={0.2}
-          metalness={0.8}
-        />
-      </Sphere>
+  const sphere = (
+    <Sphere ref={meshRef} args={[1, 64, 64]} position={orbit ? [3, 0, 0] : position} scale={scale}>
+      <MeshDistortMaterial
+        color={color}
+        attach="material"
+        distort={0.5}
+        speed={3 * speed}
+        roughness={0.2}
+        metalness={0.9}
+      />
+    </Sphere>
+  );
+
+  return orbit ? (
+    <group ref={groupRef}>
+      <Float speed={speed * 2} rotationIntensity={0.8} floatIntensity={0.8}>
+        {sphere}
+      </Float>
+    </group>
+  ) : (
+    <Float speed={speed * 2} rotationIntensity={0.8} floatIntensity={0.8}>
+      {sphere}
     </Float>
   );
 }
@@ -86,8 +113,9 @@ function Particles({ count = 1000 }: { count?: number }) {
   
   useFrame((state) => {
     if (particlesRef.current) {
-      particlesRef.current.rotation.y = state.clock.elapsedTime * 0.05;
-      particlesRef.current.rotation.x = state.clock.elapsedTime * 0.03;
+      particlesRef.current.rotation.y = state.clock.elapsedTime * 0.1;
+      particlesRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.5;
+      particlesRef.current.rotation.z = Math.cos(state.clock.elapsedTime * 0.15) * 0.3;
     }
   });
   
@@ -148,29 +176,140 @@ function FrameLimiter({ fps = 30 }: { fps?: number }) {
   return null;
 }
 
-// Rotating ring/torus
+// Rotating ring/torus - multiple rings
 function AnimatedTorus() {
-  const torusRef = useRef<THREE.Mesh>(null);
+  const torus1Ref = useRef<THREE.Mesh>(null);
+  const torus2Ref = useRef<THREE.Mesh>(null);
+  const torus3Ref = useRef<THREE.Mesh>(null);
   
   useFrame((state) => {
-    if (torusRef.current) {
-      torusRef.current.rotation.x = state.clock.elapsedTime * 0.3;
-      torusRef.current.rotation.y = state.clock.elapsedTime * 0.2;
+    const time = state.clock.elapsedTime;
+    
+    if (torus1Ref.current) {
+      torus1Ref.current.rotation.x = time * 0.5;
+      torus1Ref.current.rotation.y = time * 0.3;
+    }
+    
+    if (torus2Ref.current) {
+      torus2Ref.current.rotation.x = time * -0.4;
+      torus2Ref.current.rotation.z = time * 0.3;
+    }
+    
+    if (torus3Ref.current) {
+      torus3Ref.current.rotation.y = time * 0.6;
+      torus3Ref.current.rotation.z = time * -0.2;
     }
   });
   
   return (
-    <mesh ref={torusRef} position={[0, 0, -5]}>
-      <torusGeometry args={[3, 0.4, 16, 100]} />
-      <meshStandardMaterial
-        color="#007FFF"
-        transparent
-        opacity={0.3}
-        roughness={0.1}
-        metalness={0.9}
-        wireframe
-      />
-    </mesh>
+    <>
+      <mesh ref={torus1Ref} position={[0, 0, -5]}>
+        <torusGeometry args={[3, 0.3, 16, 100]} />
+        <meshStandardMaterial
+          color="#007FFF"
+          transparent
+          opacity={0.25}
+          roughness={0.1}
+          metalness={0.9}
+          wireframe
+        />
+      </mesh>
+      <mesh ref={torus2Ref} position={[2, 1, -6]}>
+        <torusGeometry args={[2, 0.2, 16, 100]} />
+        <meshStandardMaterial
+          color="#D4AF37"
+          transparent
+          opacity={0.2}
+          roughness={0.1}
+          metalness={0.9}
+          wireframe
+        />
+      </mesh>
+      <mesh ref={torus3Ref} position={[-2, -1, -7]}>
+        <torusGeometry args={[1.5, 0.15, 16, 100]} />
+        <meshStandardMaterial
+          color="#0088FF"
+          transparent
+          opacity={0.2}
+          roughness={0.1}
+          metalness={0.9}
+          wireframe
+        />
+      </mesh>
+    </>
+  );
+}
+
+// Moving cubes with trails
+function MovingCubes() {
+  const cube1Ref = useRef<THREE.Mesh>(null);
+  const cube2Ref = useRef<THREE.Mesh>(null);
+  const cube3Ref = useRef<THREE.Mesh>(null);
+  
+  useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    
+    if (cube1Ref.current) {
+      cube1Ref.current.position.x = Math.sin(time * 0.5) * 4;
+      cube1Ref.current.position.y = Math.cos(time * 0.7) * 2;
+      cube1Ref.current.position.z = Math.sin(time * 0.3) * 3 - 4;
+      cube1Ref.current.rotation.x = time;
+      cube1Ref.current.rotation.y = time * 0.7;
+    }
+    
+    if (cube2Ref.current) {
+      cube2Ref.current.position.x = Math.cos(time * 0.6) * 3;
+      cube2Ref.current.position.y = Math.sin(time * 0.8) * 2.5;
+      cube2Ref.current.position.z = Math.cos(time * 0.4) * 2 - 5;
+      cube2Ref.current.rotation.x = -time * 0.5;
+      cube2Ref.current.rotation.z = time * 0.8;
+    }
+    
+    if (cube3Ref.current) {
+      cube3Ref.current.position.x = Math.sin(time * 0.4) * 3.5;
+      cube3Ref.current.position.y = Math.cos(time * 0.5) * 1.5;
+      cube3Ref.current.position.z = Math.sin(time * 0.6) * 2.5 - 6;
+      cube3Ref.current.rotation.y = time * 1.2;
+      cube3Ref.current.rotation.z = time * 0.4;
+    }
+  });
+  
+  return (
+    <>
+      <mesh ref={cube1Ref}>
+        <boxGeometry args={[0.5, 0.5, 0.5]} />
+        <meshStandardMaterial
+          color="#007FFF"
+          transparent
+          opacity={0.4}
+          roughness={0.3}
+          metalness={0.8}
+          wireframe
+        />
+      </mesh>
+      <mesh ref={cube2Ref}>
+        <boxGeometry args={[0.4, 0.4, 0.4]} />
+        <meshStandardMaterial
+          color="#D4AF37"
+          transparent
+          opacity={0.4}
+          roughness={0.3}
+          metalness={0.8}
+          wireframe
+        />
+      </mesh>
+      <mesh ref={cube3Ref}>
+        <boxGeometry args={[0.3, 0.3, 0.3]} />
+        <meshStandardMaterial
+          color="#0088FF"
+          transparent
+          opacity={0.4}
+          roughness={0.3}
+          metalness={0.8}
+          wireframe
+        />
+      </mesh>
+    </>
   );
 }
 
@@ -228,7 +367,7 @@ export default function AnimatedBackground3D() {
           enableZoom={false}
           enablePan={false}
           autoRotate
-          autoRotateSpeed={0.5}
+          autoRotateSpeed={1}
           maxPolarAngle={Math.PI / 2}
           minPolarAngle={Math.PI / 2}
         />
