@@ -50,9 +50,10 @@ engine = create_engine(
     },
     # Force IPv4 if DNS resolution fails (Windows sometimes has IPv6 issues)
     poolclass=None,  # Use default connection pool
-    # Disable statement caching to avoid prepared statement conflicts
+    # Disable statement caching and prepared statements completely
     execution_options={
         "autocommit": False,
+        "compiled_cache": None,  # Disable SQLAlchemy's compiled statement cache
     },
 )
 
@@ -92,16 +93,18 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     except Exception as e:
-        # Handle DuplicatePreparedStatement errors by invalidating the connection
+        db.rollback()
+        # Handle DuplicatePreparedStatement errors by disposing the entire connection pool
         if "DuplicatePreparedStatement" in str(e) or "prepared statement" in str(e).lower():
-            db.rollback()
             try:
-                # Invalidate the connection to force a new one on next use
-                db.connection().invalidate()
+                # Close the current connection
+                db.close()
+                # Dispose the entire connection pool to force fresh connections
+                engine.dispose()
+                # Create a new session
+                db = SessionLocal()
             except Exception:
                 pass
-        else:
-            db.rollback()
         raise
     finally:
         db.close()
