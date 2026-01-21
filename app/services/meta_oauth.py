@@ -1,6 +1,6 @@
 """
-Meta OAuth Service for WhatsApp Business API
-Handles OAuth flow to connect WhatsApp without manual token entry.
+Meta Embedded Signup Service for WhatsApp Business API
+Handles Embedded Signup flow to create and connect WhatsApp Business Accounts automatically.
 """
 import logging
 import httpx
@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class MetaOAuthService:
-    """Handles Meta OAuth flow for WhatsApp connection"""
+    """Handles Meta Embedded Signup for WhatsApp connection"""
     
-    BASE_URL = "https://graph.facebook.com/v18.0"
+    BASE_URL = "https://graph.facebook.com/v21.0"  # Updated to latest version for Embedded Signup
     
     def __init__(self):
         """Initialize with settings from config"""
@@ -24,26 +24,35 @@ class MetaOAuthService:
     
     def get_authorization_url(self, state: str) -> str:
         """
-        Generate Meta OAuth authorization URL.
+        Generate Meta Embedded Signup authorization URL.
+        This creates a WABA during the signup process.
         
         Args:
             state: CSRF protection token (should include user_id)
             
         Returns:
-            OAuth authorization URL
+            Embedded Signup authorization URL
         """
-        scopes = [
-            "whatsapp_business_management",
-            "whatsapp_business_messaging",
-            "business_management"
-        ]
+        # Embedded Signup configuration
+        config = {
+            "business_config": {
+                "vertical": "NOT_A_BUSINESS"  # For testing; use appropriate vertical in production
+            }
+        }
         
+        # Convert config to query parameter (Meta expects JSON in setup param)
+        import json
+        from urllib.parse import quote
+        setup_config = quote(json.dumps(config))
+        
+        # Build Embedded Signup URL
         url = (
-            f"https://www.facebook.com/v18.0/dialog/oauth?"
+            f"https://www.facebook.com/v21.0/dialog/oauth?"
             f"client_id={self.app_id}&"
             f"redirect_uri={self.redirect_uri}&"
             f"state={state}&"
-            f"scope={','.join(scopes)}&"
+            f"scope=whatsapp_business_management,whatsapp_business_messaging,business_management&"
+            f"extras={{\"feature\":\"whatsapp_embedded_signup\",\"setup\":{setup_config}}}&"
             f"response_type=code"
         )
         
@@ -138,6 +147,7 @@ class MetaOAuthService:
     ) -> List[Dict[str, Any]]:
         """
         Get WhatsApp Business Accounts for a business.
+        With Embedded Signup, this will return the newly created WABA.
         
         Args:
             business_account_id: Meta Business Account ID
@@ -153,7 +163,7 @@ class MetaOAuthService:
         }
         
         params = {
-            "fields": "id,name,account_review_status,message_template_namespace"
+            "fields": "id,name,account_review_status,message_template_namespace,timezone_id"
         }
         
         try:
@@ -164,6 +174,45 @@ class MetaOAuthService:
                 return data.get("data", [])
         except Exception as e:
             logger.error(f"Error getting WhatsApp accounts: {e}")
+            raise
+    
+    async def register_phone_number(
+        self,
+        phone_number_id: str,
+        access_token: str,
+        pin: str = "000000"  # 6-digit PIN for verification
+    ) -> Dict[str, Any]:
+        """
+        Register a phone number for WhatsApp Business.
+        This is part of Embedded Signup flow.
+        
+        Args:
+            phone_number_id: Phone number ID from Meta
+            access_token: User's access token
+            pin: 6-digit PIN for two-step verification
+            
+        Returns:
+            Registration response
+        """
+        url = f"{self.BASE_URL}/{phone_number_id}/register"
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "messaging_product": "whatsapp",
+            "pin": pin
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=data, timeout=30.0)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"Error registering phone number: {e}")
             raise
     
     async def get_phone_numbers(
@@ -201,6 +250,37 @@ class MetaOAuthService:
             logger.error(f"Error getting phone numbers: {e}")
             raise
     
+    async def get_debug_token_info(
+        self,
+        access_token: str
+    ) -> Dict[str, Any]:
+        """
+        Get debug information about the access token.
+        This includes scopes, data access expiration, and app/user info.
+        After Embedded Signup, this can extract the WABA ID.
+        
+        Args:
+            access_token: User's access token
+            
+        Returns:
+            Debug token information including granular_scopes with whatsapp_business_management
+        """
+        url = f"{self.BASE_URL}/debug_token"
+        
+        params = {
+            "input_token": access_token,
+            "access_token": f"{self.app_id}|{self.app_secret}"
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, timeout=10.0)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"Error getting debug token info: {e}")
+            raise
+    
     async def setup_webhook(
         self,
         phone_number_id: str,
@@ -209,13 +289,13 @@ class MetaOAuthService:
         verify_token: str
     ) -> bool:
         """
-        Automatically set up webhook for phone number.
+        Subscribe app to receive webhooks for a phone number.
         
         Args:
             phone_number_id: WhatsApp phone number ID
             access_token: User's access token
-            webhook_url: Your webhook URL
-            verify_token: Verification token
+            webhook_url: Your webhook URL (not used in this call, set in Meta dashboard)
+            verify_token: Verification token (not used in this call, set in Meta dashboard)
             
         Returns:
             True if successful
@@ -227,13 +307,10 @@ class MetaOAuthService:
             "Content-Type": "application/json"
         }
         
-        data = {
-            "data": [{"fields": "messages"}]
-        }
-        
+        # Subscribe to webhook events
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, headers=headers, json=data, timeout=10.0)
+                response = await client.post(url, headers=headers, timeout=10.0)
                 response.raise_for_status()
                 logger.info(f"Webhook subscribed for {phone_number_id}")
                 return True

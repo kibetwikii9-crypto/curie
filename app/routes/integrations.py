@@ -811,27 +811,35 @@ async def whatsapp_oauth_callback(
         expires_in = long_lived_response.get("expires_in", 5184000)  # 60 days
         
         # 3. Get business accounts
+        # With Embedded Signup, Meta creates a business account automatically if needed
         business_accounts = await oauth.get_business_accounts(access_token)
         
         if not business_accounts:
-            return Response(content=_get_error_html("No business accounts found"), media_type="text/html")
+            return Response(content=_get_error_html("No business accounts found. Please try again or contact support."), media_type="text/html")
         
-        # 4. Use first business account (in production, let user select)
+        # 4. Use first business account
         business_account = business_accounts[0]
         business_account_id = business_account["id"]
         
         # 5. Get WhatsApp accounts
+        # Embedded Signup automatically creates a WABA during OAuth
         whatsapp_accounts = await oauth.get_whatsapp_accounts(
             business_account_id,
             access_token
         )
         
         if not whatsapp_accounts:
-            return Response(content=_get_error_html("No WhatsApp Business Accounts found"), media_type="text/html")
+            # This should not happen with Embedded Signup
+            # It means the WABA wasn't created during signup
+            return Response(content=_get_error_html(
+                "WhatsApp Business Account was not created. "
+                "Please ensure you completed the signup process including phone number verification."
+            ), media_type="text/html")
         
-        # 6. Use first WhatsApp account (or let user select)
+        # 6. Use first WhatsApp account
         whatsapp_account = whatsapp_accounts[0]
         whatsapp_account_id = whatsapp_account["id"]
+        whatsapp_account_name = whatsapp_account.get("name", "WhatsApp Business")
         
         # 7. Get phone numbers
         phone_numbers = await oauth.get_phone_numbers(
@@ -840,12 +848,19 @@ async def whatsapp_oauth_callback(
         )
         
         if not phone_numbers:
-            return Response(content=_get_error_html("No phone numbers found"), media_type="text/html")
+            return Response(content=_get_error_html(
+                "No phone numbers found. "
+                "If you just completed signup, the phone number may take a few minutes to appear. "
+                "Please try reconnecting in a moment."
+            ), media_type="text/html")
         
-        # 8. Use first phone number (or let user select)
+        # 8. Use first phone number
         phone_number = phone_numbers[0]
         phone_number_id = phone_number["id"]
         display_phone_number = phone_number.get("display_phone_number", "")
+        verified_name = phone_number.get("verified_name", "")
+        
+        log.info(f"Embedded Signup completed: WABA={whatsapp_account_id}, Phone={display_phone_number}")
         
         # 9. Set up webhook automatically
         public_url = settings.public_url.rstrip('/')
@@ -909,7 +924,7 @@ async def whatsapp_oauth_callback(
         
         log.info(f"WhatsApp integration created/updated: {integration_id} by user {user_id}")
         
-        # 12. Return HTML page that posts message to parent window and closes popup
+        # 12. Return success page with account info
         frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
         html_content = f"""
         <!DOCTYPE html>
@@ -932,6 +947,7 @@ async def whatsapp_oauth_callback(
                     background: white;
                     border-radius: 8px;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    max-width: 400px;
                 }}
                 .success {{
                     color: #25D366;
@@ -944,28 +960,63 @@ async def whatsapp_oauth_callback(
                 }}
                 p {{
                     color: #666;
-                    margin: 0;
+                    margin: 0.5rem 0;
+                    font-size: 0.95rem;
+                }}
+                .info {{
+                    background: #f0f9f4;
+                    border: 1px solid #25D366;
+                    border-radius: 6px;
+                    padding: 1rem;
+                    margin-top: 1rem;
+                    text-align: left;
+                }}
+                .info-item {{
+                    margin: 0.5rem 0;
+                    font-size: 0.9rem;
+                }}
+                .info-label {{
+                    font-weight: 600;
+                    color: #333;
+                }}
+                .info-value {{
+                    color: #666;
                 }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="success">✓</div>
-                <h1>WhatsApp Connected!</h1>
-                <p>This window will close automatically...</p>
+                <h1>WhatsApp Connected Successfully!</h1>
+                <p>Your WhatsApp Business Account is now ready.</p>
+                <div class="info">
+                    <div class="info-item">
+                        <span class="info-label">Phone Number:</span>
+                        <span class="info-value">{display_phone_number}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Business Name:</span>
+                        <span class="info-value">{verified_name or whatsapp_account_name}</span>
+                    </div>
+                </div>
+                <p style="margin-top: 1rem; font-size: 0.85rem; color: #999;">
+                    This window will close automatically...
+                </p>
             </div>
             <script>
                 // Post message to parent window
                 if (window.opener) {{
                     window.opener.postMessage({{
                         type: 'whatsapp-oauth-success',
-                        channel: 'whatsapp'
+                        channel: 'whatsapp',
+                        phone: '{display_phone_number}',
+                        name: '{verified_name or whatsapp_account_name}'
                     }}, '*');
                     
-                    // Close popup after a short delay
+                    // Close popup after showing success
                     setTimeout(function() {{
                         window.close();
-                    }}, 1500);
+                    }}, 3000);
                 }} else {{
                     // If no opener (direct navigation), redirect
                     window.location.href = '{frontend_url}/dashboard/integrations?success=true&channel=whatsapp';

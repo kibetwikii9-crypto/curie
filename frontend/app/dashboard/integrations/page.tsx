@@ -539,8 +539,13 @@ export default function IntegrationsPage() {
                               // Refresh integrations
                               fetchIntegrations();
                               
-                              // Show success message
-                              alert('WhatsApp connected successfully!');
+                              // Show success message with phone number if available
+                              const phone = event.data.phone || '';
+                              const name = event.data.name || '';
+                              const message = phone 
+                                ? `WhatsApp connected successfully!\n\nPhone: ${phone}\n${name ? `Business: ${name}` : ''}`
+                                : 'WhatsApp connected successfully!';
+                              alert(message);
                               
                               // Remove listener
                               window.removeEventListener('message', handleMessage);
@@ -596,9 +601,20 @@ export default function IntegrationsPage() {
                   )}
                 </div>
                 {!isWhatsAppConnected && (
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    No tokens or code needed. You'll be redirected to Meta to authorize.
-                  </p>
+                  <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-2 font-medium">
+                      ✨ Quick Setup Process:
+                    </p>
+                    <ol className="text-xs text-blue-600 dark:text-blue-400 space-y-1 ml-4 list-decimal">
+                      <li>Log in with Facebook</li>
+                      <li>Add your phone number</li>
+                      <li>Verify with SMS code</li>
+                      <li>Done! Your WhatsApp Business Account will be created automatically</li>
+                    </ol>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      No tokens or manual setup needed. Takes ~2 minutes.
+                    </p>
+                  </div>
                 )}
               </div>
             );
