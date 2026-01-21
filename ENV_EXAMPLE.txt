@@ -17,8 +17,8 @@ DATABASE_URL=postgresql://user:password@host:port/database
 SECRET_KEY=your-secret-key-change-in-production
 
 # Admin User Configuration (optional - for auto-creation on startup)
-ADMIN_EMAIL=admin@automify.com
-ADMIN_PASSWORD=your_secure_admin_password_here
+# Note: No default admin accounts. Create users via signup flow.
+# Removed: No auto-admin creation for security
 
 # Logging
 LOG_LEVEL=INFO

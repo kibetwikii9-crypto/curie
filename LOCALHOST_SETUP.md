@@ -12,7 +12,7 @@ FRONTEND_URL=http://localhost:3000
 DATABASE_URL=your_supabase_postgresql_url
 SECRET_KEY=your-secret-key-here
 ADMIN_EMAIL=admin@curie.com
-ADMIN_PASSWORD=admin123
+# Note: No default admin accounts. Create users via signup flow.
 LOG_LEVEL=INFO
 OPENAI_API_KEY=
 ```

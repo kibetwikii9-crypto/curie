@@ -291,38 +291,8 @@ async def startup_event():
         else:
             print(f"[WARN] Database initialization error: {e}")
     
-    # Auto-create admin user if it doesn't exist
-    try:
-        from app.database import get_db_context
-        from app.services.auth import create_user, get_user_by_email
-        
-        admin_email = settings.admin_email
-        admin_password = settings.admin_password
-        
-        # Only auto-create admin if password is provided
-        if admin_password:
-            with get_db_context() as db:
-                existing = get_user_by_email(db, admin_email)
-                if not existing:
-                    admin_user = create_user(
-                        db,
-                        email=admin_email,
-                        password=admin_password,
-                        full_name="Admin User",
-                        role="admin"
-                    )
-                    print(f"[OK] Admin user auto-created: {admin_email}")
-                else:
-                    print(f"[OK] Admin user already exists: {admin_email}")
-        else:
-            print(f"[WARN] Admin password not set (ADMIN_PASSWORD env var). Skipping admin auto-creation.")
-    except Exception as e:
-        # Handle DuplicatePreparedStatement errors gracefully (non-critical)
-        if "DuplicatePreparedStatement" in str(e):
-            print(f"[WARN] Admin user creation skipped (database connection issue, non-critical)")
-        else:
-            print(f"[WARN] Admin user creation error: {e}")
-        # Don't fail startup if admin creation fails
+    # Note: Admin users must be created manually via the signup flow
+    # No default admin accounts for security reasons
     
     # Load knowledge base
     if load_knowledge("faq.json"):

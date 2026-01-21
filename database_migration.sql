@@ -184,10 +184,10 @@ BEGIN
         SELECT id INTO default_user_id FROM users LIMIT 1;
         
         IF default_user_id IS NULL THEN
-            -- Create a default admin user if no users exist
-            INSERT INTO users (email, hashed_password, full_name, role, is_active, created_at, updated_at)
-            VALUES ('admin@automify.com', '$2b$12$default', 'Admin User', 'admin', true, NOW(), NOW())
-            RETURNING id INTO default_user_id;
+            -- No default admin creation for security reasons
+            -- Businesses with NULL owner_id will remain NULL until manually assigned
+            RAISE NOTICE 'No users found. Please create users via the application signup.';
+            RETURN;
         END IF;
         
         -- Update businesses with NULL owner_id

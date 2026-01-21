@@ -79,8 +79,8 @@ PUBLIC_URL=http://localhost:8000          ← Backend's own URL
 FRONTEND_URL=http://localhost:3000
 DATABASE_URL=postgresql://...
 SECRET_KEY=your-secret-key
-ADMIN_EMAIL=admin@automify.com
-ADMIN_PASSWORD=admin123
+# Note: No default admin accounts for security.
+# Create users via the application signup flow.
 ```
 
 ### Example `frontend/.env.local` (Frontend)

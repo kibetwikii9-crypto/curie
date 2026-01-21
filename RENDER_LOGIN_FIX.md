@@ -64,7 +64,7 @@ FRONTEND_URL = settings.frontend_url  # Set automatically by Render
 2. Find `/api/auth/login` endpoint
 3. Click "Try it out"
 4. Enter credentials:
-   - `username`: `admin@automify.com` (or your admin email)
+   - `username`: Your registered email address
    - `password`: (your admin password)
 5. Click "Execute"
 6. Should return a token if credentials are correct
