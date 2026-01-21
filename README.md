@@ -81,7 +81,7 @@ Should return: `test123`
 ## 📚 Documentation
 
 - [WHATSAPP_OAUTH_SETUP.md](./WHATSAPP_OAUTH_SETUP.md) - WhatsApp OAuth integration setup
-- [SUPABASE_WHATSAPP_MIGRATION.sql](./SUPABASE_WHATSAPP_MIGRATION.sql) - Database migration for WhatsApp
+- [SUPABASE_SETUP_GUIDE.md](./SUPABASE_SETUP_GUIDE.md) - Database setup guide
 
 ## 🔒 Security
 
@@ -230,7 +230,7 @@ Proprietary - All rights reserved
 
 For issues and questions, refer to:
 - [WHATSAPP_OAUTH_SETUP.md](./WHATSAPP_OAUTH_SETUP.md) for WhatsApp setup
-- [WHATSAPP_READY_CHECKLIST.md](./WHATSAPP_READY_CHECKLIST.md) for deployment checklist
+- [SUPABASE_SETUP_GUIDE.md](./SUPABASE_SETUP_GUIDE.md) for database setup
 
 ---
 
