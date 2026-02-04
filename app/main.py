@@ -128,7 +128,15 @@ if settings.public_url and "onrender.com" in settings.public_url:
         cors_origins.append(render_frontend_url)
         print(f"[SAFETY] CORS: Ensured Render frontend URL is included: {render_frontend_url}")
 
+print(f"[INFO] ============================================")
+print(f"[INFO] CORS CONFIGURATION:")
+print(f"[INFO] FRONTEND_URL env: {os.getenv('FRONTEND_URL', 'NOT SET')}")
+print(f"[INFO] settings.frontend_url: {settings.frontend_url}")
+print(f"[INFO] settings.public_url: {settings.public_url}")
+print(f"[INFO] Is production: {is_production}")
+print(f"[INFO] Allow all origins: {allow_all_origins}")
 print(f"[INFO] CORS origins configured: {cors_origins}")
+print(f"[INFO] ============================================")
 
 # Add CORS middleware - MUST be added before routers
 # CRITICAL: Cannot use allow_credentials=True with allow_origins=["*"]
