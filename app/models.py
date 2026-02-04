@@ -79,8 +79,15 @@ class User(Base):
     role = Column(String, nullable=False, default="agent")  # admin, business_owner, agent
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True, index=True)  # Nullable for admin users
     is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Billing fields
+    trial_ends_at = Column(DateTime, nullable=True)  # Trial end date
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    billing_events = relationship("BillingEvent", back_populates="user")
 
 
 class Business(Base):
@@ -93,8 +100,21 @@ class Business(Base):
     name = Column(String, nullable=False, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     settings = Column(Text, nullable=True)  # JSON string for flexible settings
+    
+    # Billing fields
+    stripe_customer_id = Column(String(255), unique=True, nullable=True, index=True)
+    payment_status = Column(String(20), default="active")  # active, past_due, suspended
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    subscription = relationship("Subscription", back_populates="business", uselist=False)
+    invoices = relationship("Invoice", back_populates="business")
+    payments = relationship("Payment", back_populates="business")
+    payment_methods = relationship("PaymentMethod", back_populates="business")
+    usage_records = relationship("UsageRecord", back_populates="business")
+    billing_events = relationship("BillingEvent", back_populates="business")
 
 
 class ChannelIntegration(Base):
@@ -698,6 +718,334 @@ class AIRule(Base):
     last_triggered_at = Column(DateTime, nullable=True)  # Last time triggered
 
 
+# ========================================
+# BILLING & SUBSCRIPTION MODELS
+# ========================================
+
+class Plan(Base):
+    """Subscription plans (Starter, Business, Pro, Enterprise)."""
+    __tablename__ = "plans"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False)  # "starter", "business", "pro", "enterprise"
+    display_name = Column(String(100), nullable=False)  # "Starter Plan"
+    description = Column(Text)
+    price_monthly = Column(Float, nullable=False)
+    price_annual = Column(Float, nullable=False)  # 20% discount
+    currency = Column(String(3), default="USD")
+    
+    # Limits
+    conversation_limit = Column(Integer, nullable=False)  # Monthly conversations
+    channel_limit = Column(Integer, nullable=False)  # Max channels
+    user_limit = Column(Integer, nullable=False)  # Team members
+    storage_limit = Column(Integer, nullable=False)  # MB
+    ai_tokens_limit = Column(Integer, nullable=True)  # Monthly AI tokens (null = unlimited)
+    
+    # Features (JSON flags)
+    features = Column(Text)  # JSON: {"voice_ai": false, "api_access": false, "crm": false}
+    
+    # Display
+    is_active = Column(Boolean, default=True)
+    is_popular = Column(Boolean, default=False)  # Show "Most Popular" badge
+    sort_order = Column(Integer, default=0)
+    
+    # Stripe Product ID
+    stripe_product_id = Column(String(255), nullable=True)
+    stripe_price_id_monthly = Column(String(255), nullable=True)
+    stripe_price_id_annual = Column(String(255), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    subscriptions = relationship("Subscription", back_populates="plan")
+
+
+class Subscription(Base):
+    """User/Business subscriptions."""
+    __tablename__ = "subscriptions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=False)
+    
+    # Stripe data
+    stripe_subscription_id = Column(String(255), unique=True, index=True)
+    stripe_customer_id = Column(String(255), index=True)
+    
+    # Status
+    status = Column(String(20), default="active")  # active, past_due, canceled, trialing, incomplete, paused
+    billing_cycle = Column(String(10), default="monthly")  # monthly, annual
+    
+    # Dates
+    current_period_start = Column(DateTime)
+    current_period_end = Column(DateTime)
+    trial_start = Column(DateTime)
+    trial_end = Column(DateTime)
+    canceled_at = Column(DateTime)
+    ended_at = Column(DateTime)
+    
+    # Pricing
+    amount = Column(Float, nullable=False)
+    currency = Column(String(3), default="USD")
+    
+    # Cancel settings
+    cancel_at_period_end = Column(Boolean, default=False)
+    cancellation_reason = Column(Text)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    business = relationship("Business", back_populates="subscription")
+    plan = relationship("Plan", back_populates="subscriptions")
+    invoices = relationship("Invoice", back_populates="subscription")
+    usage_records = relationship("UsageRecord", back_populates="subscription")
+    addons = relationship("SubscriptionAddon", back_populates="subscription")
+
+
+class Invoice(Base):
+    """Billing invoices."""
+    __tablename__ = "invoices"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
+    
+    # Invoice details
+    invoice_number = Column(String(50), unique=True, nullable=False, index=True)
+    stripe_invoice_id = Column(String(255), unique=True, index=True)
+    
+    # Amounts
+    subtotal = Column(Float, nullable=False)
+    tax = Column(Float, default=0.0)
+    total = Column(Float, nullable=False)
+    currency = Column(String(3), default="USD")
+    
+    # Status
+    status = Column(String(20), default="draft")  # draft, open, paid, void, uncollectible
+    paid_at = Column(DateTime)
+    
+    # Dates
+    invoice_date = Column(DateTime, default=datetime.utcnow)
+    due_date = Column(DateTime)
+    period_start = Column(DateTime)
+    period_end = Column(DateTime)
+    
+    # Payment
+    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
+    
+    # PDF
+    pdf_url = Column(String(500))
+    
+    # Metadata
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    business = relationship("Business", back_populates="invoices")
+    subscription = relationship("Subscription", back_populates="invoices")
+    payment = relationship("Payment", back_populates="invoice", uselist=False)
+    line_items = relationship("InvoiceLineItem", back_populates="invoice")
+
+
+class InvoiceLineItem(Base):
+    """Invoice line items."""
+    __tablename__ = "invoice_line_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    
+    description = Column(String(500), nullable=False)
+    quantity = Column(Integer, default=1)
+    unit_price = Column(Float, nullable=False)
+    amount = Column(Float, nullable=False)
+    
+    # Type: subscription, addon, overage, etc.
+    item_type = Column(String(50))
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    invoice = relationship("Invoice", back_populates="line_items")
+
+
+class Payment(Base):
+    """Payment transactions."""
+    __tablename__ = "payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+    
+    # Payment details
+    stripe_payment_intent_id = Column(String(255), unique=True, index=True)
+    amount = Column(Float, nullable=False)
+    currency = Column(String(3), default="USD")
+    
+    # Status
+    status = Column(String(20), default="pending")  # pending, succeeded, failed, canceled, refunded
+    
+    # Payment method
+    payment_method_id = Column(Integer, ForeignKey("payment_methods.id"), nullable=True)
+    payment_method_type = Column(String(50))  # card, bank_transfer, etc.
+    
+    # Metadata
+    failure_reason = Column(Text)
+    receipt_url = Column(String(500))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    business = relationship("Business", back_populates="payments")
+    invoice = relationship("Invoice", back_populates="payment")
+    payment_method = relationship("PaymentMethod", back_populates="payments")
+
+
+class PaymentMethod(Base):
+    """Saved payment methods (cards, etc.)."""
+    __tablename__ = "payment_methods"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    
+    # Stripe data
+    stripe_payment_method_id = Column(String(255), unique=True, index=True)
+    
+    # Card details (last 4, brand, etc.)
+    type = Column(String(20), default="card")  # card, bank_account, etc.
+    card_brand = Column(String(20))  # visa, mastercard, etc.
+    card_last4 = Column(String(4))
+    card_exp_month = Column(Integer)
+    card_exp_year = Column(Integer)
+    
+    # Status
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    business = relationship("Business", back_populates="payment_methods")
+    payments = relationship("Payment", back_populates="payment_method")
+
+
+class UsageRecord(Base):
+    """Track usage for billing (conversations, AI tokens, storage)."""
+    __tablename__ = "usage_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False)
+    
+    # Usage type
+    resource_type = Column(String(50), nullable=False, index=True)  # conversation, ai_token, storage, channel, user
+    quantity = Column(Integer, nullable=False)
+    
+    # Period
+    period_start = Column(DateTime, nullable=False)
+    period_end = Column(DateTime, nullable=False)
+    
+    # Metadata
+    metadata = Column(Text)  # JSON: Additional context
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    business = relationship("Business", back_populates="usage_records")
+    subscription = relationship("Subscription", back_populates="usage_records")
+
+
+class Addon(Base):
+    """Available add-ons (Voice AI, CRM, etc.)."""
+    __tablename__ = "addons"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)  # "voice_ai"
+    display_name = Column(String(100), nullable=False)  # "Voice AI Module"
+    description = Column(Text)
+    
+    # Pricing
+    price_monthly = Column(Float, nullable=False)
+    currency = Column(String(3), default="USD")
+    
+    # Display
+    icon = Column(String(50))  # lucide icon name: "mic", "image", etc.
+    image_url = Column(String(500))
+    color = Column(String(20))  # Tailwind color class
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    
+    # Features this addon provides
+    features = Column(Text)  # JSON: {"voice_ai": true, "image_recognition": true}
+    
+    # Stripe Product ID
+    stripe_product_id = Column(String(255), nullable=True)
+    stripe_price_id = Column(String(255), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    subscriptions = relationship("SubscriptionAddon", back_populates="addon")
+
+
+class SubscriptionAddon(Base):
+    """User's active add-ons."""
+    __tablename__ = "subscription_addons"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False, index=True)
+    addon_id = Column(Integer, ForeignKey("addons.id"), nullable=False)
+    
+    # Stripe Subscription Item ID
+    stripe_subscription_item_id = Column(String(255), nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    
+    # Dates
+    started_at = Column(DateTime, default=datetime.utcnow)
+    canceled_at = Column(DateTime)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    subscription = relationship("Subscription", back_populates="addons")
+    addon = relationship("Addon", back_populates="subscriptions")
+
+
+class BillingEvent(Base):
+    """Audit log for billing events."""
+    __tablename__ = "billing_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # Event details
+    event_type = Column(String(50), nullable=False, index=True)  # subscription_created, payment_failed, etc.
+    description = Column(Text)
+    
+    # Metadata
+    metadata = Column(Text)  # JSON
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    business = relationship("Business", back_populates="billing_events")
+    user = relationship("User", back_populates="billing_events")
+
+
 # ========== PERFORMANCE INDEXES ==========
 # Composite indexes for frequently queried column combinations
 # These dramatically improve query performance for dashboard and filtering
@@ -773,4 +1121,13 @@ Index('idx_apikeys_business_active', APIKey.business_id, APIKey.is_active)
 # Sessions - for active session lookup
 Index('idx_sessions_user_active', Session.user_id, Session.is_active)
 Index('idx_sessions_expires_active', Session.expires_at, Session.is_active)
+
+# Billing - for subscription management and reporting
+Index('idx_subscriptions_business_status', Subscription.business_id, Subscription.status)
+Index('idx_subscriptions_stripe', Subscription.stripe_subscription_id)
+Index('idx_invoices_business_status', Invoice.business_id, Invoice.status)
+Index('idx_invoices_stripe', Invoice.stripe_invoice_id)
+Index('idx_payments_business_status', Payment.business_id, Payment.status)
+Index('idx_usage_business_type_period', UsageRecord.business_id, UsageRecord.resource_type, UsageRecord.period_start)
+Index('idx_billing_events_business_type', BillingEvent.business_id, BillingEvent.event_type)
 

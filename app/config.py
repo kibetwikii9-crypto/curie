@@ -37,6 +37,19 @@ class Settings(BaseSettings):
     
     # Website Chat Widget (No external setup needed - fully automated)
     widget_secret_key: str = ""  # Secret key for widget authentication (set via WIDGET_SECRET_KEY env var, auto-generated if empty)
+    
+    # ========== BILLING & STRIPE ==========
+    # Stripe API Keys
+    stripe_public_key: str = ""  # Stripe Publishable Key (set via STRIPE_PUBLIC_KEY env var)
+    stripe_secret_key: str = ""  # Stripe Secret Key (set via STRIPE_SECRET_KEY env var)
+    stripe_webhook_secret: str = ""  # Stripe Webhook Secret (set via STRIPE_WEBHOOK_SECRET env var)
+    
+    # Billing Configuration
+    trial_days: int = 14  # Free trial period in days (set via TRIAL_DAYS env var)
+    invoice_prefix: str = "INV"  # Invoice number prefix (set via INVOICE_PREFIX env var)
+    currency_default: str = "USD"  # Default currency (set via CURRENCY_DEFAULT env var)
+    tax_rate: float = 0.00  # Default tax rate (0.16 for Kenya VAT) (set via TAX_RATE env var)
+    annual_discount: float = 0.20  # 20% discount for annual billing (set via ANNUAL_DISCOUNT env var)
 
     model_config = SettingsConfigDict(
         env_file=".env",

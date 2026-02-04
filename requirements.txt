@@ -47,5 +47,10 @@ redis>=5.0.0  # Optional: For distributed rate limiting (can use in-memory for n
 # Utilities
 python-dotenv==1.0.0  # Environment variable management
 
+# Billing & Payments
+stripe>=7.0.0,<8.0.0  # Stripe payment processing
+reportlab>=4.0.0,<5.0.0  # PDF generation for invoices
+Pillow>=10.0.0  # Image processing (required by reportlab)
+
 # Note: All standard library imports (logging, json, os, sys, datetime, typing, etc.)
 # are included in Python 3.11.9 and do not need to be listed here.
