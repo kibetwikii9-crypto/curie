@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
@@ -9,11 +9,39 @@ import AuthModal from './AuthModal';
 import dynamic from 'next/dynamic';
 
 // Dynamically import 3D background for better performance
-// Disabled for local dev (works on Render)
-// const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
-//   ssr: false,
-//   loading: () => null,
-// });
+const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
+  ssr: false,
+  loading: () => null,
+});
+
+// Hook for intersection observer animations
+function useIntersectionObserver(options = {}) {
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsIntersecting(true);
+        }
+      },
+      { threshold: 0.1, ...options }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => {
+      if (ref.current) {
+        observer.unobserve(ref.current);
+      }
+    };
+  }, []);
+
+  return [ref, isIntersecting] as const;
+}
 
 export default function LandingPage() {
   const router = useRouter();
@@ -21,6 +49,7 @@ export default function LandingPage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [featuresRef, featuresVisible] = useIntersectionObserver();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -53,10 +82,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
-      {/* 3D Animated Background - Disabled for local dev (works on Render) */}
-      {/* <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
+      {/* 3D Animated Background */}
+      <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
         <AnimatedBackground3D />
-      </Suspense> */}
+      </Suspense>
 
       {/* Navigation */}
       <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6">
@@ -110,27 +139,27 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up">
               Multi-Channel AI Business Assistant
-              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent">
+              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
                 That Works Everywhere
               </span>
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed">
+            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
               Connect with customers across WhatsApp, Telegram, Instagram, and more. 
               Powered by AI that understands context and delivers personalized experiences.
             </p>
 
             {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
                   setShowAuthModal(true);
                 }}
-                className="group px-8 py-4 text-lg font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/40 flex items-center gap-2"
+                className="group px-8 py-4 text-lg font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/40 hover:scale-105 flex items-center gap-2"
               >
                 Get Started Free
                 <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -140,35 +169,35 @@ export default function LandingPage() {
                   setAuthModalTab('signin');
                   setShowAuthModal(true);
                 }}
-                className="px-8 py-4 text-lg font-semibold text-white bg-white/10 backdrop-blur-sm border-2 border-white/20 hover:border-[#007FFF] hover:bg-white/20 rounded-lg transition-all"
+                className="px-8 py-4 text-lg font-semibold text-white bg-white/10 backdrop-blur-sm border-2 border-white/20 hover:border-[#007FFF] hover:bg-white/20 rounded-lg transition-all hover:scale-105"
               >
                 Sign In
               </button>
             </div>
 
             {/* Optional Visual Element */}
-            <div className="relative mt-16">
+            <div className="relative mt-16 animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
               <div className="relative mx-auto max-w-3xl">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/30 to-[#D4AF37]/30 rounded-2xl blur-3xl" />
-                <div className="relative bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/30 to-[#D4AF37]/30 rounded-2xl blur-3xl animate-pulse-slow" />
+                <div className="relative bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl hover:border-[#007FFF]/50 transition-all duration-500">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 rounded-full bg-[#007FFF]/20 flex items-center justify-center mb-4">
-                        <MessageSquare className="h-8 w-8 text-[#007FFF]" />
+                    <div className="flex flex-col items-center text-center group">
+                      <div className="w-16 h-16 rounded-full bg-[#007FFF]/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                        <MessageSquare className="h-8 w-8 text-[#007FFF] group-hover:animate-bounce" />
                       </div>
                       <h3 className="font-semibold text-white mb-2">Multi-Channel</h3>
                       <p className="text-sm text-gray-300">Connect everywhere your customers are</p>
                     </div>
-                    <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 rounded-full bg-yellow-400/20 flex items-center justify-center mb-4">
-                        <Zap className="h-8 w-8 text-yellow-400" />
+                    <div className="flex flex-col items-center text-center group">
+                      <div className="w-16 h-16 rounded-full bg-yellow-400/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                        <Zap className="h-8 w-8 text-yellow-400 group-hover:animate-bounce" />
                       </div>
                       <h3 className="font-semibold text-white mb-2">AI-Powered</h3>
                       <p className="text-sm text-gray-300">Intelligent responses that understand context</p>
                     </div>
-                    <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 rounded-full bg-gray-400/20 flex items-center justify-center mb-4">
-                        <Shield className="h-8 w-8 text-gray-300" />
+                    <div className="flex flex-col items-center text-center group">
+                      <div className="w-16 h-16 rounded-full bg-gray-400/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                        <Shield className="h-8 w-8 text-gray-300 group-hover:animate-bounce" />
                       </div>
                       <h3 className="font-semibold text-white mb-2">Enterprise-Grade</h3>
                       <p className="text-sm text-gray-300">Secure, scalable, and reliable</p>
@@ -182,9 +211,9 @@ export default function LandingPage() {
       </section>
 
       {/* Learn More Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
+      <section ref={featuresRef} className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
+          <div className={`text-center mb-12 transition-all duration-700 ${featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
               Everything You Need to Scale
             </h2>
@@ -242,9 +271,14 @@ export default function LandingPage() {
               return (
                 <div
                   key={idx}
-                  className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all hover:shadow-lg"
+                  className={`bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all duration-700 hover:shadow-lg hover:scale-105 hover:-translate-y-2 ${
+                    featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+                  }`}
+                  style={{ 
+                    transitionDelay: featuresVisible ? `${idx * 100}ms` : '0ms'
+                  }}
                 >
-                  <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4`}>
+                  <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110`}>
                     <Icon className={`h-6 w-6 ${feature.color}`} />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-2">
