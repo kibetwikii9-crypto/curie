@@ -112,7 +112,7 @@ const availableChannels: AvailableChannel[] = [
   {
     name: 'Instagram',
     id: 'instagram',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
     icon: '/intagram-icon.png',
     category: 'Social Media',
@@ -122,7 +122,7 @@ const availableChannels: AvailableChannel[] = [
   {
     name: 'Facebook Messenger',
     id: 'messenger',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Integrate Facebook Messenger conversations',
     icon: '/messenger-icon.png',
     category: 'Social Media',
@@ -427,6 +427,242 @@ export default function IntegrationsPage() {
         alert(error.response?.data?.detail || 'You do not have permission');
       } else {
         alert('Failed to connect WhatsApp. Please try again.');
+      }
+    }
+  };
+
+  const connectInstagram = async () => {
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const popup = window.open(
+      'about:blank',
+      'Instagram OAuth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      alert('Please allow popups for this site to connect Instagram');
+      return;
+    }
+
+    popup.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Connecting Instagram...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #E1306C 0%, #C13584 50%, #833AB4 100%);
+          }
+          .container {
+            text-align: center;
+            padding: 2rem;
+          }
+          .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #E1306C;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
+          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="spinner"></div>
+          <h2>Connecting Instagram...</h2>
+          <p>Please wait while we prepare the connection.</p>
+        </div>
+      </body>
+      </html>
+    `);
+
+    try {
+      const response = await api.get('/api/integrations/instagram/connect', {
+        headers: {
+          Accept: 'application/json',
+        },
+        validateStatus: (status) => status < 500,
+      });
+
+      if (response.status === 302 || response.data?.redirect_url) {
+        const redirectUrl = response.data?.redirect_url || response.headers?.location;
+        if (redirectUrl) {
+          popup.location.href = redirectUrl;
+        }
+      } else if (response.request.responseURL) {
+        popup.location.href = response.request.responseURL;
+      }
+
+      // Listen for messages from popup
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === 'instagram-oauth-success') {
+          console.log('Instagram connected successfully:', event.data.account);
+          refetch();
+          popup.close();
+          window.removeEventListener('message', handleMessage);
+        } else if (event.data.type === 'instagram-oauth-error') {
+          console.error('Instagram connection error:', event.data.error);
+          alert(`Failed to connect Instagram: ${event.data.error}`);
+          popup.close();
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Check if popup was closed
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+          refetch();
+        }
+      }, 1000);
+    } catch (error: any) {
+      console.error('Instagram connection error:', error);
+      popup.close();
+      if (error.response?.status === 401) {
+        alert('Please log in first');
+      } else if (error.response?.status === 403) {
+        alert(error.response?.data?.detail || 'You do not have permission');
+      } else {
+        alert('Failed to connect Instagram. Please try again.');
+      }
+    }
+  };
+
+  const connectMessenger = async () => {
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const popup = window.open(
+      'about:blank',
+      'Messenger OAuth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      alert('Please allow popups for this site to connect Messenger');
+      return;
+    }
+
+    popup.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Connecting Messenger...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #0084ff 0%, #0066ff 100%);
+          }
+          .container {
+            text-align: center;
+            padding: 2rem;
+          }
+          .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0084ff;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
+          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="spinner"></div>
+          <h2>Connecting Messenger...</h2>
+          <p>Please wait while we prepare the connection.</p>
+        </div>
+      </body>
+      </html>
+    `);
+
+    try {
+      const response = await api.get('/api/integrations/messenger/connect', {
+        headers: {
+          Accept: 'application/json',
+        },
+        validateStatus: (status) => status < 500,
+      });
+
+      if (response.status === 302 || response.data?.redirect_url) {
+        const redirectUrl = response.data?.redirect_url || response.headers?.location;
+        if (redirectUrl) {
+          popup.location.href = redirectUrl;
+        }
+      } else if (response.request.responseURL) {
+        popup.location.href = response.request.responseURL;
+      }
+
+      // Listen for messages from popup
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === 'messenger-oauth-success') {
+          console.log('Messenger connected successfully:', event.data.account);
+          refetch();
+          popup.close();
+          window.removeEventListener('message', handleMessage);
+        } else if (event.data.type === 'messenger-oauth-error') {
+          console.error('Messenger connection error:', event.data.error);
+          alert(`Failed to connect Messenger: ${event.data.error}`);
+          popup.close();
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Check if popup was closed
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+          refetch();
+        }
+      }, 1000);
+    } catch (error: any) {
+      console.error('Messenger connection error:', error);
+      popup.close();
+      if (error.response?.status === 401) {
+        alert('Please log in first');
+      } else if (error.response?.status === 403) {
+        alert(error.response?.data?.detail || 'You do not have permission');
+      } else {
+        alert('Failed to connect Messenger. Please try again.');
       }
     }
   };
@@ -845,6 +1081,10 @@ export default function IntegrationsPage() {
                             connectWhatsApp();
                           } else if (channel.id === 'telegram') {
                             setIsModalOpen(true);
+                          } else if (channel.id === 'instagram') {
+                            connectInstagram();
+                          } else if (channel.id === 'messenger') {
+                            connectMessenger();
                           }
                         } else {
                           alert('This integration is coming soon!');

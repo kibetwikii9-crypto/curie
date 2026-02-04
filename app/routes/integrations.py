@@ -1300,3 +1300,693 @@ async def check_integrations_health(
     
     return health_status
 
+
+# ============================================================================
+# INSTAGRAM INTEGRATION ENDPOINTS
+# ============================================================================
+
+@router.get("/instagram/connect")
+async def initiate_instagram_oauth(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Initiate Instagram OAuth flow.
+    Step 1: Redirect user to Meta's Instagram OAuth consent screen.
+    """
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        return Response(
+            content=_get_error_html("Instagram integration requires a business account."),
+            media_type="text/html"
+        )
+    
+    # Check if user already has Instagram connected
+    existing = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "instagram",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if existing:
+        return Response(
+            content=_get_error_html("Instagram account is already connected."),
+            media_type="text/html"
+        )
+    
+    try:
+        # Generate state token with user_id for callback verification
+        state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+        
+        # Initialize Meta OAuth service
+        meta_service = MetaOAuthService()
+        
+        # Get Instagram authorization URL
+        auth_url = meta_service.get_instagram_authorization_url(state_token)
+        
+        log.info(f"Instagram OAuth initiated for user {current_user.id}")
+        
+        # Redirect to Meta OAuth consent screen
+        return RedirectResponse(url=auth_url, status_code=302)
+        
+    except Exception as e:
+        log.error(f"Error initiating Instagram OAuth: {e}")
+        return Response(
+            content=_get_error_html(f"Failed to initiate Instagram connection: {str(e)}"),
+            media_type="text/html"
+        )
+
+
+@router.get("/instagram/callback")
+async def instagram_oauth_callback(
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+    error_description: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Instagram OAuth callback from Meta.
+    Step 2: Exchange code for access token and set up Instagram integration.
+    """
+    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    
+    # Handle OAuth errors
+    if error:
+        error_msg = error_description or error
+        log.error(f"Instagram OAuth error: {error_msg}")
+        return Response(
+            content=_get_error_html(f"Instagram connection failed: {error_msg}"),
+            media_type="text/html"
+        )
+    
+    if not code or not state:
+        return Response(
+            content=_get_error_html("Missing authorization code or state parameter"),
+            media_type="text/html"
+        )
+    
+    try:
+        # Extract user_id from state
+        user_id_str = state.split("_")[0]
+        user_id = int(user_id_str)
+        
+        # Get user
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user:
+            return Response(
+                content=_get_error_html("Invalid user session"),
+                media_type="text/html"
+            )
+        
+        business_id = get_user_business_id(user, db)
+        if business_id is None:
+            return Response(
+                content=_get_error_html("Business account required"),
+                media_type="text/html"
+            )
+        
+        # Initialize Meta OAuth service
+        meta_service = MetaOAuthService()
+        
+        # Step 1: Exchange code for access token
+        token_response = await meta_service.exchange_code_for_token(code)
+        short_lived_token = token_response.get("access_token")
+        
+        if not short_lived_token:
+            raise Exception("Failed to obtain access token")
+        
+        # Step 2: Get long-lived token
+        long_lived_response = await meta_service.get_long_lived_token(short_lived_token)
+        access_token = long_lived_response.get("access_token")
+        
+        # Step 3: Get Instagram accounts
+        instagram_accounts = await meta_service.get_instagram_accounts(access_token)
+        
+        if not instagram_accounts:
+            return Response(
+                content=_get_error_html("No Instagram Business accounts found. Please connect an Instagram Business account to your Facebook Page."),
+                media_type="text/html"
+            )
+        
+        # Use first Instagram account
+        ig_account = instagram_accounts[0]
+        ig_account_id = ig_account.get("id")
+        ig_username = ig_account.get("username", "Instagram Account")
+        page_name = ig_account.get("page_name", "")
+        
+        # Step 4: Store integration in database
+        integration = ChannelIntegration(
+            business_id=business_id,
+            channel="instagram",
+            channel_name=f"@{ig_username}" if ig_username else page_name,
+            is_active=True,
+            webhook_url=f"{settings.public_url}/api/integrations/instagram/webhook",
+            access_token=access_token,
+            channel_user_id=ig_account_id
+        )
+        
+        db.add(integration)
+        db.commit()
+        db.refresh(integration)
+        
+        log.info(f"Instagram integration created successfully for user {user_id}: {ig_username}")
+        
+        # Success! Return HTML that closes popup and notifies parent
+        return Response(
+            content=_get_success_html("Instagram", ig_username),
+            media_type="text/html"
+        )
+        
+    except Exception as e:
+        log.error(f"Error in Instagram OAuth callback: {e}")
+        return Response(
+            content=_get_error_html(f"Failed to complete Instagram setup: {str(e)}"),
+            media_type="text/html"
+        )
+
+
+def _get_success_html(platform: str, account_name: str) -> str:
+    """Generate HTML page that posts success message to parent window (for popup OAuth)."""
+    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>{platform} Connected Successfully</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background: #f5f5f5;
+            }}
+            .container {{
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }}
+            .success {{
+                color: #10b981;
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }}
+            h1 {{
+                color: #333;
+                margin: 0.5rem 0;
+            }}
+            p {{
+                color: #666;
+                margin: 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="success">✓</div>
+            <h1>Successfully Connected!</h1>
+            <p>{account_name} is now connected</p>
+            <p style="margin-top: 1rem; font-size: 0.9rem; color: #999;">This window will close automatically...</p>
+        </div>
+        <script>
+            // Post success message to parent window
+            if (window.opener) {{
+                window.opener.postMessage({{
+                    type: '{platform.lower()}-oauth-success',
+                    account: '{account_name}'
+                }}, '*');
+                
+                // Close popup after a short delay
+                setTimeout(function() {{
+                    window.close();
+                }}, 2000);
+            }} else {{
+                // If no opener (direct navigation), redirect
+                window.location.href = '{frontend_url}/dashboard/integrations?success={platform.lower()}_connected';
+            }}
+        </script>
+    </body>
+    </html>
+    """
+
+
+@router.get("/instagram/webhook")
+@router.post("/instagram/webhook")
+async def instagram_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Instagram webhook endpoint for receiving messages and events.
+    
+    GET: Webhook verification (Meta sends this when you configure webhook)
+    POST: Receive Instagram messages and events
+    """
+    if request.method == "GET":
+        # Webhook verification
+        params = dict(request.query_params)
+        mode = params.get("hub.mode")
+        token = params.get("hub.verify_token")
+        challenge = params.get("hub.challenge")
+        
+        verify_token = getattr(settings, 'instagram_verify_token', '')
+        
+        if mode == "subscribe" and token == verify_token:
+            log.info("Instagram webhook verified successfully")
+            return Response(content=challenge, media_type="text/plain")
+        else:
+            log.warning("Instagram webhook verification failed")
+            return Response(status_code=403, content="Forbidden")
+    
+    # POST: Handle incoming webhooks
+    try:
+        body = await request.json()
+        log.info(f"Instagram webhook received: {json.dumps(body)[:200]}")
+        
+        # Extract entry data
+        entries = body.get("entry", [])
+        
+        for entry in entries:
+            messaging = entry.get("messaging", [])
+            
+            for event in messaging:
+                sender_id = event.get("sender", {}).get("id")
+                recipient_id = event.get("recipient", {}).get("id")
+                
+                # Check if message
+                if "message" in event:
+                    message_data = event["message"]
+                    message_text = message_data.get("text", "")
+                    
+                    # Find integration for this Instagram account
+                    integration = db.query(ChannelIntegration).filter(
+                        ChannelIntegration.channel == "instagram",
+                        ChannelIntegration.channel_user_id == recipient_id,
+                        ChannelIntegration.is_active == True
+                    ).first()
+                    
+                    if integration:
+                        # TODO: Process message with AI and send response
+                        # For now, just log it
+                        log.info(f"Instagram message from {sender_id}: {message_text}")
+                        
+                        # You can add message processing here
+                        # await process_instagram_message(integration, sender_id, message_text, db)
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        log.error(f"Error processing Instagram webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/instagram/status", response_model=IntegrationResponse)
+async def get_instagram_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get Instagram integration status."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "instagram",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instagram not connected"
+        )
+    
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=integration.webhook_url,
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat()
+    )
+
+
+@router.delete("/instagram/disconnect")
+async def disconnect_instagram(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Disconnect Instagram integration."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "instagram",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instagram not connected"
+        )
+    
+    # Deactivate integration
+    integration.is_active = False
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    
+    log.info(f"Instagram integration disconnected for user {current_user.id}")
+    
+    return {"success": True, "message": "Instagram disconnected successfully"}
+
+
+# ============================================================================
+# FACEBOOK MESSENGER INTEGRATION ENDPOINTS
+# ============================================================================
+
+@router.get("/messenger/connect")
+async def initiate_messenger_oauth(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Initiate Facebook Messenger OAuth flow.
+    Step 1: Redirect user to Meta's Messenger OAuth consent screen.
+    """
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        return Response(
+            content=_get_error_html("Messenger integration requires a business account."),
+            media_type="text/html"
+        )
+    
+    # Check if user already has Messenger connected
+    existing = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "messenger",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if existing:
+        return Response(
+            content=_get_error_html("Facebook Messenger is already connected."),
+            media_type="text/html"
+        )
+    
+    try:
+        # Generate state token with user_id for callback verification
+        state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+        
+        # Initialize Meta OAuth service
+        meta_service = MetaOAuthService()
+        
+        # Get Messenger authorization URL
+        auth_url = meta_service.get_messenger_authorization_url(state_token)
+        
+        log.info(f"Messenger OAuth initiated for user {current_user.id}")
+        
+        # Redirect to Meta OAuth consent screen
+        return RedirectResponse(url=auth_url, status_code=302)
+        
+    except Exception as e:
+        log.error(f"Error initiating Messenger OAuth: {e}")
+        return Response(
+            content=_get_error_html(f"Failed to initiate Messenger connection: {str(e)}"),
+            media_type="text/html"
+        )
+
+
+@router.get("/messenger/callback")
+async def messenger_oauth_callback(
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+    error_description: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Messenger OAuth callback from Meta.
+    Step 2: Exchange code for access token and set up Messenger integration.
+    """
+    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    
+    # Handle OAuth errors
+    if error:
+        error_msg = error_description or error
+        log.error(f"Messenger OAuth error: {error_msg}")
+        return Response(
+            content=_get_error_html(f"Messenger connection failed: {error_msg}"),
+            media_type="text/html"
+        )
+    
+    if not code or not state:
+        return Response(
+            content=_get_error_html("Missing authorization code or state parameter"),
+            media_type="text/html"
+        )
+    
+    try:
+        # Extract user_id from state
+        user_id_str = state.split("_")[0]
+        user_id = int(user_id_str)
+        
+        # Get user
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user:
+            return Response(
+                content=_get_error_html("Invalid user session"),
+                media_type="text/html"
+            )
+        
+        business_id = get_user_business_id(user, db)
+        if business_id is None:
+            return Response(
+                content=_get_error_html("Business account required"),
+                media_type="text/html"
+            )
+        
+        # Initialize Meta OAuth service
+        meta_service = MetaOAuthService()
+        
+        # Step 1: Exchange code for access token
+        token_response = await meta_service.exchange_code_for_token(code)
+        short_lived_token = token_response.get("access_token")
+        
+        if not short_lived_token:
+            raise Exception("Failed to obtain access token")
+        
+        # Step 2: Get long-lived token
+        long_lived_response = await meta_service.get_long_lived_token(short_lived_token)
+        access_token = long_lived_response.get("access_token")
+        
+        # Step 3: Get Facebook Pages
+        pages = await meta_service.get_messenger_pages(access_token)
+        
+        if not pages:
+            return Response(
+                content=_get_error_html("No Facebook Pages found. Please create a Facebook Page to use Messenger."),
+                media_type="text/html"
+            )
+        
+        # Use first page
+        page = pages[0]
+        page_id = page.get("id")
+        page_name = page.get("name", "Facebook Page")
+        page_access_token = page.get("access_token")
+        
+        # Step 4: Subscribe page to webhooks
+        await meta_service.subscribe_page_webhook(page_id, page_access_token)
+        
+        # Step 5: Store integration in database
+        integration = ChannelIntegration(
+            business_id=business_id,
+            channel="messenger",
+            channel_name=page_name,
+            is_active=True,
+            webhook_url=f"{settings.public_url}/api/integrations/messenger/webhook",
+            access_token=page_access_token,  # Store page access token
+            channel_user_id=page_id
+        )
+        
+        db.add(integration)
+        db.commit()
+        db.refresh(integration)
+        
+        log.info(f"Messenger integration created successfully for user {user_id}: {page_name}")
+        
+        # Success! Return HTML that closes popup and notifies parent
+        return Response(
+            content=_get_success_html("Messenger", page_name),
+            media_type="text/html"
+        )
+        
+    except Exception as e:
+        log.error(f"Error in Messenger OAuth callback: {e}")
+        return Response(
+            content=_get_error_html(f"Failed to complete Messenger setup: {str(e)}"),
+            media_type="text/html"
+        )
+
+
+@router.get("/messenger/webhook")
+@router.post("/messenger/webhook")
+async def messenger_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Facebook Messenger webhook endpoint for receiving messages and events.
+    
+    GET: Webhook verification (Meta sends this when you configure webhook)
+    POST: Receive Messenger messages and events
+    """
+    if request.method == "GET":
+        # Webhook verification
+        params = dict(request.query_params)
+        mode = params.get("hub.mode")
+        token = params.get("hub.verify_token")
+        challenge = params.get("hub.challenge")
+        
+        verify_token = getattr(settings, 'messenger_verify_token', '')
+        
+        if mode == "subscribe" and token == verify_token:
+            log.info("Messenger webhook verified successfully")
+            return Response(content=challenge, media_type="text/plain")
+        else:
+            log.warning("Messenger webhook verification failed")
+            return Response(status_code=403, content="Forbidden")
+    
+    # POST: Handle incoming webhooks
+    try:
+        body = await request.json()
+        log.info(f"Messenger webhook received: {json.dumps(body)[:200]}")
+        
+        # Extract entry data
+        entries = body.get("entry", [])
+        
+        for entry in entries:
+            messaging = entry.get("messaging", [])
+            
+            for event in messaging:
+                sender_id = event.get("sender", {}).get("id")
+                recipient_id = event.get("recipient", {}).get("id")
+                
+                # Check if message
+                if "message" in event:
+                    message_data = event["message"]
+                    message_text = message_data.get("text", "")
+                    
+                    # Find integration for this Facebook Page
+                    integration = db.query(ChannelIntegration).filter(
+                        ChannelIntegration.channel == "messenger",
+                        ChannelIntegration.channel_user_id == recipient_id,
+                        ChannelIntegration.is_active == True
+                    ).first()
+                    
+                    if integration:
+                        # TODO: Process message with AI and send response
+                        # For now, just log it
+                        log.info(f"Messenger message from {sender_id}: {message_text}")
+                        
+                        # You can add message processing here
+                        # await process_messenger_message(integration, sender_id, message_text, db)
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        log.error(f"Error processing Messenger webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/messenger/status", response_model=IntegrationResponse)
+async def get_messenger_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get Messenger integration status."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "messenger",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Messenger not connected"
+        )
+    
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=integration.webhook_url,
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat()
+    )
+
+
+@router.delete("/messenger/disconnect")
+async def disconnect_messenger(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Disconnect Messenger integration."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "messenger",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Messenger not connected"
+        )
+    
+    # Deactivate integration
+    integration.is_active = False
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    
+    log.info(f"Messenger integration disconnected for user {current_user.id}")
+    
+    return {"success": True, "message": "Messenger disconnected successfully"}
+

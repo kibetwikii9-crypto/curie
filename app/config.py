@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     # WhatsApp Webhook
     whatsapp_verify_token: str = ""  # Webhook verification token (set via WHATSAPP_VERIFY_TOKEN env var)
     whatsapp_app_secret: str = ""  # App secret for signature verification (set via WHATSAPP_APP_SECRET env var)
+    
+    # Instagram Integration
+    instagram_verify_token: str = ""  # Instagram webhook verification token (set via INSTAGRAM_VERIFY_TOKEN env var)
+    meta_instagram_redirect_uri: str = ""  # Instagram OAuth redirect URI (set via META_INSTAGRAM_REDIRECT_URI env var)
+    
+    # Facebook Messenger Integration
+    messenger_verify_token: str = ""  # Messenger webhook verification token (set via MESSENGER_VERIFY_TOKEN env var)
+    meta_messenger_redirect_uri: str = ""  # Messenger OAuth redirect URI (set via META_MESSENGER_REDIRECT_URI env var)
 
     model_config = SettingsConfigDict(
         env_file=".env",

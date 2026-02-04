@@ -22,6 +22,8 @@ class MetaOAuthService:
         self.app_id = getattr(settings, 'meta_app_id', '')
         self.app_secret = getattr(settings, 'meta_app_secret', '')
         self.redirect_uri = getattr(settings, 'meta_redirect_uri', '')
+        self.instagram_redirect_uri = getattr(settings, 'meta_instagram_redirect_uri', '')
+        self.messenger_redirect_uri = getattr(settings, 'meta_messenger_redirect_uri', '')
     
     def get_authorization_url(self, state: str) -> str:
         """
@@ -276,6 +278,171 @@ class MetaOAuthService:
                 return True
         except Exception as e:
             logger.error(f"Error setting up webhook: {e}")
+            return False
+    
+    def get_instagram_authorization_url(self, state: str) -> str:
+        """
+        Generate Meta OAuth authorization URL for Instagram.
+        
+        Scopes for Instagram:
+        - instagram_basic: Basic profile info
+        - instagram_manage_messages: Read and respond to messages
+        - pages_show_list: List connected pages
+        - pages_manage_metadata: Manage page metadata
+        
+        Args:
+            state: CSRF protection token (should include user_id)
+            
+        Returns:
+            OAuth authorization URL
+        """
+        url = (
+            f"https://www.facebook.com/v21.0/dialog/oauth?"
+            f"client_id={self.app_id}&"
+            f"redirect_uri={self.instagram_redirect_uri}&"
+            f"state={state}&"
+            f"scope=instagram_basic,instagram_manage_messages,pages_show_list,pages_manage_metadata&"
+            f"response_type=code"
+        )
+        
+        return url
+    
+    def get_messenger_authorization_url(self, state: str) -> str:
+        """
+        Generate Meta OAuth authorization URL for Facebook Messenger.
+        
+        Scopes for Messenger:
+        - pages_messaging: Send and receive messages
+        - pages_manage_metadata: Manage page metadata
+        - pages_show_list: List connected pages
+        
+        Args:
+            state: CSRF protection token (should include user_id)
+            
+        Returns:
+            OAuth authorization URL
+        """
+        url = (
+            f"https://www.facebook.com/v21.0/dialog/oauth?"
+            f"client_id={self.app_id}&"
+            f"redirect_uri={self.messenger_redirect_uri}&"
+            f"state={state}&"
+            f"scope=pages_messaging,pages_manage_metadata,pages_show_list,pages_read_engagement&"
+            f"response_type=code"
+        )
+        
+        return url
+    
+    async def get_instagram_accounts(
+        self, 
+        access_token: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get user's Instagram Business Accounts.
+        
+        Args:
+            access_token: User's access token
+            
+        Returns:
+            List of Instagram accounts
+        """
+        url = f"{self.BASE_URL}/me/accounts"
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        params = {
+            "fields": "instagram_business_account,name,id"
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, params=params, timeout=10.0)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Extract Instagram accounts from pages
+                instagram_accounts = []
+                for page in data.get("data", []):
+                    if "instagram_business_account" in page:
+                        ig_account = page["instagram_business_account"]
+                        ig_account["page_name"] = page["name"]
+                        ig_account["page_id"] = page["id"]
+                        instagram_accounts.append(ig_account)
+                
+                return instagram_accounts
+        except Exception as e:
+            logger.error(f"Error getting Instagram accounts: {e}")
+            raise
+    
+    async def get_messenger_pages(
+        self, 
+        access_token: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get user's Facebook Pages (for Messenger).
+        
+        Args:
+            access_token: User's access token
+            
+        Returns:
+            List of Facebook Pages
+        """
+        url = f"{self.BASE_URL}/me/accounts"
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        params = {
+            "fields": "id,name,access_token,category,tasks"
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, params=params, timeout=10.0)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("data", [])
+        except Exception as e:
+            logger.error(f"Error getting Messenger pages: {e}")
+            raise
+    
+    async def subscribe_page_webhook(
+        self,
+        page_id: str,
+        page_access_token: str
+    ) -> bool:
+        """
+        Subscribe page to receive Messenger webhooks.
+        
+        Args:
+            page_id: Facebook Page ID
+            page_access_token: Page access token
+            
+        Returns:
+            True if successful
+        """
+        url = f"{self.BASE_URL}/{page_id}/subscribed_apps"
+        
+        headers = {
+            "Authorization": f"Bearer {page_access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "subscribed_fields": ["messages", "messaging_postbacks", "message_echoes", "messaging_handovers"]
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=data, timeout=10.0)
+                response.raise_for_status()
+                logger.info(f"Messenger webhook subscribed for page {page_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error subscribing page webhook: {e}")
             return False
 
 
