@@ -834,9 +834,6 @@ class Invoice(Base):
     period_start = Column(DateTime)
     period_end = Column(DateTime)
     
-    # Payment
-    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
-    
     # PDF
     pdf_url = Column(String(500))
     
@@ -848,7 +845,7 @@ class Invoice(Base):
     # Relationships
     business = relationship("Business", back_populates="invoices")
     subscription = relationship("Subscription", back_populates="invoices")
-    payment = relationship("Payment", back_populates="invoice", uselist=False, foreign_keys="[Invoice.payment_id]")
+    payment = relationship("Payment", back_populates="invoice", uselist=False)
     line_items = relationship("InvoiceLineItem", back_populates="invoice")
 
 
@@ -902,7 +899,7 @@ class Payment(Base):
     
     # Relationships
     business = relationship("Business", back_populates="payments")
-    invoice = relationship("Invoice", back_populates="payment", foreign_keys="[Payment.invoice_id]")
+    invoice = relationship("Invoice", back_populates="payment")
     payment_method = relationship("PaymentMethod", back_populates="payments")
 
 
