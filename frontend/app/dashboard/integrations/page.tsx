@@ -515,7 +515,7 @@ export default function IntegrationsPage() {
       const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'instagram-oauth-success') {
           console.log('Instagram connected successfully:', event.data.account);
-          refetch();
+          fetchIntegrations();
           popup.close();
           window.removeEventListener('message', handleMessage);
         } else if (event.data.type === 'instagram-oauth-error') {
@@ -533,7 +533,7 @@ export default function IntegrationsPage() {
         if (popup.closed) {
           clearInterval(checkClosed);
           window.removeEventListener('message', handleMessage);
-          refetch();
+          fetchIntegrations();
         }
       }, 1000);
     } catch (error: any) {
@@ -633,7 +633,7 @@ export default function IntegrationsPage() {
       const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'messenger-oauth-success') {
           console.log('Messenger connected successfully:', event.data.account);
-          refetch();
+          fetchIntegrations();
           popup.close();
           window.removeEventListener('message', handleMessage);
         } else if (event.data.type === 'messenger-oauth-error') {
@@ -651,7 +651,7 @@ export default function IntegrationsPage() {
         if (popup.closed) {
           clearInterval(checkClosed);
           window.removeEventListener('message', handleMessage);
-          refetch();
+          fetchIntegrations();
         }
       }, 1000);
     } catch (error: any) {
