@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
 import TimeAgo from '@/components/TimeAgo';
+import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
   MessageSquare,
   Search,
@@ -180,6 +181,19 @@ export default function ConversationsPage() {
   const [showAnalytics, setShowAnalytics] = useState(false);
 
   const queryClient = useQueryClient();
+
+  // Fetch usage for upgrade prompts
+  const { data: usageData } = useQuery({
+    queryKey: ['billing', 'usage'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/api/billing/usage');
+        return response.data;
+      } catch (error) {
+        return { usage: {} };
+      }
+    }
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['conversations', page, channelFilter, intentFilter, statusFilter, hasFallbackFilter, hasLeadFilter],
@@ -466,6 +480,21 @@ export default function ConversationsPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {data?.total || 0} total conversations
           </p>
+
+          {/* Usage Upgrade Prompt */}
+          {usageData?.usage?.conversation && usageData.usage.conversation.percentage >= 75 && (
+            <div className="mt-3">
+              <UpgradePrompt
+                title={usageData.usage.conversation.percentage >= 90 ? "🚨 Conversation Limit Reached!" : "⚠️ Approaching Limit"}
+                message={`You've used ${usageData.usage.conversation.used.toLocaleString()} of ${usageData.usage.conversation.limit?.toLocaleString()} conversations`}
+                currentUsage={usageData.usage.conversation.used}
+                limit={usageData.usage.conversation.limit || 0}
+                ctaText="Upgrade Plan"
+                variant="banner"
+                dismissible={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* Analytics Panel (Collapsible) */}

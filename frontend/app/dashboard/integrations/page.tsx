@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Image from 'next/image';
+import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
   Plug,
   CheckCircle2,
@@ -164,6 +165,19 @@ export default function IntegrationsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editChannelName, setEditChannelName] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Fetch usage for channel limits
+  const { data: usageData } = useQuery({
+    queryKey: ['billing', 'usage'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/api/billing/usage');
+        return response.data;
+      } catch (error) {
+        return { usage: {} };
+      }
+    }
+  });
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const canManage = user?.role === 'admin' || user?.role === 'business_owner';
@@ -856,6 +870,18 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Channel Limit Upgrade Prompt */}
+      {usageData?.usage?.channel && usageData.usage.channel.exceeded && (
+        <UpgradePrompt
+          title="Channel Limit Reached"
+          message={`You're using ${usageData.usage.channel.used} of ${usageData.usage.channel.limit} channels. Upgrade to connect more platforms.`}
+          feature="Unlimited Channels"
+          ctaText="Upgrade Plan"
+          variant="banner"
+          dismissible={false}
+        />
+      )}
+
       {/* Enhanced Hero Header */}
       <div className="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-lg p-1 shadow-lg">
         <div className="bg-white dark:bg-gray-900 rounded-lg p-6">

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
   Users,
   Shield,
@@ -106,6 +107,19 @@ export default function UsersPage() {
       return response.data;
     },
     refetchInterval: 30000,
+  });
+
+  // Fetch usage for team limit
+  const { data: usageData } = useQuery({
+    queryKey: ['billing', 'usage'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/api/billing/usage');
+        return response.data;
+      } catch (error) {
+        return { usage: {} };
+      }
+    }
   });
 
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
@@ -312,6 +326,18 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Team Limit Upgrade Prompt */}
+      {usageData?.usage?.user && usageData.usage.user.exceeded && (
+        <UpgradePrompt
+          title="Team Limit Reached"
+          message={`You have ${usageData.usage.user.used} of ${usageData.usage.user.limit} team members. Upgrade to add more.`}
+          feature="More Team Members"
+          ctaText="Upgrade Plan"
+          variant="banner"
+          dismissible={false}
+        />
+      )}
+
       {/* Enhanced Hero Header */}
       <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-lg p-1 shadow-lg">
         <div className="bg-white dark:bg-gray-900 rounded-lg p-6">
