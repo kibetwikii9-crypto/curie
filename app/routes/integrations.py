@@ -2000,35 +2000,47 @@ from app.services.gmail_oauth import GmailOAuthService
 
 @router.get("/email/connect")
 async def initiate_email_oauth(
+    request: Request,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Initiate Gmail OAuth flow.
-    Step 1: Redirect user to Google's OAuth consent screen.
+    Step 1: Generate auth URL and return it (or redirect).
+    
+    Supports both:
+    - Browser redirect: Returns RedirectResponse (302)
+    - API call: Returns JSON with auth_url (for frontend to redirect)
     """
-    business_id = get_user_business_id(current_user, db)
-    
-    if business_id is None:
-        return Response(
-            content=_get_error_html("Email integration requires a business account."),
-            media_type="text/html"
-        )
-    
-    # Check if user already has email connected
-    existing = db.query(ChannelIntegration).filter(
-        ChannelIntegration.business_id == business_id,
-        ChannelIntegration.channel == "email",
-        ChannelIntegration.is_active == True
-    ).first()
-    
-    if existing:
-        return Response(
-            content=_get_error_html("Email account is already connected."),
-            media_type="text/html"
-        )
-    
     try:
+        # Check user role
+        if current_user.role not in ["admin", "business_owner"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Admin and Business Owner roles can connect integrations"
+            )
+        
+        business_id = get_user_business_id(current_user, db)
+        
+        if business_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email integration requires a business account."
+            )
+        
+        # Check if user already has email connected
+        existing = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "email",
+            ChannelIntegration.is_active == True
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email account is already connected."
+            )
+        
         # Generate state token with user_id for callback verification
         state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
         
@@ -2040,14 +2052,23 @@ async def initiate_email_oauth(
         
         log.info(f"Email OAuth initiated for user {current_user.id}")
         
-        # Redirect to Google OAuth consent screen
+        # Check Accept header to determine response format
+        accept_header = request.headers.get("Accept", "")
+        
+        # If request wants JSON (API call from frontend), return JSON
+        if "application/json" in accept_header:
+            return JSONResponse(content={"auth_url": auth_url, "state": state_token})
+        
+        # Redirect to Google (for direct browser navigation)
         return RedirectResponse(url=auth_url, status_code=302)
         
+    except HTTPException:
+        raise
     except Exception as e:
-        log.error(f"Error initiating Email OAuth: {e}")
-        return Response(
-            content=_get_error_html(f"Failed to initiate Email connection: {str(e)}"),
-            media_type="text/html"
+        log.error(f"Error initiating Email OAuth: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to initiate Email connection: {str(e)}"
         )
 
 
