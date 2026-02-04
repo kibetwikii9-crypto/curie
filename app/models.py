@@ -952,8 +952,8 @@ class UsageRecord(Base):
     period_start = Column(DateTime, nullable=False)
     period_end = Column(DateTime, nullable=False)
     
-    # Metadata
-    metadata = Column(Text)  # JSON: Additional context
+    # Metadata (renamed to avoid SQLAlchemy reserved word)
+    resource_metadata = Column(Text)  # JSON: Additional context
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
