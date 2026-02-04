@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # Facebook Messenger Integration
     messenger_verify_token: str = ""  # Messenger webhook verification token (set via MESSENGER_VERIFY_TOKEN env var)
     meta_messenger_redirect_uri: str = ""  # Messenger OAuth redirect URI (set via META_MESSENGER_REDIRECT_URI env var)
+    
+    # Gmail/Email Integration (OAuth)
+    google_client_id: str = ""  # Google OAuth Client ID (set via GOOGLE_CLIENT_ID env var)
+    google_client_secret: str = ""  # Google OAuth Client Secret (set via GOOGLE_CLIENT_SECRET env var)
+    google_redirect_uri: str = ""  # Google OAuth redirect URI (set via GOOGLE_REDIRECT_URI env var)
+    
+    # Website Chat Widget (No external setup needed - fully automated)
+    widget_secret_key: str = ""  # Secret key for widget authentication (set via WIDGET_SECRET_KEY env var, auto-generated if empty)
 
     model_config = SettingsConfigDict(
         env_file=".env",

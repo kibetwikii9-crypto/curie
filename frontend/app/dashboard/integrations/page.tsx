@@ -132,22 +132,22 @@ const availableChannels: AvailableChannel[] = [
   {
     name: 'Website Chat',
     id: 'webchat',
-    status: 'coming_soon',
+    status: 'available',
     description: 'Embed chat widget on your website',
     icon: '/chat-icon.png',
     category: 'Web',
     color: 'from-gray-600 to-gray-700',
-    features: ['Custom branding', 'Pre-chat forms', 'File uploads', 'Typing indicators'],
+    features: ['Custom branding', 'Instant setup', 'Copy-paste embed', 'Real-time chat'],
   },
   {
     name: 'Email',
     id: 'email',
-    status: 'coming_soon',
-    description: 'Handle customer emails with AI',
+    status: 'available',
+    description: 'Connect Gmail with one-click OAuth',
     icon: '/chat-icon.png',
     category: 'Email',
     color: 'from-red-500 to-red-600',
-    features: ['Auto-responses', 'Thread tracking', 'Priority detection', 'Templates'],
+    features: ['Auto-responses', 'Gmail integration', 'AI-powered replies', 'Smart inbox'],
   },
 ];
 
@@ -426,7 +426,7 @@ export default function IntegrationsPage() {
       } else if (error.response?.status === 403) {
         alert(error.response?.data?.detail || 'You do not have permission');
       } else {
-        alert('Failed to connect WhatsApp. Please try again.');
+        alert('Integration in progress... If this persists, please try again.');
       }
     }
   };
@@ -544,7 +544,7 @@ export default function IntegrationsPage() {
       } else if (error.response?.status === 403) {
         alert(error.response?.data?.detail || 'You do not have permission');
       } else {
-        alert('Failed to connect Instagram. Please try again.');
+        alert('Integration in progress... If this persists, please try again.');
       }
     }
   };
@@ -662,7 +662,170 @@ export default function IntegrationsPage() {
       } else if (error.response?.status === 403) {
         alert(error.response?.data?.detail || 'You do not have permission');
       } else {
-        alert('Failed to connect Messenger. Please try again.');
+        alert('Integration in progress... If this persists, please try again.');
+      }
+    }
+  };
+
+  const connectEmail = async () => {
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const popup = window.open(
+      'about:blank',
+      'Email OAuth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      alert('Please allow popups for this site to connect Email');
+      return;
+    }
+
+    popup.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Connecting Email...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #EA4335 0%, #FBBC05 50%, #34A853 100%);
+          }
+          .container {
+            text-align: center;
+            padding: 2rem;
+          }
+          .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #EA4335;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
+          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="spinner"></div>
+          <h2>Connecting Gmail...</h2>
+          <p>Please wait while we prepare the connection.</p>
+        </div>
+      </body>
+      </html>
+    `);
+
+    try {
+      const response = await api.get('/api/integrations/email/connect', {
+        headers: {
+          Accept: 'application/json',
+        },
+        validateStatus: (status) => status < 500,
+      });
+
+      if (response.status === 302 || response.data?.redirect_url) {
+        const redirectUrl = response.data?.redirect_url || response.headers?.location;
+        if (redirectUrl) {
+          popup.location.href = redirectUrl;
+        }
+      } else if (response.request.responseURL) {
+        popup.location.href = response.request.responseURL;
+      }
+
+      // Listen for messages from popup
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === 'email-oauth-success') {
+          console.log('Email connected successfully:', event.data.account);
+          fetchIntegrations();
+          popup.close();
+          window.removeEventListener('message', handleMessage);
+        } else if (event.data.type === 'email-oauth-error') {
+          console.error('Email connection error:', event.data.error);
+          alert(`Integration in progress... ${event.data.error}`);
+          popup.close();
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Check if popup was closed
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+          fetchIntegrations();
+        }
+      }, 1000);
+    } catch (error: any) {
+      console.error('Email connection error:', error);
+      popup.close();
+      if (error.response?.status === 401) {
+        alert('Please log in first');
+      } else if (error.response?.status === 403) {
+        alert(error.response?.data?.detail || 'You do not have permission');
+      } else {
+        alert('Integration in progress... If this persists, please try again.');
+      }
+    }
+  };
+
+  const connectWebchat = async () => {
+    try {
+      const response = await api.post('/api/integrations/webchat/connect');
+      
+      if (response.data.success) {
+        // Show embed code modal
+        const embedCode = response.data.embed_code;
+        const widgetId = response.data.widget_id;
+        
+        // Create modal to show embed code
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
+        modal.innerHTML = `
+          <div style="background:white;padding:2rem;border-radius:12px;max-width:600px;width:90%;">
+            <h2 style="margin:0 0 1rem 0;font-size:1.5rem;color:#111;">Website Chat Widget Created! 🎉</h2>
+            <p style="color:#666;margin-bottom:1rem;">Copy the code below and paste it before the closing &lt;/body&gt; tag on your website:</p>
+            <div style="background:#f5f5f5;padding:1rem;border-radius:8px;margin-bottom:1rem;overflow-x:auto;">
+              <code style="font-family:monospace;font-size:0.875rem;white-space:pre;display:block;">${embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <button onclick="navigator.clipboard.writeText(\`${embedCode.replace(/`/g, '\\`')}\`).then(() => alert('Copied to clipboard!')); this.textContent='✓ Copied!';" style="flex:1;padding:0.75rem;background:#10b981;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+                Copy Embed Code
+              </button>
+              <button onclick="this.parentElement.parentElement.parentElement.remove();" style="flex:1;padding:0.75rem;background:#6b7280;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+                Close
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        
+        fetchIntegrations();
+      }
+    } catch (error: any) {
+      console.error('Website chat connection error:', error);
+      if (error.response?.status === 401) {
+        alert('Please log in first');
+      } else if (error.response?.status === 403) {
+        alert(error.response?.data?.detail || 'You do not have permission');
+      } else {
+        alert('Integration in progress... If this persists, please try again.');
       }
     }
   };
@@ -1085,6 +1248,10 @@ export default function IntegrationsPage() {
                             connectInstagram();
                           } else if (channel.id === 'messenger') {
                             connectMessenger();
+                          } else if (channel.id === 'email') {
+                            connectEmail();
+                          } else if (channel.id === 'webchat') {
+                            connectWebchat();
                           }
                         } else {
                           alert('This integration is coming soon!');

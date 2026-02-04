@@ -1990,3 +1990,439 @@ async def disconnect_messenger(
     
     return {"success": True, "message": "Messenger disconnected successfully"}
 
+
+# ============================================================================
+# EMAIL (GMAIL) INTEGRATION ENDPOINTS
+# ============================================================================
+
+from app.services.gmail_oauth import GmailOAuthService
+
+
+@router.get("/email/connect")
+async def initiate_email_oauth(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Initiate Gmail OAuth flow.
+    Step 1: Redirect user to Google's OAuth consent screen.
+    """
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        return Response(
+            content=_get_error_html("Email integration requires a business account."),
+            media_type="text/html"
+        )
+    
+    # Check if user already has email connected
+    existing = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "email",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if existing:
+        return Response(
+            content=_get_error_html("Email account is already connected."),
+            media_type="text/html"
+        )
+    
+    try:
+        # Generate state token with user_id for callback verification
+        state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+        
+        # Initialize Gmail OAuth service
+        gmail_service = GmailOAuthService()
+        
+        # Get Gmail authorization URL
+        auth_url = gmail_service.get_authorization_url(state_token)
+        
+        log.info(f"Email OAuth initiated for user {current_user.id}")
+        
+        # Redirect to Google OAuth consent screen
+        return RedirectResponse(url=auth_url, status_code=302)
+        
+    except Exception as e:
+        log.error(f"Error initiating Email OAuth: {e}")
+        return Response(
+            content=_get_error_html(f"Failed to initiate Email connection: {str(e)}"),
+            media_type="text/html"
+        )
+
+
+@router.get("/email/callback")
+async def email_oauth_callback(
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Gmail OAuth callback from Google.
+    Step 2: Exchange code for access token and set up email integration.
+    """
+    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    
+    # Handle OAuth errors
+    if error:
+        log.error(f"Email OAuth error: {error}")
+        return Response(
+            content=_get_error_html(f"Email connection failed: {error}"),
+            media_type="text/html"
+        )
+    
+    if not code or not state:
+        return Response(
+            content=_get_error_html("Missing authorization code or state parameter"),
+            media_type="text/html"
+        )
+    
+    try:
+        # Extract user_id from state
+        user_id_str = state.split("_")[0]
+        user_id = int(user_id_str)
+        
+        # Get user
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user:
+            return Response(
+                content=_get_error_html("Invalid user session"),
+                media_type="text/html"
+            )
+        
+        business_id = get_user_business_id(user, db)
+        if business_id is None:
+            return Response(
+                content=_get_error_html("Business account required"),
+                media_type="text/html"
+            )
+        
+        # Initialize Gmail OAuth service
+        gmail_service = GmailOAuthService()
+        
+        # Step 1: Exchange code for access token
+        token_response = await gmail_service.exchange_code_for_token(code)
+        access_token = token_response.get("access_token")
+        refresh_token = token_response.get("refresh_token")
+        
+        if not access_token:
+            raise Exception("Failed to obtain access token")
+        
+        # Step 2: Get user's email address
+        user_email = await gmail_service.get_user_email(access_token)
+        
+        # Step 3: Store integration in database
+        integration = ChannelIntegration(
+            business_id=business_id,
+            channel="email",
+            channel_name=user_email,
+            is_active=True,
+            webhook_url=None,  # Gmail uses polling, not webhooks
+            access_token=access_token,
+            refresh_token=refresh_token,
+            channel_user_id=user_email
+        )
+        
+        db.add(integration)
+        db.commit()
+        db.refresh(integration)
+        
+        log.info(f"Email integration created successfully for user {user_id}: {user_email}")
+        
+        # Success! Return HTML that closes popup and notifies parent
+        return Response(
+            content=_get_success_html("Email", user_email),
+            media_type="text/html"
+        )
+        
+    except Exception as e:
+        log.error(f"Error in Email OAuth callback: {e}")
+        return Response(
+            content=_get_error_html(f"Failed to complete Email setup: {str(e)}"),
+            media_type="text/html"
+        )
+
+
+@router.get("/email/status", response_model=IntegrationResponse)
+async def get_email_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get Email integration status."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "email",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email not connected"
+        )
+    
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=integration.webhook_url,
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat()
+    )
+
+
+@router.delete("/email/disconnect")
+async def disconnect_email(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Disconnect Email integration."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "email",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email not connected"
+        )
+    
+    # Deactivate integration
+    integration.is_active = False
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    
+    log.info(f"Email integration disconnected for user {current_user.id}")
+    
+    return {"success": True, "message": "Email disconnected successfully"}
+
+
+# ============================================================================
+# WEBSITE CHAT WIDGET INTEGRATION ENDPOINTS
+# ============================================================================
+
+@router.post("/webchat/connect")
+async def create_webchat_widget(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create website chat widget integration.
+    This is instant - no OAuth needed!
+    """
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    try:
+        # Check if widget already exists
+        existing = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "webchat",
+            ChannelIntegration.is_active == True
+        ).first()
+        
+        if existing:
+            # Return existing widget
+            widget_id = existing.channel_user_id
+        else:
+            # Generate unique widget ID
+            widget_id = f"widget_{business_id}_{secrets.token_urlsafe(8)}"
+            
+            # Create integration
+            integration = ChannelIntegration(
+                business_id=business_id,
+                channel="webchat",
+                channel_name="Website Chat Widget",
+                is_active=True,
+                webhook_url=f"{settings.public_url}/api/integrations/webchat/webhook",
+                channel_user_id=widget_id
+            )
+            
+            db.add(integration)
+            db.commit()
+            db.refresh(integration)
+            
+            log.info(f"Website chat widget created for user {current_user.id}: {widget_id}")
+        
+        # Generate embed code
+        frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+        embed_code = f"""<!-- Automify Chat Widget -->
+<script>
+  (function() {{
+    var script = document.createElement('script');
+    script.src = '{frontend_url}/widget.js';
+    script.setAttribute('data-widget-id', '{widget_id}');
+    script.setAttribute('data-api-url', '{settings.public_url}');
+    script.async = true;
+    document.head.appendChild(script);
+  }})();
+</script>
+<!-- End Automify Chat Widget -->"""
+        
+        return {
+            "success": True,
+            "widget_id": widget_id,
+            "embed_code": embed_code,
+            "message": "Website chat widget created successfully"
+        }
+        
+    except Exception as e:
+        log.error(f"Error creating website chat widget: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create widget: {str(e)}"
+        )
+
+
+@router.get("/webchat/status")
+async def get_webchat_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get website chat widget status."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "webchat",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Website chat widget not connected"
+        )
+    
+    # Generate embed code
+    widget_id = integration.channel_user_id
+    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    embed_code = f"""<!-- Automify Chat Widget -->
+<script>
+  (function() {{
+    var script = document.createElement('script');
+    script.src = '{frontend_url}/widget.js';
+    script.setAttribute('data-widget-id', '{widget_id}');
+    script.setAttribute('data-api-url', '{settings.public_url}');
+    script.async = true;
+    document.head.appendChild(script);
+  }})();
+</script>
+<!-- End Automify Chat Widget -->"""
+    
+    return {
+        "id": integration.id,
+        "channel": integration.channel,
+        "channel_name": integration.channel_name,
+        "is_active": integration.is_active,
+        "widget_id": widget_id,
+        "embed_code": embed_code,
+        "created_at": integration.created_at.isoformat(),
+        "updated_at": integration.updated_at.isoformat()
+    }
+
+
+@router.delete("/webchat/disconnect")
+async def disconnect_webchat(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Disconnect website chat widget."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Business account required"
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "webchat",
+        ChannelIntegration.is_active == True
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Website chat widget not connected"
+        )
+    
+    # Deactivate integration
+    integration.is_active = False
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    
+    log.info(f"Website chat widget disconnected for user {current_user.id}")
+    
+    return {"success": True, "message": "Website chat widget disconnected successfully"}
+
+
+@router.post("/webchat/webhook")
+async def webchat_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Website chat widget webhook for receiving messages.
+    """
+    try:
+        body = await request.json()
+        widget_id = body.get("widget_id")
+        message = body.get("message")
+        sender_id = body.get("sender_id")
+        
+        log.info(f"Website chat message from widget {widget_id}: {message}")
+        
+        # Find integration for this widget
+        integration = db.query(ChannelIntegration).filter(
+            ChannelIntegration.channel == "webchat",
+            ChannelIntegration.channel_user_id == widget_id,
+            ChannelIntegration.is_active == True
+        ).first()
+        
+        if integration:
+            # TODO: Process message with AI and send response
+            # For now, just log it
+            log.info(f"Website chat message from {sender_id}: {message}")
+            
+            # You can add message processing here
+            # await process_webchat_message(integration, sender_id, message, db)
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        log.error(f"Error processing website chat webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
