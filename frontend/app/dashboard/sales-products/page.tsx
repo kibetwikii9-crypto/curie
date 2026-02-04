@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import ProductModal from '@/components/ProductModal';
 import {
   ShoppingBag,
   Package,
@@ -66,7 +67,9 @@ export default function SalesProductsPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('products');
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [productToEdit, setProductToEdit] = useState<any | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -99,6 +102,104 @@ export default function SalesProductsPage() {
     },
     refetchInterval: 30000,
   });
+
+  // Fetch sales stats
+  const { data: stats } = useQuery({
+    queryKey: ['sales', 'stats'],
+    queryFn: async () => {
+      const response = await api.get('/api/sales/stats');
+      return response.data;
+    },
+  });
+
+  // Create product mutation
+  const createProductMutation = useMutation({
+    mutationFn: async (productData: any) => {
+      const response = await api.post('/api/sales/products/', productData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales', 'products'] });
+      queryClient.invalidateQueries({ queryKey: ['sales', 'stats'] });
+      setIsProductModalOpen(false);
+      setProductToEdit(null);
+      alert('Product created successfully!');
+    },
+    onError: (error: any) => {
+      alert(`Failed to create product: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
+  // Update product mutation
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await api.put(`/api/sales/products/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales', 'products'] });
+      setIsProductModalOpen(false);
+      setProductToEdit(null);
+      alert('Product updated successfully!');
+    },
+    onError: (error: any) => {
+      alert(`Failed to update product: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
+  // Delete product mutation
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.delete(`/api/sales/products/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales', 'products'] });
+      queryClient.invalidateQueries({ queryKey: ['sales', 'stats'] });
+      alert('Product deleted successfully!');
+    },
+    onError: (error: any) => {
+      alert(`Failed to delete product: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
+  // Toggle product active status
+  const toggleProductMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.patch(`/api/sales/products/${id}/toggle`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales', 'products'] });
+    },
+    onError: (error: any) => {
+      alert(`Failed to toggle product: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
+  const handleSaveProduct = (productData: any) => {
+    if (productToEdit) {
+      updateProductMutation.mutate({ id: productToEdit.id, data: productData });
+    } else {
+      createProductMutation.mutate(productData);
+    }
+  };
+
+  const handleDeleteProduct = (product: any) => {
+    if (confirm(`Are you sure you want to delete "${product.name}"? This action cannot be undone.`)) {
+      deleteProductMutation.mutate(product.id);
+    }
+  };
+
+  const handleEditProduct = (product: any) => {
+    setProductToEdit(product);
+    setIsProductModalOpen(true);
+  };
+
+  const handleAddProduct = () => {
+    setProductToEdit(null);
+    setIsProductModalOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -388,10 +489,7 @@ export default function SalesProductsPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => {
-                    // TODO: Open add product modal
-                    alert('Add product functionality - connect to API');
-                  }}
+                  onClick={handleAddProduct}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -504,7 +602,7 @@ export default function SalesProductsPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // TODO: Open edit modal
+                                    handleEditProduct(product);
                                   }}
                                   className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                                 >
@@ -513,9 +611,7 @@ export default function SalesProductsPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm(`Delete ${product.name}?`)) {
-                                      // TODO: Delete product
-                                    }
+                                    handleDeleteProduct(product);
                                   }}
                                   className="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
                                 >
@@ -1283,7 +1379,7 @@ export default function SalesProductsPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      // TODO: Open filter modal
+                      // Filter functionality coming soon
                     }}
                     className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
@@ -1389,7 +1485,7 @@ export default function SalesProductsPage() {
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button
                                   onClick={() => {
-                                    // TODO: View order details
+                                    alert('Order details view coming soon!');
                                   }}
                                   className="text-primary-600 hover:text-primary-700 dark:text-primary-400"
                                 >
@@ -1998,8 +2094,14 @@ export default function SalesProductsPage() {
                       Close
                     </button>
                     <button
-                      disabled
-                      className="px-4 py-2 text-sm font-medium text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-md cursor-not-allowed opacity-50"
+                      onClick={() => {
+                        const product = products.find((p: any) => p.id.toString() === selectedProduct);
+                        if (product) {
+                          setSelectedProduct(null);
+                          handleEditProduct(product);
+                        }
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700"
                     >
                       Edit Product
                     </button>
@@ -2010,6 +2112,18 @@ export default function SalesProductsPage() {
           </div>
         </div>
       )}
+
+      {/* Product Modal */}
+      <ProductModal
+        isOpen={isProductModalOpen}
+        onClose={() => {
+          setIsProductModalOpen(false);
+          setProductToEdit(null);
+        }}
+        onSave={handleSaveProduct}
+        product={productToEdit}
+        isLoading={createProductMutation.isPending || updateProductMutation.isPending}
+      />
     </div>
   );
 }
