@@ -1037,8 +1037,8 @@ class BillingEvent(Base):
     event_type = Column(String(50), nullable=False, index=True)  # subscription_created, payment_failed, etc.
     description = Column(Text)
     
-    # Metadata
-    metadata = Column(Text)  # JSON
+    # Metadata (renamed to avoid SQLAlchemy reserved word)
+    event_metadata = Column(Text)  # JSON
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
