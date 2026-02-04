@@ -45,22 +45,38 @@ def fix_render_url(url: str) -> str:
     if not url:
         return url
     
+    url = url.strip()
+    
     # Remove protocol to check the hostname
     hostname = url.replace("https://", "").replace("http://", "").split("/")[0]
     
-    # If hostname doesn't contain a dot and doesn't end with .onrender.com,
-    # it's likely an incomplete Render service name
-    if "." not in hostname and not hostname.endswith(".onrender.com"):
-        # Reconstruct URL with .onrender.com
-        protocol = "https://" if url.startswith("https://") else ("http://" if url.startswith("http://") else "https://")
-        fixed_url = f"{protocol}{hostname}.onrender.com"
-        print(f"[FIX] Fixed incomplete Render URL: {url} -> {fixed_url}")
-        return fixed_url
+    # Fix for Render's automatic URL shortening in dashboard
+    # If hostname doesn't end with .onrender.com but looks like a Render service name
+    if not hostname.endswith(".onrender.com"):
+        # Check if it's a Render service name (contains "automify" or other patterns)
+        if "automify" in hostname or "-" in hostname or hostname.count(".") == 0:
+            # Reconstruct URL with .onrender.com
+            protocol = "https://" if url.startswith("https://") else ("http://" if url.startswith("http://") else "https://")
+            # Remove any trailing parts after the service name
+            service_name = hostname.split(".")[0]
+            fixed_url = f"{protocol}{service_name}.onrender.com"
+            print(f"[FIX] Fixed incomplete Render URL: {url} -> {fixed_url}")
+            return fixed_url
     
     return url
 
 # Add production frontend URL from environment variable
 frontend_url_env = os.getenv("FRONTEND_URL", "").strip()
+
+# CRITICAL FIX: Render sometimes shortens URLs in environment variables
+# If we detect a shortened Render service name, fix it immediately
+if frontend_url_env and "automify" in frontend_url_env.lower():
+    if not frontend_url_env.endswith(".onrender.com"):
+        # Extract service name and rebuild full URL
+        service_name = frontend_url_env.replace("https://", "").replace("http://", "").split("/")[0].split(".")[0]
+        frontend_url_env = f"https://{service_name}.onrender.com"
+        print(f"[FIX] Render shortened URL detected and fixed: https://{service_name}.onrender.com")
+
 if frontend_url_env:
     # Don't modify localhost URLs - they're correct as-is
     if "localhost" in frontend_url_env or "127.0.0.1" in frontend_url_env:
@@ -127,6 +143,13 @@ if settings.public_url and "onrender.com" in settings.public_url:
     if render_frontend_url not in cors_origins:
         cors_origins.append(render_frontend_url)
         print(f"[SAFETY] CORS: Ensured Render frontend URL is included: {render_frontend_url}")
+
+# ULTIMATE SAFETY NET: If backend URL contains "automify-ai-backend", always add the frontend
+if settings.public_url and "automify-ai-backend" in settings.public_url:
+    ultimate_frontend = "https://automify-ai-frontend.onrender.com"
+    if ultimate_frontend not in cors_origins:
+        cors_origins.append(ultimate_frontend)
+        print(f"[ULTIMATE-SAFETY] CORS: Force-added automify-ai-frontend.onrender.com")
 
 print(f"[INFO] ============================================")
 print(f"[INFO] CORS CONFIGURATION:")
