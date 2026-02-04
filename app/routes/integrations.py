@@ -2230,15 +2230,16 @@ async def create_webchat_widget(
     Create website chat widget integration.
     This is instant - no OAuth needed!
     """
-    business_id = get_user_business_id(current_user, db)
-    
-    if business_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Business account required"
-        )
-    
     try:
+        business_id = get_user_business_id(current_user, db)
+        
+        if business_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Business account required"
+            )
+        
+        log.info(f"Creating webchat widget for user {current_user.id}, business {business_id}")
         # Check if widget already exists
         existing = db.query(ChannelIntegration).filter(
             ChannelIntegration.business_id == business_id,
@@ -2292,7 +2293,9 @@ async def create_webchat_widget(
         }
         
     except Exception as e:
+        import traceback
         log.error(f"Error creating website chat widget: {e}")
+        log.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create widget: {str(e)}"

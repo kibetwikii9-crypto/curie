@@ -673,8 +673,13 @@ export default function IntegrationsPage() {
     const left = (window.screen.width - width) / 2;
     const top = (window.screen.height - height) / 2;
 
+    // Get the backend URL from environment
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://automify-ai-backend.onrender.com';
+    const emailConnectUrl = `${backendUrl}/api/integrations/email/connect`;
+
+    // Open popup and navigate directly to backend (no axios, avoid CORS on redirect)
     const popup = window.open(
-      'about:blank',
+      emailConnectUrl,
       'Email OAuth',
       `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
     );
@@ -684,105 +689,31 @@ export default function IntegrationsPage() {
       return;
     }
 
-    popup.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connecting Email...</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #EA4335 0%, #FBBC05 50%, #34A853 100%);
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-          }
-          .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #EA4335;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
-          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h2>Connecting Gmail...</h2>
-          <p>Please wait while we prepare the connection.</p>
-        </div>
-      </body>
-      </html>
-    `);
-
-    try {
-      const response = await api.get('/api/integrations/email/connect', {
-        headers: {
-          Accept: 'application/json',
-        },
-        validateStatus: (status) => status < 500,
-      });
-
-      if (response.status === 302 || response.data?.redirect_url) {
-        const redirectUrl = response.data?.redirect_url || response.headers?.location;
-        if (redirectUrl) {
-          popup.location.href = redirectUrl;
-        }
-      } else if (response.request.responseURL) {
-        popup.location.href = response.request.responseURL;
+    // Listen for messages from popup
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'email-oauth-success') {
+        console.log('Email connected successfully:', event.data.account);
+        fetchIntegrations();
+        popup.close();
+        window.removeEventListener('message', handleMessage);
+      } else if (event.data.type === 'email-oauth-error') {
+        console.error('Email connection error:', event.data.error);
+        alert(`Failed to connect Email: ${event.data.error}`);
+        popup.close();
+        window.removeEventListener('message', handleMessage);
       }
+    };
 
-      // Listen for messages from popup
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data.type === 'email-oauth-success') {
-          console.log('Email connected successfully:', event.data.account);
-          fetchIntegrations();
-          popup.close();
-          window.removeEventListener('message', handleMessage);
-        } else if (event.data.type === 'email-oauth-error') {
-          console.error('Email connection error:', event.data.error);
-          alert(`Integration in progress... ${event.data.error}`);
-          popup.close();
-          window.removeEventListener('message', handleMessage);
-        }
-      };
+    window.addEventListener('message', handleMessage);
 
-      window.addEventListener('message', handleMessage);
-
-      // Check if popup was closed
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-          fetchIntegrations();
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.error('Email connection error:', error);
-      popup.close();
-      if (error.response?.status === 401) {
-        alert('Please log in first');
-      } else if (error.response?.status === 403) {
-        alert(error.response?.data?.detail || 'You do not have permission');
-      } else {
-        alert('Integration in progress... If this persists, please try again.');
+    // Check if popup was closed
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        window.removeEventListener('message', handleMessage);
+        fetchIntegrations();
       }
-    }
+    }, 1000);
   };
 
   const connectWebchat = async () => {
