@@ -26,6 +26,23 @@ email-validator>=2.0.0  # Required for Pydantic EmailStr validation
 # Authentication & Security
 python-jose[cryptography]>=3.3.0  # JWT token handling (includes cryptography)
 bcrypt>=4.0.0  # Password hashing
+pyotp>=2.9.0  # TOTP for 2FA authentication
+
+# AI & LLM
+openai>=1.12.0  # OpenAI GPT API client
+
+# Document Processing
+python-docx>=1.1.0  # Parse Word documents (.docx)
+PyPDF2>=3.0.0  # Parse PDF documents
+pdfplumber>=0.10.0  # Better PDF text extraction with tables
+openpyxl>=3.1.0  # Parse Excel files (.xlsx)
+python-magic-bin>=0.4.14; sys_platform == 'win32'  # File type detection (Windows)
+python-magic>=0.4.27; sys_platform != 'win32'  # File type detection (Linux/Mac)
+markdown>=3.5.0  # Parse Markdown files
+
+# Rate Limiting & Security
+slowapi>=0.1.9  # Rate limiting for FastAPI
+redis>=5.0.0  # Optional: For distributed rate limiting (can use in-memory for now)
 
 # Utilities
 python-dotenv==1.0.0  # Environment variable management

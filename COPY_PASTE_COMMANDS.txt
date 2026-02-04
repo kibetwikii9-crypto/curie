@@ -1,0 +1,43 @@
+═══════════════════════════════════════════════════════════
+🚀 COPY-PASTE COMMANDS - RUN THESE IN ORDER
+═══════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────
+STEP 1: INSTALL PYOTP
+────────────────────────────────────────────────────────────
+Copy and paste this command in Command Prompt or PowerShell:
+
+cd C:\Users\Kibee\Desktop\projects\Curie && python -m pip install pyotp
+
+────────────────────────────────────────────────────────────
+STEP 2: START BACKEND SERVER
+────────────────────────────────────────────────────────────
+Copy and paste this in a NEW terminal window:
+
+cd C:\Users\Kibee\Desktop\projects\Curie && python main.py
+
+⚠️ KEEP THIS TERMINAL OPEN! DO NOT CLOSE IT!
+
+────────────────────────────────────────────────────────────
+STEP 3: START FRONTEND SERVER
+────────────────────────────────────────────────────────────
+Open ANOTHER NEW terminal window and paste:
+
+cd C:\Users\Kibee\Desktop\projects\Curie\frontend && npm run dev
+
+⚠️ KEEP THIS TERMINAL OPEN TOO!
+
+────────────────────────────────────────────────────────────
+STEP 4: OPEN IN BROWSER
+────────────────────────────────────────────────────────────
+Copy these URLs one by one into your browser:
+
+http://localhost:3000/dashboard/security
+
+http://localhost:3000/dashboard/notifications
+
+http://localhost:3000/dashboard/onboarding
+
+═══════════════════════════════════════════════════════════
+✅ DONE! All 3 pages should be working now!
+═══════════════════════════════════════════════════════════

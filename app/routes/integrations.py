@@ -1059,3 +1059,244 @@ async def disconnect_whatsapp(
     
     return {"success": True, "message": "WhatsApp integration disconnected successfully"}
 
+
+# ============================================================================
+# GENERAL CRUD OPERATIONS
+# ============================================================================
+
+class IntegrationUpdateRequest(BaseModel):
+    """Request model for updating integration."""
+    channel_name: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/{integration_id}", response_model=IntegrationResponse)
+async def get_integration(
+    integration_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific integration by ID."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.id == integration_id,
+        ChannelIntegration.business_id == business_id
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Integration not found"
+        )
+    
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=integration.webhook_url,
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat(),
+    )
+
+
+@router.put("/{integration_id}", response_model=IntegrationResponse)
+async def update_integration(
+    integration_id: int,
+    request: IntegrationUpdateRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an integration (channel name, active status)."""
+    # Check user role
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admin and Business Owner roles can update integrations"
+        )
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.id == integration_id,
+        ChannelIntegration.business_id == business_id
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Integration not found"
+        )
+    
+    # Update fields
+    if request.channel_name is not None:
+        integration.channel_name = request.channel_name
+    if request.is_active is not None:
+        integration.is_active = request.is_active
+    
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(integration)
+    
+    log.info(f"Integration {integration_id} updated by user {current_user.id}")
+    
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=integration.webhook_url,
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat(),
+    )
+
+
+@router.delete("/{integration_id}")
+async def delete_integration(
+    integration_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete/deactivate an integration."""
+    # Check user role
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admin and Business Owner roles can delete integrations"
+        )
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integration = db.query(ChannelIntegration).filter(
+        ChannelIntegration.id == integration_id,
+        ChannelIntegration.business_id == business_id
+    ).first()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Integration not found"
+        )
+    
+    # Deactivate instead of hard delete
+    integration.is_active = False
+    integration.updated_at = datetime.utcnow()
+    db.commit()
+    
+    log.info(f"Integration {integration_id} deactivated by user {current_user.id}")
+    
+    return {"success": True, "message": "Integration deactivated successfully"}
+
+
+@router.post("/bulk/toggle")
+async def bulk_toggle_integrations(
+    integration_ids: List[int],
+    is_active: bool,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk toggle integrations active/inactive."""
+    # Check user role
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admin and Business Owner roles can manage integrations"
+        )
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integrations = db.query(ChannelIntegration).filter(
+        ChannelIntegration.id.in_(integration_ids),
+        ChannelIntegration.business_id == business_id
+    ).all()
+    
+    updated_count = 0
+    for integration in integrations:
+        integration.is_active = is_active
+        integration.updated_at = datetime.utcnow()
+        updated_count += 1
+    
+    db.commit()
+    
+    log.info(f"Bulk toggled {updated_count} integrations to {'active' if is_active else 'inactive'} by user {current_user.id}")
+    
+    return {
+        "success": True,
+        "message": f"{updated_count} integrations {'activated' if is_active else 'deactivated'}",
+        "updated_count": updated_count
+    }
+
+
+@router.get("/health/check")
+async def check_integrations_health(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check health status of all integrations."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Integrations require a business account."
+        )
+    
+    integrations = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id
+    ).all()
+    
+    health_status = {
+        "total_integrations": len(integrations),
+        "active_integrations": sum(1 for i in integrations if i.is_active),
+        "inactive_integrations": sum(1 for i in integrations if not i.is_active),
+        "by_channel": {},
+        "integrations": []
+    }
+    
+    # Group by channel
+    from collections import defaultdict
+    channel_counts = defaultdict(int)
+    for integration in integrations:
+        if integration.is_active:
+            channel_counts[integration.channel] += 1
+    
+    health_status["by_channel"] = dict(channel_counts)
+    
+    # Add integration details
+    for integration in integrations:
+        health_status["integrations"].append({
+            "id": integration.id,
+            "channel": integration.channel,
+            "channel_name": integration.channel_name,
+            "is_active": integration.is_active,
+            "created_at": integration.created_at.isoformat(),
+            "updated_at": integration.updated_at.isoformat(),
+        })
+    
+    return health_status
+

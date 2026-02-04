@@ -1,0 +1,40 @@
+Product Information - AI Assistant Platform
+
+What is our platform?
+Our platform is an intelligent AI-powered customer support assistant that works across multiple messaging channels including WhatsApp, Telegram, Instagram, and Facebook Messenger. It helps businesses automate customer conversations, capture leads, and provide 24/7 support.
+
+Key Features:
+- Multi-channel support (WhatsApp, Telegram, Instagram, Messenger)
+- GPT-4 powered intelligent responses
+- Knowledge base with RAG (Retrieval-Augmented Generation)
+- Conversation memory for context-aware responses
+- Custom AI rules for business-specific behavior
+- Lead capture and CRM integration
+- Human handoff when needed
+- Real-time analytics and insights
+- Multi-language support
+
+How does it work?
+1. Customers message your business on any connected channel
+2. Our AI analyzes the message and retrieves relevant knowledge
+3. AI generates an intelligent, context-aware response
+4. If needed, the conversation is handed off to a human agent
+5. All conversations are logged and analyzed for insights
+
+Benefits:
+- Reduce response time from hours to seconds
+- Handle unlimited conversations simultaneously
+- Never miss a lead or customer inquiry
+- Provide consistent, accurate information 24/7
+- Free up your team to focus on complex issues
+- Scale your customer support without hiring more staff
+
+Who is it for?
+- Small businesses looking to improve customer service
+- E-commerce stores handling product inquiries
+- Service businesses managing appointments and bookings
+- Real estate agents responding to property inquiries
+- Any business that receives customer messages regularly
+
+Setup time:
+Getting started takes only 15-20 minutes. No technical expertise required.

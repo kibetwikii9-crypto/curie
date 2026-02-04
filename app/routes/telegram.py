@@ -146,10 +146,32 @@ async def telegram_webhook(update: TelegramUpdate):
             # Use safe default but continue processing
             normalized_message.message_text = ""
 
-        # Step 3: Process message through AI Brain (processor)
+        # Step 3: Get business_id from integration (for AI engine context with RAG and AI Rules)
+        # Look up which business this message belongs to BEFORE processing
+        business_id_for_ai = 1  # Default business ID
+        try:
+            db = next(get_db())
+            try:
+                # Get the first active Telegram integration (most recently updated)
+                integration = db.query(ChannelIntegration).filter(
+                    ChannelIntegration.channel == "telegram",
+                    ChannelIntegration.is_active == True
+                ).order_by(ChannelIntegration.updated_at.desc()).first()
+                
+                if integration and integration.business_id:
+                    business_id_for_ai = integration.business_id
+                    log.debug(f"business_context_determined business_id={business_id_for_ai} integration_id={integration.id}")
+            except Exception as lookup_error:
+                log.warning(f"business_lookup_failed error={type(lookup_error).__name__} using_default")
+            finally:
+                db.close()
+        except Exception as e:
+            log.warning(f"db_access_failed error={type(e).__name__} using_default_business")
+        
+        # Step 4: Process message through AI Engine (with GPT-4o, RAG, AI Rules, Memory)
         # This is the ONLY source of reply text generation
         try:
-            reply_text = await process_message(normalized_message)
+            reply_text = await process_message(normalized_message, business_id_for_ai)
             # Validate reply is not empty/None
             if not reply_text or not reply_text.strip():
                 log.warning(f"empty_response user_id={normalized_message.user_id} action=using_default")
@@ -160,7 +182,7 @@ async def telegram_webhook(update: TelegramUpdate):
             log.error(f"processing_failed user_id={normalized_message.user_id} error={type(e).__name__} message={str(e)}", exc_info=True)
             reply_text = SAFE_DEFAULT_RESPONSE
 
-        # Step 4: Extract reply destination from normalized message metadata
+        # Step 5: Extract reply destination from normalized message metadata
         # Metadata contains platform-specific data needed for sending replies
         try:
             chat_id = normalized_message.metadata.get("chat_id") if normalized_message.metadata else None
@@ -188,7 +210,7 @@ async def telegram_webhook(update: TelegramUpdate):
             log.error(f"chat_id_extraction_failed error={type(e).__name__}", exc_info=True)
             chat_id = None
 
-        # Step 5: Send reply using processor-generated text
+        # Step 6: Send reply using AI-generated text
         # This MUST happen before saving conversation to ensure user receives reply
         # Bot behavior is unchanged - reply is sent regardless of what happens next
         used_business_id = None  # Track which business's bot was used

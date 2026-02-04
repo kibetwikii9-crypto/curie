@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -9,6 +10,7 @@ from app.logging_config import init_logging
 from app.routes import api_router
 from app.services.knowledge_service import load_knowledge
 from app.database import init_db
+from app.middleware.rate_limiter import setup_rate_limiting
 from app.models import (
     Conversation,
     User,
@@ -25,6 +27,9 @@ from app.models import (
 init_logging(settings.log_level)
 
 app = FastAPI(title="Automify - Multi-Platform Messaging API", version="0.1.0")
+
+# Set up rate limiting (MUST be done before adding routes)
+setup_rate_limiting(app)
 
 # Add CORS middleware
 # Support both local development and production (Render)
@@ -200,6 +205,10 @@ class MaintenanceModeMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 app.add_middleware(MaintenanceModeMiddleware)
+
+# Add GZip compression middleware for all responses
+# Compresses responses > 500 bytes, reduces bandwidth by 60-80% (PERFORMANCE OPTIMIZATION)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Global exception handler to ensure CORS headers are always sent
 @app.exception_handler(Exception)

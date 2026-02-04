@@ -293,3 +293,218 @@ async def get_audit_logs(
         "created_at": log.created_at.isoformat(),
     } for log in logs]
 
+
+# ========== IP ALLOWLIST ENDPOINTS ==========
+
+@router.get("/ip-allowlist/", response_model=List[dict])
+async def get_ip_allowlist(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get IP allowlist for business."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="IP allowlist access requires a business account"
+        )
+    
+    ip_list = db.query(IPAllowlist).filter(
+        IPAllowlist.business_id == business_id
+    ).all()
+    
+    return [{
+        "id": ip.id,
+        "ip_address": ip.ip_address,
+        "description": ip.description,
+        "is_active": ip.is_active,
+        "created_at": ip.created_at.isoformat(),
+        "created_by_user_id": ip.created_by_user_id,
+    } for ip in ip_list]
+
+
+@router.post("/ip-allowlist/", response_model=dict)
+async def create_ip_allowlist(
+    ip_data: IPAllowlistCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add IP to allowlist."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="IP allowlist creation requires a business account"
+        )
+    
+    # Check permissions
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+    
+    ip_entry = IPAllowlist(
+        business_id=business_id,
+        ip_address=ip_data.ip_address,
+        description=ip_data.description,
+        created_by_user_id=current_user.id,
+    )
+    
+    db.add(ip_entry)
+    db.commit()
+    db.refresh(ip_entry)
+    
+    return {
+        "id": ip_entry.id,
+        "ip_address": ip_entry.ip_address,
+        "description": ip_entry.description,
+        "is_active": ip_entry.is_active,
+        "created_at": ip_entry.created_at.isoformat(),
+    }
+
+
+@router.delete("/ip-allowlist/{ip_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ip_allowlist(
+    ip_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove IP from allowlist."""
+    business_id = get_user_business_id(current_user, db)
+    
+    ip_entry = db.query(IPAllowlist).filter(
+        IPAllowlist.id == ip_id,
+        IPAllowlist.business_id == business_id
+    ).first()
+    
+    if not ip_entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="IP allowlist entry not found"
+        )
+    
+    # Check permissions
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+    
+    db.delete(ip_entry)
+    db.commit()
+    
+    return None
+
+
+# ========== SECURITY STATS ENDPOINT ==========
+
+@router.get("/stats/dashboard")
+async def get_security_stats(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get security statistics for dashboard."""
+    business_id = get_user_business_id(current_user, db)
+    
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+    
+    # 2FA status
+    two_fa = db.query(TwoFactorAuth).filter(
+        TwoFactorAuth.user_id == current_user.id
+    ).first()
+    
+    two_fa_enabled = two_fa.is_enabled if two_fa else False
+    
+    # Active sessions count
+    active_sessions = db.query(func.count(SessionModel.id)).filter(
+        SessionModel.user_id == current_user.id,
+        SessionModel.is_active == True
+    ).scalar() or 0
+    
+    # API keys count
+    api_keys_count = 0
+    if business_id:
+        api_keys_count = db.query(func.count(APIKey.id)).filter(
+            APIKey.business_id == business_id,
+            APIKey.is_active == True
+        ).scalar() or 0
+    
+    # IP allowlist count
+    ip_allowlist_count = 0
+    if business_id:
+        ip_allowlist_count = db.query(func.count(IPAllowlist.id)).filter(
+            IPAllowlist.business_id == business_id,
+            IPAllowlist.is_active == True
+        ).scalar() or 0
+    
+    # Recent audit logs (last 7 days)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    recent_audit_logs = 0
+    if business_id:
+        recent_audit_logs = db.query(func.count(AuditLog.id)).filter(
+            AuditLog.business_id == business_id,
+            AuditLog.created_at >= seven_days_ago
+        ).scalar() or 0
+    
+    # Security score calculation
+    score = 0
+    factors = []
+    
+    # 2FA enabled (+30 points)
+    if two_fa_enabled:
+        score += 30
+        factors.append({"factor": "2FA enabled", "points": 30})
+    else:
+        factors.append({"factor": "2FA disabled", "points": 0})
+    
+    # Active sessions (< 3 is better, +20 points)
+    if active_sessions <= 2:
+        score += 20
+        factors.append({"factor": f"Minimal active sessions ({active_sessions})", "points": 20})
+    elif active_sessions <= 5:
+        score += 10
+        factors.append({"factor": f"Moderate active sessions ({active_sessions})", "points": 10})
+    else:
+        factors.append({"factor": f"Many active sessions ({active_sessions})", "points": 0})
+    
+    # API keys exist (+10 points for having security setup)
+    if api_keys_count > 0:
+        score += 10
+        factors.append({"factor": "API keys configured", "points": 10})
+    
+    # IP allowlist (+20 points if configured)
+    if ip_allowlist_count > 0:
+        score += 20
+        factors.append({"factor": "IP allowlist configured", "points": 20})
+    
+    # Audit logging active (+20 points)
+    if recent_audit_logs > 0:
+        score += 20
+        factors.append({"factor": "Audit logging active", "points": 20})
+    
+    # Determine security level
+    if score >= 80:
+        security_level = "excellent"
+    elif score >= 60:
+        security_level = "good"
+    elif score >= 40:
+        security_level = "fair"
+    else:
+        security_level = "poor"
+    
+    return {
+        "two_fa_enabled": two_fa_enabled,
+        "active_sessions": active_sessions,
+        "api_keys_count": api_keys_count,
+        "ip_allowlist_count": ip_allowlist_count,
+        "recent_audit_logs": recent_audit_logs,
+        "security_score": score,
+        "security_level": security_level,
+        "score_factors": factors,
+        "max_score": 100,
+    }
+

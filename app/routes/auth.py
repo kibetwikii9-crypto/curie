@@ -2,7 +2,7 @@
 import logging
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.services.auth import (
     get_user_by_email,
     verify_token,
 )
+from app.middleware.rate_limiter import limiter, get_rate_limit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -87,7 +88,9 @@ def get_user_business_id(current_user: UserModel, db: Session) -> int | None:
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit(get_rate_limit("public_strict"))  # 10/minute - Prevent brute force
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -113,7 +116,12 @@ async def login(
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit(get_rate_limit("public_strict"))  # 10/minute - Prevent spam accounts
+async def register(
+    request: Request,
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
     """
     Register a new user.
     

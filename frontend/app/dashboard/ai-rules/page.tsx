@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState } from 'react';
 import TimeAgo from '@/components/TimeAgo';
@@ -24,14 +24,27 @@ import {
   Lightbulb,
   Play,
   X,
+  GripVertical,
+  Power,
+  PowerOff,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
-interface IntentRule {
-  id: string;
+interface AIRule {
+  id: number;
   intent: string;
+  name: string | null;
+  description: string | null;
   keywords: string[];
   response: string;
   priority: number;
+  is_active: boolean;
+  trigger_count: number;
+  last_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface RuleCoverage {
@@ -78,27 +91,38 @@ interface RuleRecommendation {
 }
 
 export default function AIRulesPage() {
-  const [rules, setRules] = useState<IntentRule[]>([
-    {
-      id: '1',
-      intent: 'greeting',
-      keywords: ['hi', 'hello', 'hey'],
-      response: 'Hello! How can I help you today?',
-      priority: 1,
-    },
-    {
-      id: '2',
-      intent: 'pricing',
-      keywords: ['price', 'cost', 'pricing'],
-      response: 'Our pricing plans are flexible. Would you like to know more?',
-      priority: 2,
-    },
-  ]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedRuleId, setSelectedRuleId] = useState<number | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showTestMode, setShowTestMode] = useState(false);
   const [testMessage, setTestMessage] = useState('');
   const [testResult, setTestResult] = useState<any>(null);
+  const [expandedRules, setExpandedRules] = useState<Set<number>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedRules, setSelectedRules] = useState<Set<number>>(new Set());
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    intent: '',
+    name: '',
+    description: '',
+    keywords: '',
+    response: '',
+    priority: 100,
+    is_active: true,
+  });
+
+  const queryClient = useQueryClient();
+
+  // Fetch rules
+  const { data: rulesData, isLoading: rulesLoading } = useQuery({
+    queryKey: ['ai-rules'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ai-rules');
+      return response.data;
+    },
+    refetchInterval: 30000,
+  });
 
   const { data: coverageData } = useQuery<RuleCoverage>({
     queryKey: ['ai-rules-coverage'],
@@ -107,9 +131,6 @@ export default function AIRulesPage() {
       return response.data;
     },
     refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 30000,
   });
 
   const { data: effectivenessData } = useQuery<{ rules: RuleEffectiveness[] }>({
@@ -119,21 +140,19 @@ export default function AIRulesPage() {
       return response.data;
     },
     refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 30000,
   });
 
-  const { data: confidenceData } = useQuery<{ signals: ConfidenceSignal[]; fallback_rate: number; total_conversations: number }>({
+  const { data: confidenceData } = useQuery<{
+    signals: ConfidenceSignal[];
+    fallback_rate: number;
+    total_conversations: number;
+  }>({
     queryKey: ['ai-rules-confidence'],
     queryFn: async () => {
       const response = await api.get('/api/dashboard/ai-rules/confidence');
       return response.data;
     },
     refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 30000,
   });
 
   const { data: flowData } = useQuery<{ flow: AutomationFlow }>({
@@ -143,21 +162,83 @@ export default function AIRulesPage() {
       return response.data;
     },
     refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 30000,
   });
 
-  const { data: recommendationsData } = useQuery<{ recommendations: RuleRecommendation[] }>({
+  const { data: recommendationsData } = useQuery<{
+    recommendations: RuleRecommendation[];
+  }>({
     queryKey: ['ai-rules-recommendations'],
     queryFn: async () => {
       const response = await api.get('/api/dashboard/ai-rules/recommendations');
       return response.data;
     },
     refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 30000,
+  });
+
+  // Mutations
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await api.post('/api/dashboard/ai-rules', {
+        intent: data.intent,
+        name: data.name || null,
+        description: data.description || null,
+        keywords: data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean),
+        response: data.response,
+        priority: parseInt(data.priority),
+        is_active: data.is_active,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-rules-coverage'] });
+      setShowCreateModal(false);
+      resetForm();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await api.put(`/api/dashboard/ai-rules/${id}`, {
+        intent: data.intent,
+        name: data.name || null,
+        description: data.description || null,
+        keywords: data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean),
+        response: data.response,
+        priority: parseInt(data.priority),
+        is_active: data.is_active,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-rules-coverage'] });
+      setShowEditModal(false);
+      setSelectedRuleId(null);
+      resetForm();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/api/dashboard/ai-rules/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-rules-coverage'] });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await api.post('/api/dashboard/ai-rules/bulk/delete', { rule_ids: ids });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-rules-coverage'] });
+      setSelectedRules(new Set());
+      setBulkMode(false);
+    },
   });
 
   const testMutation = useMutation({
@@ -170,24 +251,74 @@ export default function AIRulesPage() {
     },
   });
 
-  const handleSave = (rule: IntentRule) => {
-    if (editingId) {
-      setRules(rules.map((r) => (r.id === editingId ? rule : r)));
-      setEditingId(null);
-    } else {
-      setRules([...rules, { ...rule, id: Date.now().toString() }]);
-      setShowAddForm(false);
+  const resetForm = () => {
+    setFormData({
+      intent: '',
+      name: '',
+      description: '',
+      keywords: '',
+      response: '',
+      priority: 100,
+      is_active: true,
+    });
+  };
+
+  const handleCreate = () => {
+    resetForm();
+    setShowCreateModal(true);
+  };
+
+  const handleEdit = (rule: AIRule) => {
+    setSelectedRuleId(rule.id);
+    setFormData({
+      intent: rule.intent,
+      name: rule.name || '',
+      description: rule.description || '',
+      keywords: rule.keywords.join(', '),
+      response: rule.response,
+      priority: rule.priority,
+      is_active: rule.is_active,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleDelete = (id: number, name: string) => {
+    if (confirm(`Delete rule "${name || 'Unnamed Rule'}"?`)) {
+      deleteMutation.mutate(id);
     }
   };
 
-  const handleDelete = (id: string) => {
-    setRules(rules.filter((r) => r.id !== id));
+  const handleBulkDelete = () => {
+    if (selectedRules.size === 0) return;
+    if (confirm(`Delete ${selectedRules.size} selected rules?`)) {
+      bulkDeleteMutation.mutate(Array.from(selectedRules));
+    }
   };
 
   const handleTest = () => {
     if (testMessage.trim()) {
       testMutation.mutate(testMessage);
     }
+  };
+
+  const toggleRuleExpansion = (id: number) => {
+    const newExpanded = new Set(expandedRules);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRules(newExpanded);
+  };
+
+  const toggleRuleSelection = (id: number) => {
+    const newSelected = new Set(selectedRules);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedRules(newSelected);
   };
 
   const getConfidenceColor = (type: string) => {
@@ -205,6 +336,19 @@ export default function AIRulesPage() {
     }
   };
 
+  const getPriorityColor = (priority: number) => {
+    if (priority <= 10) return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
+    if (priority <= 50) return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400';
+    if (priority <= 100) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  };
+
+  const getPriorityLabel = (priority: number) => {
+    if (priority <= 10) return 'Critical';
+    if (priority <= 50) return 'High';
+    if (priority <= 100) return 'Medium';
+    return 'Low';
+  };
 
   return (
     <div className="space-y-6">
@@ -226,7 +370,7 @@ export default function AIRulesPage() {
             Test Mode
           </button>
           <button
-            onClick={() => setShowAddForm(true)}
+            onClick={handleCreate}
             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
           >
             <Plus className="h-5 w-5 mr-2" />
@@ -237,48 +381,56 @@ export default function AIRulesPage() {
 
       {/* Rule Coverage & Health Overview */}
       {coverageData && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/10 dark:to-blue-900/10 shadow rounded-lg border border-primary-200 dark:border-primary-800">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-              Rule Coverage & Health
-            </h3>
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                Rule Coverage & Health
+              </h3>
+            </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Active Rules</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-1">
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                   {coverageData.total_active_rules}
                 </p>
               </div>
-              <div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Coverage</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-1">
+                <p className="text-3xl font-bold text-primary-600 dark:text-primary-400 mt-1">
                   {coverageData.coverage_percentage}%
                 </p>
               </div>
-              <div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Fallback Rate</p>
-                <p className={`text-2xl font-semibold mt-1 ${
-                  coverageData.fallback_rate < 10
-                    ? 'text-green-600 dark:text-green-400'
-                    : coverageData.fallback_rate < 20
-                    ? 'text-yellow-600 dark:text-yellow-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
+                <p
+                  className={`text-3xl font-bold mt-1 ${
+                    coverageData.fallback_rate < 10
+                      ? 'text-green-600 dark:text-green-400'
+                      : coverageData.fallback_rate < 20
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-red-600 dark:text-red-400'
+                  }`}
+                >
                   {coverageData.fallback_rate}%
                 </p>
               </div>
-              <div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Successful Rules</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-1">
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                   {coverageData.successful_rules.length}
                 </p>
               </div>
             </div>
             {coverageData.intents_without_coverage.length > 0 && (
-              <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
-                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400 mb-1">
-                  Intents without coverage:
-                </p>
+              <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
+                    Intents without coverage:
+                  </p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {coverageData.intents_without_coverage.map((intent, idx) => (
                     <span
@@ -295,308 +447,36 @@ export default function AIRulesPage() {
         </div>
       )}
 
-      {/* Automation Confidence Signals */}
-      {confidenceData && confidenceData.signals.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-              Automation Confidence
-            </h3>
-            <div className="space-y-2">
-              {confidenceData.signals.map((signal, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center gap-3 p-3 rounded-lg ${getConfidenceColor(signal.type)}`}
-                >
-                  {signal.type === 'high_confidence' ? (
-                    <CheckCircle2 className="h-5 w-5" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5" />
-                  )}
-                  <p className="text-sm font-medium">{signal.message}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Automation Flow Visualization */}
-      {flowData && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-              Automation Flow
-            </h3>
-            <div className="flex items-center justify-between space-x-4 overflow-x-auto pb-2">
-              <div className="flex flex-col items-center min-w-[100px]">
-                <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {flowData.flow.user_message}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                  User Message
-                </div>
-              </div>
-              <ArrowRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <div className="flex flex-col items-center min-w-[100px]">
-                <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {flowData.flow.intent_detection}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                  Intent Detection
-                </div>
-              </div>
-              <ArrowRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <div className="flex flex-col items-center min-w-[100px]">
-                <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {flowData.flow.rule_match}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                  Rule Match
-                </div>
-              </div>
-              <ArrowRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <div className="flex flex-col items-center min-w-[100px]">
-                <div className="text-2xl font-semibold text-green-600 dark:text-green-400">
-                  {flowData.flow.outcomes.success}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                  Success
-                </div>
-              </div>
-              {flowData.flow.outcomes.fallback > 0 && (
-                <>
-                  <ArrowRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                  <div className="flex flex-col items-center min-w-[100px]">
-                    <div className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
-                      {flowData.flow.outcomes.fallback}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                      Fallback
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Rule Impact & Effectiveness Indicators */}
-      {effectivenessData && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-              Rule Impact & Effectiveness
-            </h3>
-            <div className="space-y-4">
-              {effectivenessData.rules.map((rule, idx) => (
-                <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-primary-500" />
-                      <span className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                        {rule.intent}
-                      </span>
-                      {rule.knowledge_linked && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-                          Knowledge Linked
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {rule.trigger_frequency} triggers
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-3">
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Success Rate</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-green-600 h-2 rounded-full"
-                            style={{ width: `${rule.successful_response_rate}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {rule.successful_response_rate}%
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Leads Generated</p>
-                      <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {rule.leads_generated}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {rule.keywords.slice(0, 5).map((keyword, kidx) => (
-                      <span
-                        key={kidx}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <Clock className="h-3 w-3" />
-                    Last triggered: {rule.last_triggered ? <TimeAgo timestamp={rule.last_triggered} /> : 'Never'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Conditional Rule Context Viewer */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-            Rule Context & Conditions
-          </h3>
-          <div className="space-y-3">
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Context Conditions
-              </p>
-              <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Channel: All channels supported</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Language: English (primary)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Time: 24/7 availability</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>User State: New and returning users</span>
-                </div>
-              </div>
-            </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Priority Order
-              </p>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                Rules are evaluated in priority order: Human → Help → Pricing → Greeting → Unknown
-              </div>
-            </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Fallback Path
-              </p>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                If no rule matches, system uses default fallback response with polite acknowledgment.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Multilingual Rule Awareness Panel */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-            Multilingual Support
-          </h3>
-          <div className="space-y-3">
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-900 dark:text-white">English</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                  Supported
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                All intents have English language support with full rule coverage.
-              </p>
-            </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Other Languages</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-                  Available
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Multilingual support is available. Rules can be configured for multiple languages.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Automation Safeguards */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-            Automation Safeguards
-          </h3>
-          <div className="space-y-3">
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Rate Limiting</span>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                Rules are rate-limited to prevent spam and ensure quality responses.
-              </p>
-            </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Response Restrictions</span>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                Sensitive responses are restricted and require human review.
-              </p>
-            </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Channel Limits</span>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                Channel-specific automation limits are configured per integration.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Smart Rule Recommendations */}
+      {/* Smart Recommendations */}
       {recommendationsData && recommendationsData.recommendations.length > 0 && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
-              Smart Recommendations
-            </h3>
+            <div className="flex items-center gap-2 mb-4">
+              <Lightbulb className="h-5 w-5 text-yellow-500" />
+              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                Smart Recommendations
+              </h3>
+            </div>
             <div className="space-y-3">
               {recommendationsData.recommendations.map((rec, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800"
+                  className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800"
                 >
-                  <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {rec.message}
                     </p>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-1 ${
-                      rec.priority === 'high'
-                        ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                        : rec.priority === 'medium'
-                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-1 ${
+                        rec.priority === 'high'
+                          ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                          : rec.priority === 'medium'
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      }`}
+                    >
                       {rec.priority} priority
                     </span>
                   </div>
@@ -607,14 +487,17 @@ export default function AIRulesPage() {
         </div>
       )}
 
-      {/* Safe Testing & Preview Mode */}
+      {/* Test Mode */}
       {showTestMode && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-4 py-5 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                Test Mode
-              </h3>
+              <div className="flex items-center gap-2">
+                <Play className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                  Test Mode
+                </h3>
+              </div>
               <button
                 onClick={() => {
                   setShowTestMode(false);
@@ -651,43 +534,45 @@ export default function AIRulesPage() {
                 </div>
               </div>
               {testResult && (
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                <div className="p-4 bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/10 dark:to-blue-900/10 rounded-lg border border-primary-200 dark:border-primary-800">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Detected Intent:
                       </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white capitalize mt-1">
                         {testResult.detected_intent}
-                      </span>
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div>
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Confidence:
                       </span>
-                      <span className={`text-sm font-semibold ${
-                        testResult.confidence === 'high'
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-yellow-600 dark:text-yellow-400'
-                      }`}>
+                      <p
+                        className={`text-lg font-semibold mt-1 ${
+                          testResult.confidence === 'high'
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-yellow-600 dark:text-yellow-400'
+                        }`}
+                      >
                         {testResult.confidence}
-                      </span>
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div>
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Rule Matched:
                       </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
                         {testResult.rule_matched ? 'Yes' : 'No'}
-                      </span>
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div>
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Expected Path:
                       </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white capitalize mt-1">
                         {testResult.expected_path}
-                      </span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -697,73 +582,507 @@ export default function AIRulesPage() {
         </div>
       )}
 
-      {/* Existing Rules List */}
-      <div className="space-y-4">
-        {rules.map((rule) => (
-          <div
-            key={rule.id}
-            className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Zap className="h-5 w-5 text-primary-500" />
-                  <span className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                    {rule.intent}
-                  </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    Priority: {rule.priority}
-                  </span>
-                </div>
-                <div className="mb-2">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Keywords:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {rule.keywords.map((keyword, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Response:
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {rule.response}
-                  </p>
-                </div>
-              </div>
-              <div className="flex space-x-2 ml-4">
+      {/* Rules List */}
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+              Your Rules ({rulesData?.total || 0})
+            </h3>
+            <button
+              onClick={() => setBulkMode(!bulkMode)}
+              className={`px-3 py-1 text-sm font-medium rounded-md ${
+                bulkMode
+                  ? 'text-white bg-primary-600'
+                  : 'text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700'
+              }`}
+            >
+              {bulkMode ? 'Exit Bulk' : 'Bulk Mode'}
+            </button>
+          </div>
+          {bulkMode && selectedRules.size > 0 && (
+            <div className="mt-3 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-md flex items-center justify-between">
+              <span className="text-sm font-medium text-primary-900 dark:text-primary-100">
+                {selectedRules.size} selected
+              </span>
+              <div className="flex gap-2">
                 <button
-                  onClick={() => setEditingId(rule.id)}
-                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700"
                 >
-                  <Edit className="h-5 w-5" />
+                  Delete Selected
                 </button>
                 <button
-                  onClick={() => handleDelete(rule.id)}
-                  className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                  onClick={() => setSelectedRules(new Set())}
+                  className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  Clear
                 </button>
               </div>
             </div>
+          )}
+        </div>
+
+        {rulesLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
           </div>
-        ))}
+        ) : rulesData?.rules && rulesData.rules.length > 0 ? (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {rulesData.rules.map((rule: AIRule) => (
+              <div
+                key={rule.id}
+                className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <div className="flex items-start">
+                  {/* Bulk Selection Checkbox */}
+                  {bulkMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedRules.has(rule.id)}
+                      onChange={() => toggleRuleSelection(rule.id)}
+                      className="mt-1 mr-4 h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                    />
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-5 w-5 text-primary-500 flex-shrink-0" />
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                          {rule.name || rule.intent}
+                        </h4>
+                      </div>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getPriorityColor(
+                          rule.priority
+                        )}`}
+                      >
+                        {getPriorityLabel(rule.priority)}
+                      </span>
+                      {rule.is_active ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                          <Power className="h-3 w-3 mr-1" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                          <PowerOff className="h-3 w-3 mr-1" />
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+
+                    {rule.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        {rule.description}
+                      </p>
+                    )}
+
+                    {/* Keywords */}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {rule.keywords.slice(0, 6).map((keyword, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
+                        >
+                          {keyword}
+                        </span>
+                      ))}
+                      {rule.keywords.length > 6 && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                          +{rule.keywords.length - 6} more
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Expandable Response */}
+                    <div>
+                      <button
+                        onClick={() => toggleRuleExpansion(rule.id)}
+                        className="flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                      >
+                        {expandedRules.has(rule.id) ? (
+                          <>
+                            <ChevronUp className="h-4 w-4" />
+                            Hide Response
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4" />
+                            Show Response
+                          </>
+                        )}
+                      </button>
+                      {expandedRules.has(rule.id) && (
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+                          <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                            {rule.response}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Statistics */}
+                    <div className="flex items-center gap-4 mt-3 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <Activity className="h-4 w-4" />
+                        <span>{rule.trigger_count} triggers</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        <span>
+                          Last:{' '}
+                          {rule.last_triggered_at ? (
+                            <TimeAgo timestamp={rule.last_triggered_at} />
+                          ) : (
+                            'Never'
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Target className="h-4 w-4" />
+                        <span>Priority: {rule.priority}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  {!bulkMode && (
+                    <div className="flex space-x-2 ml-4">
+                      <button
+                        onClick={() => handleEdit(rule)}
+                        className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        title="Edit"
+                      >
+                        <Edit className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(rule.id, rule.name || rule.intent)}
+                        className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-12 text-center">
+            <Zap className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              No rules configured. Add your first rule to get started.
+            </p>
+            <button
+              onClick={handleCreate}
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Add Your First Rule
+            </button>
+          </div>
+        )}
       </div>
 
-      {rules.length === 0 && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
-          <Zap className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">
-            No rules configured. Add your first rule to get started.
-          </p>
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Create AI Rule
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  createMutation.mutate(formData);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Intent * <span className="text-xs text-gray-500">(e.g., greeting, pricing, help)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.intent}
+                    onChange={(e) => setFormData({ ...formData, intent: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="greeting"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Rule Name (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="Friendly Greeting"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="Responds to user greetings with a friendly message"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Keywords * <span className="text-xs text-gray-500">(comma-separated)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.keywords}
+                    onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="hi, hello, hey, good morning"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Response *
+                  </label>
+                  <textarea
+                    value={formData.response}
+                    onChange={(e) => setFormData({ ...formData, response: e.target.value })}
+                    required
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="Hello! How can I help you today?"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Priority (lower = higher priority)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.priority}
+                      onChange={(e) =>
+                        setFormData({ ...formData, priority: parseInt(e.target.value) || 100 })
+                      }
+                      min="1"
+                      max="1000"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_active}
+                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                        className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                        Active
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      resetForm();
+                    }}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createMutation.isPending}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {createMutation.isPending ? 'Creating...' : 'Create Rule'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedRuleId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Edit AI Rule
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedRuleId(null);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  updateMutation.mutate({ id: selectedRuleId, data: formData });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Intent *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.intent}
+                    onChange={(e) => setFormData({ ...formData, intent: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Rule Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Keywords * <span className="text-xs text-gray-500">(comma-separated)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.keywords}
+                    onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Response *
+                  </label>
+                  <textarea
+                    value={formData.response}
+                    onChange={(e) => setFormData({ ...formData, response: e.target.value })}
+                    required
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Priority
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.priority}
+                      onChange={(e) =>
+                        setFormData({ ...formData, priority: parseInt(e.target.value) || 100 })
+                      }
+                      min="1"
+                      max="1000"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_active}
+                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                        className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                        Active
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedRuleId(null);
+                      resetForm();
+                    }}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updateMutation.isPending}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {updateMutation.isPending ? 'Updating...' : 'Update Rule'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       )}
     </div>

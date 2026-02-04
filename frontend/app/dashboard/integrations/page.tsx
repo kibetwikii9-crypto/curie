@@ -1,11 +1,51 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import Image from 'next/image';
-import { Plug, CheckCircle2, Clock, AlertCircle, ExternalLink, Settings, MessageSquare, XCircle } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import Image from 'next/image';
+import {
+  Plug,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  Settings,
+  XCircle,
+  Zap,
+  Shield,
+  Activity,
+  TrendingUp,
+  BarChart3,
+  Globe,
+  Webhook,
+  RefreshCw,
+  Eye,
+  Edit,
+  Trash2,
+  Power,
+  PowerOff,
+  Sparkles,
+  Check,
+  X,
+  MessageSquare,
+  Clock,
+  Link as LinkIcon,
+  Code,
+  Terminal,
+  Server,
+  Play,
+  Pause,
+  Grid3x3,
+  List,
+  Filter,
+  Search,
+  Plus,
+  Download,
+  Upload,
+  Target,
+  Layers,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 import ConnectTelegramModal from '@/components/ConnectTelegramModal';
 
 interface Integration {
@@ -29,62 +69,115 @@ interface TelegramStatus {
   message?: string | null;
 }
 
-interface Channel {
+interface HealthStatus {
+  total_integrations: number;
+  active_integrations: number;
+  inactive_integrations: number;
+  by_channel: Record<string, number>;
+  integrations: Integration[];
+}
+
+interface AvailableChannel {
   name: string;
+  id: string;
   status: string;
   description: string;
   icon: string;
+  category: string;
+  color: string;
+  features: string[];
 }
 
-const channels: Channel[] = [
+const availableChannels: AvailableChannel[] = [
   {
-    name: 'WhatsApp',
+    name: 'WhatsApp Business',
+    id: 'whatsapp',
     status: 'available',
-    description: 'Connect WhatsApp Business API with one-click OAuth - just log in with Facebook',
+    description: 'Connect WhatsApp Business API with one-click OAuth',
     icon: '/whatsapp-icon.png',
-  },
-  {
-    name: 'Instagram',
-    status: 'available',
-    description: 'Manage Instagram Direct Messages and comments',
-    icon: '/intagram-icon.png', // Note: using filename as provided
-  },
-  {
-    name: 'Facebook Messenger',
-    status: 'available',
-    description: 'Integrate Facebook Messenger conversations',
-    icon: '/messenger-icon.png',
+    category: 'Messaging',
+    color: 'from-green-500 to-green-600',
+    features: ['Auto-replies', 'Media support', 'Template messages', 'Analytics'],
   },
   {
     name: 'Telegram',
-    status: 'available', // Will be updated dynamically
-    description: 'Telegram bot integration',
+    id: 'telegram',
+    status: 'available',
+    description: 'Telegram bot integration for instant messaging',
     icon: '/telegram-icon.png',
+    category: 'Messaging',
+    color: 'from-blue-500 to-blue-600',
+    features: ['Bot commands', 'Group chats', 'File sharing', 'Inline keyboards'],
+  },
+  {
+    name: 'Instagram',
+    id: 'instagram',
+    status: 'coming_soon',
+    description: 'Manage Instagram Direct Messages and comments',
+    icon: '/intagram-icon.png',
+    category: 'Social Media',
+    color: 'from-pink-500 to-purple-600',
+    features: ['DM automation', 'Comment replies', 'Story mentions', 'Media'],
+  },
+  {
+    name: 'Facebook Messenger',
+    id: 'messenger',
+    status: 'coming_soon',
+    description: 'Integrate Facebook Messenger conversations',
+    icon: '/messenger-icon.png',
+    category: 'Social Media',
+    color: 'from-blue-600 to-indigo-600',
+    features: ['Instant replies', 'Rich media', 'Quick replies', 'Templates'],
   },
   {
     name: 'Website Chat',
-    status: 'available',
+    id: 'webchat',
+    status: 'coming_soon',
     description: 'Embed chat widget on your website',
     icon: '/chat-icon.png',
+    category: 'Web',
+    color: 'from-gray-600 to-gray-700',
+    features: ['Custom branding', 'Pre-chat forms', 'File uploads', 'Typing indicators'],
+  },
+  {
+    name: 'Email',
+    id: 'email',
+    status: 'coming_soon',
+    description: 'Handle customer emails with AI',
+    icon: '/chat-icon.png',
+    category: 'Email',
+    color: 'from-red-500 to-red-600',
+    features: ['Auto-responses', 'Thread tracking', 'Priority detection', 'Templates'],
   },
 ];
 
 export default function IntegrationsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [activeView, setActiveView] = useState<'connected' | 'marketplace' | 'health'>('connected');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
   const [whatsappStatus, setWhatsappStatus] = useState<Integration | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isTestLoading, setIsTestLoading] = useState(false);
-  const [testError, setTestError] = useState<string | null>(null);
-  const [testSuccess, setTestSuccess] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editChannelName, setEditChannelName] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-  // Check if user can manage integrations
   const canManage = user?.role === 'admin' || user?.role === 'business_owner';
 
-  // Fetch integrations and Telegram status
+  const { data: healthData, isLoading: healthLoading } = useQuery<HealthStatus>({
+    queryKey: ['integrations-health'],
+    queryFn: async () => {
+      const response = await api.get('/api/integrations/health/check');
+      return response.data;
+    },
+    enabled: canManage,
+    refetchInterval: 30000,
+  });
+
   const fetchIntegrations = async () => {
     if (!canManage) {
       setIsLoading(false);
@@ -103,7 +196,6 @@ export default function IntegrationsPage() {
       setWhatsappStatus(whatsappStatusRes.data || null);
     } catch (error: any) {
       console.error('Error fetching integrations:', error);
-      // If 403, user doesn't have permission - that's okay
       if (error.response?.status !== 403) {
         setTelegramStatus({ connected: false, message: 'Failed to load status' });
       }
@@ -114,97 +206,246 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     fetchIntegrations();
-    
-    // Handle OAuth callback success/error from URL params
+
     const urlParams = new URLSearchParams(window.location.search);
     const success = urlParams.get('success');
     const error = urlParams.get('error');
     const channel = urlParams.get('channel');
-    
+
     if (success === 'true' && channel === 'whatsapp') {
-      // Refresh integrations to show WhatsApp as connected
       setTimeout(() => {
         fetchIntegrations();
       }, 1000);
-      // Clean URL
       window.history.replaceState({}, '', '/dashboard/integrations');
     } else if (error) {
-      alert(`WhatsApp connection failed: ${error}`);
-      // Clean URL
+      alert(`Connection failed: ${error}`);
       window.history.replaceState({}, '', '/dashboard/integrations');
     }
   }, [canManage]);
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await api.put(`/api/integrations/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
+      fetchIntegrations();
+      setShowEditModal(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/api/integrations/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
+      fetchIntegrations();
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
+      await api.put(`/api/integrations/${id}`, { is_active });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
+      fetchIntegrations();
+    },
+  });
+
   const handleConnectSuccess = () => {
     fetchIntegrations();
-    setTestError(null);
-    setTestSuccess(false);
-    // Invalidate onboarding progress to reflect Telegram connection
+    queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
     queryClient.invalidateQueries({ queryKey: ['onboarding'] });
   };
 
-  const handleTestMessage = async () => {
-    if (!telegramStatus?.bot_username) {
-      setTestError('Bot username not available');
-      return;
-    }
-
-    setIsTestLoading(true);
-    setTestError(null);
-    setTestSuccess(false);
-
-    try {
-      // For testing, we need a chat_id. In a real scenario, you'd get this from a conversation
-      // For now, we'll show a message that user needs to send a message first
-      setTestError('To test, send a message to your bot first, then check if you receive a reply.');
-    } catch (error: any) {
-      setTestError(error.response?.data?.detail || 'Failed to send test message');
-    } finally {
-      setIsTestLoading(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect Telegram? This will stop receiving messages.')) {
+  const handleDisconnect = async (channel: string) => {
+    if (!confirm(`Are you sure you want to disconnect ${channel}? This will stop receiving messages.`)) {
       return;
     }
 
     try {
-      await api.delete('/api/integrations/telegram/disconnect');
+      if (channel === 'telegram') {
+        await api.delete('/api/integrations/telegram/disconnect');
+      } else if (channel === 'whatsapp') {
+        await api.delete('/api/integrations/whatsapp/disconnect');
+      }
       fetchIntegrations();
+      queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to disconnect Telegram');
+      alert(error.response?.data?.detail || `Failed to disconnect ${channel}`);
     }
   };
 
-  // Determine Telegram status
-  const getTelegramStatus = () => {
-    if (isLoading) return 'loading';
-    if (!telegramStatus) return 'not_connected';
-    if (telegramStatus.connected) {
-      if (telegramStatus.last_error_message) return 'error';
-      return 'connected';
-    }
-    return 'not_connected';
+  const handleEditIntegration = (integration: Integration) => {
+    setSelectedIntegration(integration);
+    setEditChannelName(integration.channel_name || '');
+    setShowEditModal(true);
   };
 
-  const telegramStatusValue = getTelegramStatus();
+  const handleSaveEdit = () => {
+    if (selectedIntegration) {
+      updateMutation.mutate({
+        id: selectedIntegration.id,
+        data: { channel_name: editChannelName },
+      });
+    }
+  };
+
+  const getChannelColor = (channel: string) => {
+    const channelData = availableChannels.find((c) => c.id === channel);
+    return channelData?.color || 'from-gray-500 to-gray-600';
+  };
+
+  const getChannelIcon = (channel: string) => {
+    const iconPath = availableChannels.find((c) => c.id === channel)?.icon;
+    return iconPath || '/chat-icon.png';
+  };
+
+  const filteredChannels = availableChannels.filter((channel) => {
+    if (categoryFilter === 'all') return true;
+    return channel.category === categoryFilter;
+  });
+
+  const connectWhatsApp = async () => {
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const popup = window.open(
+      'about:blank',
+      'WhatsApp OAuth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      alert('Please allow popups for this site to connect WhatsApp');
+      return;
+    }
+
+    popup.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Connecting WhatsApp...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+          }
+          .container {
+            text-align: center;
+            padding: 2rem;
+          }
+          .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #25D366;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
+          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="spinner"></div>
+          <h2>Connecting WhatsApp...</h2>
+          <p>Please wait while we prepare the connection.</p>
+        </div>
+      </body>
+      </html>
+    `);
+
+    try {
+      const response = await api.get('/api/integrations/whatsapp/connect', {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (response.data?.auth_url) {
+        popup.location.href = response.data.auth_url;
+      } else {
+        throw new Error('No auth_url in response');
+      }
+
+      const handleMessage = (event: MessageEvent) => {
+        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
+        const backendOrigin = new URL(backendUrl).origin;
+
+        if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
+          return;
+        }
+
+        if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
+          return;
+        }
+
+        if (event.data.type === 'whatsapp-oauth-success') {
+          popup.close();
+          fetchIntegrations();
+          queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
+          alert('WhatsApp connected successfully!');
+          window.removeEventListener('message', handleMessage);
+        } else if (event.data.type === 'whatsapp-oauth-error') {
+          popup.close();
+          alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+        }
+      }, 1000);
+    } catch (error: any) {
+      console.error('WhatsApp connection error:', error);
+      popup.close();
+      if (error.response?.status === 401) {
+        alert('Please log in first');
+      } else if (error.response?.status === 403) {
+        alert(error.response?.data?.detail || 'You do not have permission');
+      } else {
+        alert('Failed to connect WhatsApp. Please try again.');
+      }
+    }
+  };
 
   if (!canManage) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Integrations & Channels
-          </h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Connect and manage your communication channels
-          </p>
-        </div>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <p className="text-sm text-yellow-800 dark:text-yellow-300">
-            Only Admin and Business Owner roles can manage integrations.
-          </p>
+        <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-1 shadow-lg">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Integrations & Channels</h1>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Connect and manage your communication channels
+            </p>
+            <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                Only Admin and Business Owner roles can manage integrations.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -212,602 +453,549 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Integrations & Channels
-        </h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Connect and manage your communication channels
-        </p>
-      </div>
-
-
-      {/* Channel Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {channels.map((channel) => {
-          if (channel.name === 'WhatsApp') {
-            const isWhatsAppConnected = whatsappStatus?.is_active === true;
-            
-            return (
-              <div
-                key={channel.name}
-                className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Image
-                      src={channel.icon}
-                      alt={`${channel.name} icon`}
-                      width={48}
-                      height={48}
-                      className="object-contain"
-                    />
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {channel.name}
-                      </h3>
-                      {isWhatsAppConnected ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mt-1">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Connected
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 mt-1">
-                          Not Connected
-                        </span>
-                      )}
-                    </div>
-                  </div>
+      {/* Enhanced Hero Header */}
+      <div className="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-lg p-1 shadow-lg">
+        <div className="bg-white dark:bg-gray-900 rounded-lg p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg shadow-lg">
+                  <Plug className="h-8 w-8 text-white" />
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  {channel.description}
-                  {whatsappStatus?.channel_name && (
-                    <span className="block mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {whatsappStatus.channel_name}
-                    </span>
-                  )}
-                </p>
-
-                {/* Status Details */}
-                {isWhatsAppConnected && (
-                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
-                    <p className="text-xs text-green-700 dark:text-green-300">
-                      ✅ Your WhatsApp is connected and ready to handle conversations
-                    </p>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="space-y-2">
-                  {isWhatsAppConnected ? (
-                    <>
-                      <button
-                        onClick={async () => {
-                          // Open popup immediately for faster perceived response
-                          const width = 600;
-                          const height = 700;
-                          const left = (window.screen.width - width) / 2;
-                          const top = (window.screen.height - height) / 2;
-                          
-                          const popup = window.open(
-                            'about:blank',
-                            'WhatsApp OAuth',
-                            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                          );
-                          
-                          if (!popup) {
-                            alert('Please allow popups for this site to reconnect WhatsApp');
-                            return;
-                          }
-                          
-                          // Show loading message immediately
-                          popup.document.write(`
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                              <title>Reconnecting WhatsApp...</title>
-                              <style>
-                                body {
-                                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                                  display: flex;
-                                  justify-content: center;
-                                  align-items: center;
-                                  height: 100vh;
-                                  margin: 0;
-                                  background: #f5f5f5;
-                                }
-                                .container {
-                                  text-align: center;
-                                  padding: 2rem;
-                                }
-                                .spinner {
-                                  border: 4px solid #f3f3f3;
-                                  border-top: 4px solid #25D366;
-                                  border-radius: 50%;
-                                  width: 40px;
-                                  height: 40px;
-                                  animation: spin 1s linear infinite;
-                                  margin: 0 auto 1rem;
-                                }
-                                @keyframes spin {
-                                  0% { transform: rotate(0deg); }
-                                  100% { transform: rotate(360deg); }
-                                }
-                                h2 { color: #333; margin: 0.5rem 0; }
-                                p { color: #666; margin: 0; }
-                              </style>
-                            </head>
-                            <body>
-                              <div class="container">
-                                <div class="spinner"></div>
-                                <h2>Reconnecting WhatsApp...</h2>
-                                <p>Please wait while we prepare the connection.</p>
-                              </div>
-                            </body>
-                            </html>
-                          `);
-                          
-                          try {
-                            // Use API call to get OAuth URL (includes auth headers)
-                            const response = await api.get('/api/integrations/whatsapp/connect', {
-                              headers: {
-                                'Accept': 'application/json'
-                              }
-                            });
-                            
-                            if (response.data?.auth_url) {
-                              // Navigate popup to OAuth URL immediately
-                              popup.location.href = response.data.auth_url;
-                            } else {
-                              throw new Error('No auth_url in response');
-                            }
-                            
-                            // Listen for message from popup
-                            const handleMessage = (event: MessageEvent) => {
-                              // Verify origin for security - allow messages from backend (callback page) or same origin
-                              const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-                              const backendOrigin = new URL(backendUrl).origin;
-                              
-                              // Allow messages from same origin or backend origin
-                              if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-                                return;
-                              }
-                              
-                              // Only process WhatsApp OAuth messages
-                              if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
-                                return;
-                              }
-                              
-                              if (event.data.type === 'whatsapp-oauth-success') {
-                                popup.close();
-                                fetchIntegrations();
-                                alert('WhatsApp reconnected successfully!');
-                                window.removeEventListener('message', handleMessage);
-                              } else if (event.data.type === 'whatsapp-oauth-error') {
-                                popup.close();
-                                alert(`WhatsApp reconnection failed: ${event.data.error || 'Unknown error'}`);
-                                window.removeEventListener('message', handleMessage);
-                              }
-                            };
-                            
-                            window.addEventListener('message', handleMessage);
-                            
-                            const checkClosed = setInterval(() => {
-                              if (popup.closed) {
-                                clearInterval(checkClosed);
-                                window.removeEventListener('message', handleMessage);
-                              }
-                            }, 1000);
-                          } catch (error: any) {
-                            console.error('WhatsApp reconnect error:', error);
-                            popup.close();
-                            if (error.response?.status === 401) {
-                              alert('Please log in first');
-                            } else if (error.response?.status === 403) {
-                              alert(error.response?.data?.detail || 'You do not have permission');
-                            } else {
-                              alert('Failed to reconnect WhatsApp. Please try again.');
-                            }
-                          }
-                        }}
-                        className="w-full inline-flex items-center justify-center px-4 py-2 border border-[#25D366] text-[#25D366] dark:text-[#25D366] bg-[#25D366]/10 dark:bg-[#25D366]/20 hover:bg-[#25D366]/20 dark:hover:bg-[#25D366]/30 rounded-md text-sm font-medium transition-colors"
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Reconnect / Configure
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!confirm('Are you sure you want to disconnect WhatsApp? This will stop receiving messages.')) {
-                            return;
-                          }
-                          try {
-                            await api.delete('/api/integrations/whatsapp/disconnect');
-                            fetchIntegrations();
-                          } catch (error: any) {
-                            alert(error.response?.data?.detail || 'Failed to disconnect WhatsApp');
-                          }
-                        }}
-                        className="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md text-sm font-medium transition-colors"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Disconnect
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={async () => {
-                        // Open popup immediately for faster perceived response
-                        const width = 600;
-                        const height = 700;
-                        const left = (window.screen.width - width) / 2;
-                        const top = (window.screen.height - height) / 2;
-                        
-                        const popup = window.open(
-                          'about:blank',
-                          'WhatsApp OAuth',
-                          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                        );
-                        
-                        if (!popup) {
-                          alert('Please allow popups for this site to connect WhatsApp');
-                          return;
-                        }
-                        
-                        // Show loading message immediately
-                        popup.document.write(`
-                          <!DOCTYPE html>
-                          <html>
-                          <head>
-                            <title>Connecting WhatsApp...</title>
-                            <style>
-                              body {
-                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                                display: flex;
-                                justify-content: center;
-                                align-items: center;
-                                height: 100vh;
-                                margin: 0;
-                                background: #f5f5f5;
-                              }
-                              .container {
-                                text-align: center;
-                                padding: 2rem;
-                              }
-                              .spinner {
-                                border: 4px solid #f3f3f3;
-                                border-top: 4px solid #25D366;
-                                border-radius: 50%;
-                                width: 40px;
-                                height: 40px;
-                                animation: spin 1s linear infinite;
-                                margin: 0 auto 1rem;
-                              }
-                              @keyframes spin {
-                                0% { transform: rotate(0deg); }
-                                100% { transform: rotate(360deg); }
-                              }
-                              h2 { color: #333; margin: 0.5rem 0; }
-                              p { color: #666; margin: 0; }
-                            </style>
-                          </head>
-                          <body>
-                            <div class="container">
-                              <div class="spinner"></div>
-                              <h2>Connecting WhatsApp...</h2>
-                              <p>Please wait while we prepare the connection.</p>
-                            </div>
-                          </body>
-                          </html>
-                        `);
-                        
-                        try {
-                          // Use API call to get OAuth URL (includes auth headers)
-                          const response = await api.get('/api/integrations/whatsapp/connect', {
-                            headers: {
-                              'Accept': 'application/json'
-                            }
-                          });
-                          
-                          // Backend returns JSON with auth_url
-                          if (response.data?.auth_url) {
-                            // Navigate popup to OAuth URL immediately
-                            popup.location.href = response.data.auth_url;
-                          } else {
-                            throw new Error('No auth_url in response');
-                          }
-                          
-                          // Listen for message from popup
-                          const handleMessage = (event: MessageEvent) => {
-                            // Verify origin for security - allow messages from backend (callback page) or same origin
-                            const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-                            const backendOrigin = new URL(backendUrl).origin;
-                            
-                            // Allow messages from same origin or backend origin
-                            if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-                              return;
-                            }
-                            
-                            // Only process WhatsApp OAuth messages
-                            if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
-                              return;
-                            }
-                            
-                            if (event.data.type === 'whatsapp-oauth-success') {
-                              // Close popup
-                              popup.close();
-                              
-                              // Refresh integrations
-                              fetchIntegrations();
-                              
-                              // Show success message with phone number if available
-                              const phone = event.data.phone || '';
-                              const name = event.data.name || '';
-                              const message = phone 
-                                ? `WhatsApp connected successfully!\n\nPhone: ${phone}\n${name ? `Business: ${name}` : ''}`
-                                : 'WhatsApp connected successfully!';
-                              alert(message);
-                              
-                              // Remove listener
-                              window.removeEventListener('message', handleMessage);
-                            } else if (event.data.type === 'whatsapp-oauth-error') {
-                              // Close popup
-                              popup.close();
-                              
-                              // Show error
-                              alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
-                              
-                              // Remove listener
-                              window.removeEventListener('message', handleMessage);
-                            }
-                          };
-                          
-                          window.addEventListener('message', handleMessage);
-                          
-                          // Check if popup was closed manually
-                          const checkClosed = setInterval(() => {
-                            if (popup.closed) {
-                              clearInterval(checkClosed);
-                              window.removeEventListener('message', handleMessage);
-                            }
-                          }, 1000);
-                        } catch (error: any) {
-                          console.error('WhatsApp connection error:', error);
-                          popup.close();
-                          console.error('WhatsApp connection error:', error);
-                          if (error.response?.status === 401) {
-                            alert('Please log in first');
-                            window.location.href = '/';
-                          } else if (error.response?.status === 403) {
-                            alert(error.response?.data?.detail || 'You do not have permission to connect integrations');
-                          } else if (error.response?.status === 500) {
-                            const errorMsg = error.response?.data?.detail || 'Meta OAuth is not configured. Please contact support.';
-                            alert(errorMsg);
-                            console.error('Backend error details:', error.response?.data);
-                          } else if (error.code === 'ERR_NETWORK' || error.message?.includes('CORS')) {
-                            // Network/CORS error - backend might be down or URL wrong
-                            alert('Cannot connect to backend. Please check your connection and try again.');
-                            console.error('Network error:', error);
-                          } else {
-                            alert('Failed to connect WhatsApp. Please try again.');
-                            console.error('Full error:', error);
-                          }
-                        }
-                      }}
-                      className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent bg-[#25D366] hover:bg-[#20b558] text-white rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plug className="h-4 w-4 mr-2" />
-                      Connect WhatsApp
-                    </button>
-                  )}
-                </div>
-                {!isWhatsAppConnected && (
-                  <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-2 font-medium">
-                      ✨ Quick Setup Process:
-                    </p>
-                    <ol className="text-xs text-blue-600 dark:text-blue-400 space-y-1 ml-4 list-decimal">
-                      <li>Log in with Facebook</li>
-                      <li>Select your business (or create one)</li>
-                      <li>Select your WhatsApp Business Account</li>
-                      <li>Authorize permissions</li>
-                      <li>Done! You're connected automatically</li>
-                    </ol>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      No tokens, developer accounts, or manual setup needed. Takes ~2 minutes.
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          }
-          // Special handling for Telegram
-          if (channel.name === 'Telegram') {
-            return (
-              <div
-                key={channel.name}
-                className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Image
-                      src={channel.icon}
-                      alt={`${channel.name} icon`}
-                      width={48}
-                      height={48}
-                      className="object-contain"
-                    />
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {channel.name}
-                      </h3>
-                      {telegramStatusValue === 'connected' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mt-1">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Connected
-                        </span>
-                      )}
-                      {telegramStatusValue === 'not_connected' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 mt-1">
-                          Not Connected
-                        </span>
-                      )}
-                      {telegramStatusValue === 'error' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 mt-1">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Error
-                        </span>
-                      )}
-                      {telegramStatusValue === 'loading' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 mt-1">
-                          Loading...
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  {channel.description}
-                  {telegramStatus?.bot_username && (
-                    <span className="block mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Bot: @{telegramStatus.bot_username}
-                    </span>
-                  )}
-                </p>
-
-                {/* Status Details */}
-                {telegramStatusValue === 'connected' && telegramStatus && (
-                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
-                    <p className="text-xs text-green-700 dark:text-green-300">
-                      ✅ Your bot is now connected and ready to handle conversations
-                    </p>
-                    {telegramStatus.pending_updates !== undefined && telegramStatus.pending_updates > 0 && (
-                      <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                        ⚠️ {telegramStatus.pending_updates} pending updates
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {telegramStatusValue === 'error' && telegramStatus?.last_error_message && (
-                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="text-xs text-red-700 dark:text-red-300">
-                      ⚠️ {telegramStatus.last_error_message}
-                    </p>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="space-y-2">
-                  {telegramStatusValue === 'connected' ? (
-                    <>
-                      <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="w-full inline-flex items-center justify-center px-4 py-2 border border-[#007FFF] text-[#007FFF] dark:text-[#007FFF] bg-[#007FFF]/10 dark:bg-[#007FFF]/20 hover:bg-[#007FFF]/20 dark:hover:bg-[#007FFF]/30 rounded-md text-sm font-medium transition-colors"
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Reconnect / Configure
-                      </button>
-                      <button
-                        onClick={handleDisconnect}
-                        className="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md text-sm font-medium transition-colors"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Disconnect
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setIsModalOpen(true)}
-                      disabled={telegramStatusValue === 'loading'}
-                      className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent bg-[#007FFF] hover:bg-[#0066CC] text-white rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plug className="h-4 w-4 mr-2" />
-                      Connect
-                    </button>
-                  )}
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                    Integrations Hub
+                  </h1>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    Connect, manage, and monitor all your communication channels
+                  </p>
                 </div>
               </div>
-            );
-          }
-
-          // Other channels
-          return (
-            <div
-              key={channel.name}
-              className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Image
-                    src={channel.icon}
-                    alt={`${channel.name} icon`}
-                    width={48}
-                    height={48}
-                    className="object-contain"
-                  />
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {channel.name}
-                    </h3>
-                    {channel.status === 'available' && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mt-1">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Available
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                {channel.description}
-              </p>
+            </div>
+            <div className="flex space-x-2">
               <button
-                onClick={() => {
-                  if (channel.name === 'Telegram') {
-                    setIsModalOpen(true);
-                  } else {
-                    alert(`${channel.name} integration setup will be available soon. Backend endpoints are being configured.`);
-                  }
-                }}
-                className="w-full inline-flex items-center justify-center px-4 py-2 border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded-md text-sm font-medium"
+                onClick={() => setActiveView('marketplace')}
+                className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 transition-all"
               >
-                {channel.name === 'Telegram' ? (
-                  <>
-                    <Plug className="h-4 w-4 mr-2" />
-                    {telegramStatus?.connected ? 'Configure' : 'Connect'}
-                  </>
-                ) : (
-                  <>
-                    <Plug className="h-4 w-4 mr-2" />
-                    Connect
-                  </>
-                )}
+                <Plus className="h-5 w-5 mr-2" />
+                Add Integration
               </button>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Integration Readiness */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-          Integration Readiness
-        </h3>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <span className="text-sm text-gray-700 dark:text-gray-300">API Authentication</span>
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">Active</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <span className="text-sm text-gray-700 dark:text-gray-300">Webhook Management</span>
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">Active</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <span className="text-sm text-gray-700 dark:text-gray-300">Multi-Channel Routing</span>
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">Active</span>
           </div>
         </div>
       </div>
+
+      {/* Stats Dashboard */}
+      {healthData && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Active Integrations</p>
+                <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{healthData.active_integrations}</p>
+              </div>
+              <Power className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Channels</p>
+                <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{healthData.total_integrations}</p>
+              </div>
+              <Layers className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Health Status</p>
+                <p className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                  {healthData.active_integrations > 0 ? '✓ Good' : '⚠ Setup'}
+                </p>
+              </div>
+              <Activity className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Webhooks</p>
+                <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">
+                  {healthData.integrations.filter((i) => i.webhook_url).length}
+                </p>
+              </div>
+              <Webhook className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Navigation */}
+      <div className="flex space-x-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        {[
+          { id: 'connected', label: 'Connected', icon: CheckCircle2, color: 'text-green-600' },
+          { id: 'marketplace', label: 'Marketplace', icon: Grid3x3, color: 'text-blue-600' },
+          { id: 'health', label: 'Health Dashboard', icon: Activity, color: 'text-purple-600' },
+        ].map((view) => (
+          <button
+            key={view.id}
+            onClick={() => setActiveView(view.id as any)}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+              activeView === view.id
+                ? 'bg-primary-500 text-white shadow-md'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            <view.icon className={`h-5 w-5 ${activeView !== view.id ? view.color : ''}`} />
+            <span className="hidden sm:inline">{view.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Connected Integrations View */}
+      {activeView === 'connected' && (
+        <div className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div>
+            </div>
+          ) : integrations.length > 0 ? (
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="px-6 py-5">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Your Integrations</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-2 rounded ${
+                        viewMode === 'grid'
+                          ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-400'
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      <Grid3x3 className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-2 rounded ${
+                        viewMode === 'list'
+                          ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-400'
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      <List className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {integrations.map((integration) => (
+                      <div
+                        key={integration.id}
+                        className="group relative p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-xl transition-all transform hover:-translate-y-1"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-center">
+                              <Image
+                                src={getChannelIcon(integration.channel)}
+                                alt={integration.channel}
+                                width={56}
+                                height={56}
+                                className="w-14 h-14 object-contain"
+                              />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
+                                {integration.channel}
+                              </h4>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {integration.channel_name || `${integration.channel} Integration`}
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                              integration.is_active
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {integration.is_active ? (
+                              <><CheckCircle2 className="h-3 w-3" /> Active</>
+                            ) : (
+                              <><PowerOff className="h-3 w-3" /> Inactive</>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <Webhook className="h-4 w-4" />
+                            <span className="truncate">
+                              {integration.webhook_url ? '✓ Configured' : '⚠ Not configured'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <Clock className="h-4 w-4" />
+                            <span>Connected {new Date(integration.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() =>
+                              toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })
+                            }
+                            className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            {integration.is_active ? <Pause className="h-3 w-3 inline mr-1" /> : <Play className="h-3 w-3 inline mr-1" />}
+                            {integration.is_active ? 'Pause' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => handleEditIntegration(integration)}
+                            className="px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this integration?')) {
+                                deleteMutation.mutate(integration.id);
+                              }
+                            }}
+                            className="px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {integrations.map((integration) => (
+                      <div
+                        key={integration.id}
+                        className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <div className="flex items-center justify-center">
+                            <Image
+                              src={getChannelIcon(integration.channel)}
+                              alt={integration.channel}
+                              width={48}
+                              height={48}
+                              className="w-12 h-12 object-contain"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
+                              {integration.channel}
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {integration.channel_name || `${integration.channel} Integration`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                              integration.is_active
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {integration.is_active ? (
+                              <><CheckCircle2 className="h-3 w-3" /> Active</>
+                            ) : (
+                              <><PowerOff className="h-3 w-3" /> Inactive</>
+                            )}
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() =>
+                                toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })
+                              }
+                              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                              {integration.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleEditIntegration(integration)}
+                              className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Delete this integration?')) {
+                                  deleteMutation.mutate(integration.id);
+                                }
+                              }}
+                              className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
+              <div className="mx-auto w-24 h-24 bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-full flex items-center justify-center mb-4">
+                <Plug className="h-12 w-12 text-cyan-600 dark:text-cyan-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No integrations yet</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Connect your first channel to start automating conversations
+              </p>
+              <button
+                onClick={() => setActiveView('marketplace')}
+                className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 transition-all"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Browse Integrations
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Marketplace View */}
+      {activeView === 'marketplace' && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Integration Marketplace</h3>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
+              >
+                <option value="all">All Categories</option>
+                <option value="Messaging">Messaging</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Web">Web</option>
+                <option value="Email">Email</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredChannels.map((channel) => {
+                const isConnected = integrations.some(
+                  (i) => i.channel === channel.id && i.is_active
+                );
+
+                return (
+                  <div
+                    key={channel.id}
+                    className="group relative p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-600 hover:border-cyan-400 dark:hover:border-cyan-600 hover:shadow-2xl transition-all transform hover:-translate-y-2"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center justify-center">
+                        <Image
+                          src={channel.icon}
+                          alt={channel.name}
+                          width={64}
+                          height={64}
+                          className="w-16 h-16 object-contain"
+                        />
+                      </div>
+                      {channel.status === 'available' && isConnected && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                          <Check className="h-3 w-3" />
+                          Connected
+                        </span>
+                      )}
+                      {channel.status === 'coming_soon' && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">
+                          Coming Soon
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{channel.name}</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{channel.description}</p>
+
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Features:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {channel.features.slice(0, 3).map((feature) => (
+                          <span
+                            key={feature}
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-400"
+                          >
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (channel.status === 'available') {
+                          if (channel.id === 'whatsapp') {
+                            connectWhatsApp();
+                          } else if (channel.id === 'telegram') {
+                            setIsModalOpen(true);
+                          }
+                        } else {
+                          alert('This integration is coming soon!');
+                        }
+                      }}
+                      disabled={channel.status !== 'available' || isConnected}
+                      className={`w-full py-3 text-sm font-medium rounded-lg transition-all ${
+                        channel.status === 'available' && !isConnected
+                          ? `bg-gradient-to-r ${channel.color} text-white shadow-lg hover:shadow-xl`
+                          : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {isConnected ? (
+                        <><Check className="h-4 w-4 inline mr-2" /> Connected</>
+                      ) : channel.status === 'available' ? (
+                        <><Plus className="h-4 w-4 inline mr-2" /> Connect Now</>
+                      ) : (
+                        <>Coming Soon</>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Health Dashboard View */}
+      {activeView === 'health' && healthData && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Channel Distribution */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Channel Distribution</h3>
+              <div className="space-y-3">
+                {Object.entries(healthData.by_channel).map(([channel, count]) => (
+                  <div key={channel}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600 dark:text-gray-400 capitalize">{channel}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{count}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className={`bg-gradient-to-r ${getChannelColor(channel)} h-2 rounded-full`}
+                        style={{
+                          width: `${(count / healthData.total_integrations) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Integration Status */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Integration Status</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-800 dark:text-green-400">Active</p>
+                      <p className="text-2xl font-bold text-green-900 dark:text-green-300">
+                        {healthData.active_integrations}
+                      </p>
+                    </div>
+                    <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-400">Inactive</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-300">
+                        {healthData.inactive_integrations}
+                      </p>
+                    </div>
+                    <PowerOff className="h-10 w-10 text-gray-600 dark:text-gray-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* System Health */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">System Health</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 rounded-lg">
+                  <span className="text-sm text-green-700 dark:text-green-300">API Status</span>
+                  <span className="text-sm font-medium text-green-600 dark:text-green-400">✓ Online</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 rounded-lg">
+                  <span className="text-sm text-green-700 dark:text-green-300">Webhooks</span>
+                  <span className="text-sm font-medium text-green-600 dark:text-green-400">✓ Active</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 rounded-lg">
+                  <span className="text-sm text-green-700 dark:text-green-300">Message Queue</span>
+                  <span className="text-sm font-medium text-green-600 dark:text-green-400">✓ Healthy</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedIntegration && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Integration</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Channel Name
+                </label>
+                <input
+                  type="text"
+                  value={editChannelName}
+                  onChange={(e) => setEditChannelName(e.target.value)}
+                  placeholder="e.g., Customer Support WhatsApp"
+                  className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={updateMutation.isPending}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-md disabled:opacity-50 transition-all"
+                >
+                  {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Connect Telegram Modal */}
       <ConnectTelegramModal

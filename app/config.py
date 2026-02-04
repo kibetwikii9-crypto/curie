@@ -22,7 +22,11 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = ""  # Webhook verification token (set via WHATSAPP_VERIFY_TOKEN env var)
     whatsapp_app_secret: str = ""  # App secret for signature verification (set via WHATSAPP_APP_SECRET env var)
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"  # Allow extra env vars without raising errors
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

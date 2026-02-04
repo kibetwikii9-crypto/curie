@@ -42,8 +42,8 @@ engine = create_engine(
     echo=False,  # Set to True for SQL query logging (useful for debugging)
     pool_pre_ping=True,  # Verify connections before using them
     pool_recycle=300,  # Recycle connections after 5 minutes
-    pool_size=5,  # Limit pool size to reduce connection issues
-    max_overflow=10,  # Allow up to 10 overflow connections
+    pool_size=20,  # Increased from 5 to 20 for better concurrency (PERFORMANCE OPTIMIZATION)
+    max_overflow=30,  # Increased from 10 to 30 for handling traffic spikes
     connect_args={
         "prepare_threshold": 0,  # Disable prepared statements to avoid psycopg3 DuplicatePreparedStatement errors
         "connect_timeout": 10,  # Connection timeout in seconds

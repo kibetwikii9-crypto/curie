@@ -4,13 +4,14 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, Business
+from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule
 from app.routes.auth import get_current_user, get_user_business_id
+from app.middleware.rate_limiter import limiter, get_rate_limit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -497,6 +498,18 @@ async def get_conversations(
         if conv.intent == "unknown":
             health_indicators.append("unresolved_intent")
 
+        # Get tags for this conversation
+        tag_relations = db.query(ConversationTagRelation).filter(
+            ConversationTagRelation.conversation_id == conv.id
+        ).all()
+        tag_ids = [rel.tag_id for rel in tag_relations]
+        conversation_tags = db.query(ConversationTag).filter(ConversationTag.id.in_(tag_ids)).all() if tag_ids else []
+
+        # Get assignment for this conversation
+        assignment = db.query(ConversationAssignment).filter(
+            ConversationAssignment.conversation_id == conv.id
+        ).first()
+
         result_conversations.append({
             "id": conv.id,
             "user_id": conv.user_id,
@@ -513,6 +526,9 @@ async def get_conversations(
             "health_indicators": health_indicators,
             "has_lead": lead is not None,
             "lead_id": lead.id if lead else None,
+            # Tags and assignment
+            "tags": [{"id": tag.id, "name": tag.name, "color": tag.color} for tag in conversation_tags],
+            "assigned_to_user_id": assignment.assigned_to_user_id if assignment else None,
         })
 
     return {
@@ -826,6 +842,352 @@ async def get_knowledge_entry_detail(
     }
 
 
+# ========== KNOWLEDGE BASE CRUD OPERATIONS ==========
+
+@router.post("/knowledge")
+async def create_knowledge_entry(
+    question: str,
+    answer: str,
+    keywords: Optional[List[str]] = None,
+    intent: Optional[str] = None,
+    is_active: bool = True,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new knowledge base entry."""
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    # Validate required fields
+    if not question or not answer:
+        raise HTTPException(status_code=400, detail="Question and answer are required")
+    
+    # Create entry
+    entry = KnowledgeEntry(
+        business_id=business_id,
+        question=question.strip(),
+        answer=answer.strip(),
+        keywords=json.dumps(keywords) if keywords else None,
+        intent=intent,
+        is_active=is_active,
+    )
+    
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    
+    return {
+        "id": entry.id,
+        "question": entry.question,
+        "answer": entry.answer,
+        "keywords": json.loads(entry.keywords) if entry.keywords else [],
+        "intent": entry.intent,
+        "is_active": entry.is_active,
+        "created_at": entry.created_at.isoformat(),
+    }
+
+
+@router.put("/knowledge/{entry_id}")
+async def update_knowledge_entry(
+    entry_id: int,
+    question: Optional[str] = None,
+    answer: Optional[str] = None,
+    keywords: Optional[List[str]] = None,
+    intent: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update an existing knowledge base entry."""
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    # Get entry
+    entry = db.query(KnowledgeEntry).filter(
+        KnowledgeEntry.id == entry_id,
+        KnowledgeEntry.business_id == business_id
+    ).first()
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    
+    # Update fields
+    if question is not None:
+        entry.question = question.strip()
+    if answer is not None:
+        entry.answer = answer.strip()
+    if keywords is not None:
+        entry.keywords = json.dumps(keywords)
+    if intent is not None:
+        entry.intent = intent
+    if is_active is not None:
+        entry.is_active = is_active
+    
+    entry.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(entry)
+    
+    return {
+        "id": entry.id,
+        "question": entry.question,
+        "answer": entry.answer,
+        "keywords": json.loads(entry.keywords) if entry.keywords else [],
+        "intent": entry.intent,
+        "is_active": entry.is_active,
+        "updated_at": entry.updated_at.isoformat(),
+    }
+
+
+@router.delete("/knowledge/{entry_id}")
+async def delete_knowledge_entry(
+    entry_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a knowledge base entry."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    # Get entry
+    entry = db.query(KnowledgeEntry).filter(
+        KnowledgeEntry.id == entry_id,
+        KnowledgeEntry.business_id == business_id
+    ).first()
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    
+    db.delete(entry)
+    db.commit()
+    
+    return {"success": True, "message": "Knowledge entry deleted successfully"}
+
+
+@router.post("/knowledge/bulk/import")
+async def bulk_import_knowledge(
+    entries: List[dict],
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk import knowledge entries from JSON."""
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    if not entries or not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="Invalid entries format")
+    
+    imported_count = 0
+    skipped_count = 0
+    errors = []
+    
+    for idx, entry_data in enumerate(entries):
+        try:
+            if not isinstance(entry_data, dict):
+                errors.append(f"Entry {idx + 1}: Invalid format")
+                skipped_count += 1
+                continue
+            
+            question = entry_data.get("question")
+            answer = entry_data.get("answer")
+            
+            if not question or not answer:
+                errors.append(f"Entry {idx + 1}: Missing question or answer")
+                skipped_count += 1
+                continue
+            
+            # Check if entry already exists
+            existing = db.query(KnowledgeEntry).filter(
+                KnowledgeEntry.business_id == business_id,
+                KnowledgeEntry.question == question
+            ).first()
+            
+            if existing:
+                errors.append(f"Entry {idx + 1}: Question already exists")
+                skipped_count += 1
+                continue
+            
+            # Create entry
+            entry = KnowledgeEntry(
+                business_id=business_id,
+                question=question.strip(),
+                answer=answer.strip(),
+                keywords=json.dumps(entry_data.get("keywords", [])),
+                intent=entry_data.get("intent"),
+                is_active=entry_data.get("is_active", True),
+            )
+            
+            db.add(entry)
+            imported_count += 1
+            
+        except Exception as e:
+            errors.append(f"Entry {idx + 1}: {str(e)}")
+            skipped_count += 1
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "imported_count": imported_count,
+        "skipped_count": skipped_count,
+        "errors": errors[:10],  # Limit to first 10 errors
+    }
+
+
+@router.post("/knowledge/upload/document")
+@limiter.limit(get_rate_limit("auth_upload"))  # 10/minute - Heavy operation
+async def upload_knowledge_document(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a document (Word, PDF, Text, etc.) and extract knowledge entries using AI.
+    
+    Supports: .docx, .pdf, .txt, .md, .csv, .xlsx
+    """
+    from app.services.document_parser import parse_document, extract_qa_with_gpt
+    from app.config import settings
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    try:
+        # Read file content
+        file_content = await file.read()
+        filename = file.filename
+        
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(file_content) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Maximum size is 10MB. Your file is {len(file_content) / 1024 / 1024:.1f}MB"
+            )
+        
+        # Parse document to extract text
+        log.info(f"Parsing uploaded document: {filename} ({len(file_content)} bytes)")
+        document_text = parse_document(file_content, filename)
+        
+        if not document_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to extract text from document. Please check the file format and try again."
+            )
+        
+        log.info(f"✅ Extracted {len(document_text)} characters from {filename}")
+        
+        # Use GPT-4o to extract Q&A pairs
+        if not settings.openai_api_key or not settings.openai_api_key.strip():
+            # Fallback: return raw text for manual processing
+            return {
+                "success": True,
+                "mode": "manual",
+                "raw_text": document_text[:5000],  # Limit to 5000 chars for preview
+                "message": "OpenAI API key not configured. Please manually create Q&A pairs from the text above."
+            }
+        
+        log.info("Using GPT-4o to extract Q&A pairs...")
+        qa_pairs = extract_qa_with_gpt(document_text, settings.openai_api_key)
+        
+        if not qa_pairs:
+            # Fallback: return raw text
+            return {
+                "success": True,
+                "mode": "manual",
+                "raw_text": document_text[:5000],
+                "message": "Failed to extract Q&A pairs automatically. Please review the text and create entries manually."
+            }
+        
+        # Return extracted Q&A pairs for user review
+        return {
+            "success": True,
+            "mode": "ai_extracted",
+            "qa_pairs": qa_pairs,
+            "original_text": document_text[:2000],  # Preview of original
+            "message": f"Successfully extracted {len(qa_pairs)} Q&A pairs. Review and save them below."
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error processing document upload: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing document: {str(e)}"
+        )
+
+
+@router.post("/knowledge/bulk/delete")
+async def bulk_delete_knowledge(
+    entry_ids: List[int],
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete knowledge entries."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Knowledge base access requires a business account"
+        )
+    
+    if not entry_ids or not isinstance(entry_ids, list):
+        raise HTTPException(status_code=400, detail="Invalid entry_ids format")
+    
+    # Get all entries that belong to this business
+    entries = db.query(KnowledgeEntry).filter(
+        KnowledgeEntry.id.in_(entry_ids),
+        KnowledgeEntry.business_id == business_id
+    ).all()
+    
+    deleted_count = len(entries)
+    
+    for entry in entries:
+        db.delete(entry)
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "requested_count": len(entry_ids),
+    }
+
+
 @router.get("/conversations/{conversation_id}")
 async def get_conversation_detail(
     conversation_id: int,
@@ -950,6 +1312,28 @@ async def get_conversation_detail(
             "message": "Intent could not be determined",
         })
 
+    # Get tags for this conversation
+    tag_relations = db.query(ConversationTagRelation).filter(
+        ConversationTagRelation.conversation_id == conversation_id
+    ).all()
+    tag_ids = [rel.tag_id for rel in tag_relations]
+    tags = db.query(ConversationTag).filter(ConversationTag.id.in_(tag_ids)).all() if tag_ids else []
+
+    # Get assignment for this conversation
+    assignment = db.query(ConversationAssignment).filter(
+        ConversationAssignment.conversation_id == conversation_id
+    ).first()
+    
+    assignment_data = None
+    if assignment:
+        assignee = db.query(UserModel).filter(UserModel.id == assignment.assigned_to_user_id).first()
+        assignment_data = {
+            "assigned_to_user_id": assignment.assigned_to_user_id,
+            "assigned_to_user_name": assignee.full_name if assignee and assignee.full_name else assignee.email if assignee else "Unknown",
+            "notes": assignment.notes,
+            "assigned_at": assignment.created_at.isoformat(),
+        }
+
     return {
         "conversation": {
             "id": conversation.id,
@@ -989,6 +1373,15 @@ async def get_conversation_detail(
             }
             for msg in messages
         ],
+        "tags": [
+            {
+                "id": tag.id,
+                "name": tag.name,
+                "color": tag.color,
+            }
+            for tag in tags
+        ],
+        "assignment": assignment_data,
     }
 
 
@@ -1630,305 +2023,389 @@ async def get_leads(
     }
 
 
-@router.get("/knowledge")
-async def get_knowledge_base(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    intent: Optional[str] = None,
-    status: Optional[str] = None,  # active, inactive, needs-review
-    search: Optional[str] = None,
+@router.get("/leads/{lead_id}")
+async def get_lead(
+    lead_id: int,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get knowledge base entries with intelligence data."""
-    from sqlalchemy import or_
-    import json
-    
-    # Get user's business_id (None for admin = can see all)
+    """Get a single lead by ID."""
     business_id = get_user_business_id(current_user, db)
     
-    if business_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Knowledge base access requires a business account"
-        )
+    query = db.query(Lead).filter(Lead.id == lead_id)
     
-    query = db.query(KnowledgeEntry).filter(KnowledgeEntry.business_id == business_id)
+    if business_id is not None:
+        query = query.filter(Lead.business_id == business_id)
     
-    # Apply filters
-    if intent:
-        query = query.filter(KnowledgeEntry.intent == intent)
-    if status == "active":
-        query = query.filter(KnowledgeEntry.is_active == True)
-    elif status == "inactive":
-        query = query.filter(KnowledgeEntry.is_active == False)
-    if search:
-        query = query.filter(
-            (KnowledgeEntry.question.ilike(f"%{search}%")) |
-            (KnowledgeEntry.answer.ilike(f"%{search}%"))
-        )
+    lead = query.first()
     
-    # Get total count
-    total = query.count()
-    
-    # Apply pagination
-    offset = (page - 1) * limit
-    entries = query.order_by(KnowledgeEntry.updated_at.desc()).offset(offset).limit(limit).all()
-    
-    # Get all intents from conversations
-    start_date = datetime.utcnow() - timedelta(days=30)
-    
-    # Build response with intelligence data
-    result_entries = []
-    for entry in entries:
-        # Count usage in conversations (simple keyword matching)
-        usage_count = 0
-        keywords = []
-        if entry.keywords:
-            try:
-                keywords = json.loads(entry.keywords) if isinstance(entry.keywords, str) else entry.keywords
-                if keywords and isinstance(keywords, list):
-                    # Count conversations with matching keywords (filtered by business)
-                    usage_filter = and_(
-                        Conversation.created_at >= start_date,
-                        Conversation.business_id == business_id,
-                        or_(*[Conversation.user_message.ilike(f"%{kw}%") for kw in keywords[:3]])
-                    )
-                    usage_count = db.query(func.count(Conversation.id)).filter(usage_filter).scalar() or 0
-            except:
-                keywords = []
-        
-        # Check if entry is linked to intent
-        has_intent_link = entry.intent is not None and entry.intent != ""
-        
-        # Determine quality signals
-        quality_signals = []
-        if usage_count > 10:
-            quality_signals.append("high_performing")
-        elif usage_count == 0:
-            quality_signals.append("unused")
-        if not has_intent_link:
-            quality_signals.append("needs_intent_link")
-        if entry.is_active == False:
-            quality_signals.append("inactive")
-        
-        # Get last used timestamp (simplified - use updated_at for now)
-        last_used = entry.updated_at.isoformat()
-        
-        result_entries.append({
-            "id": entry.id,
-            "question": entry.question,
-            "answer": entry.answer,
-            "keywords": keywords,
-            "intent": entry.intent,
-            "is_active": entry.is_active,
-            "created_at": entry.created_at.isoformat(),
-            "updated_at": entry.updated_at.isoformat(),
-            # Intelligence data
-            "usage_count": usage_count,
-            "quality_signals": quality_signals,
-            "has_intent_link": has_intent_link,
-            "last_used": last_used,
-        })
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
     
     return {
-        "entries": result_entries,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "total_pages": (total + limit - 1) // limit,
+        "id": lead.id,
+        "user_id": lead.user_id,
+        "channel": lead.channel,
+        "name": lead.name,
+        "email": lead.email,
+        "phone": lead.phone,
+        "status": lead.status,
+        "source_intent": lead.source_intent,
+        "extra_data": lead.extra_data,
+        "created_at": lead.created_at.isoformat(),
+        "updated_at": lead.updated_at.isoformat(),
     }
 
 
-@router.get("/knowledge/health")
-async def get_knowledge_health(
+@router.post("/leads")
+async def create_lead(
+    lead_data: dict,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get knowledge base health and coverage metrics."""
-    # Get user's business_id (None for admin = can see all)
+    """Create a new lead."""
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Knowledge base access requires a business account"
+            detail="Lead creation requires a business account"
         )
     
-    start_date = datetime.utcnow() - timedelta(days=30)
-    
-    # Total knowledge entries
-    total_entries = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == business_id
-    ).scalar() or 0
-    
-    # Active entries
-    active_entries = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == business_id,
-        KnowledgeEntry.is_active == True
-    ).scalar() or 0
-    
-    # Entries with intent links
-    entries_with_intent = db.query(func.count(KnowledgeEntry.id)).filter(
-        KnowledgeEntry.business_id == business_id,
-        KnowledgeEntry.intent.isnot(None),
-        KnowledgeEntry.intent != ""
-    ).scalar() or 0
-    
-    # Get all intents from conversations (filtered by business)
-    conv_intent_filter = and_(
-        Conversation.created_at >= start_date,
-        Conversation.business_id == business_id
+    lead = Lead(
+        business_id=business_id,
+        user_id=lead_data.get("user_id", ""),
+        channel=lead_data.get("channel", "manual"),
+        name=lead_data.get("name"),
+        email=lead_data.get("email"),
+        phone=lead_data.get("phone"),
+        status=lead_data.get("status", "new"),
+        source_intent=lead_data.get("source_intent"),
+        extra_data=lead_data.get("extra_data"),
     )
-    conversation_intents = db.query(Conversation.intent).filter(conv_intent_filter).distinct().all()
-    all_intents = [intent[0] for intent in conversation_intents if intent[0] and intent[0] != "unknown"]
     
-    # Get intents with knowledge entries
-    knowledge_intents = db.query(KnowledgeEntry.intent).filter(
-        KnowledgeEntry.business_id == business_id,
-        KnowledgeEntry.intent.isnot(None),
-        KnowledgeEntry.intent != ""
-    ).distinct().all()
-    knowledge_intent_list = [intent[0] for intent in knowledge_intents]
-    
-    # Intents without knowledge
-    intents_without_knowledge = [intent for intent in all_intents if intent not in knowledge_intent_list]
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
     
     return {
-        "total_entries": total_entries,
-        "active_entries": active_entries,
-        "entries_with_intent": entries_with_intent,
-        "intents_without_knowledge": intents_without_knowledge,
-        "unused_entries_count": 0,  # Would need more complex logic
-        "coverage_percentage": round((len(knowledge_intent_list) / max(len(all_intents), 1)) * 100, 1) if all_intents else 100,
+        "id": lead.id,
+        "user_id": lead.user_id,
+        "channel": lead.channel,
+        "name": lead.name,
+        "email": lead.email,
+        "phone": lead.phone,
+        "status": lead.status,
+        "source_intent": lead.source_intent,
+        "created_at": lead.created_at.isoformat(),
     }
 
 
-@router.get("/knowledge/mapping")
-async def get_intent_knowledge_mapping(
+@router.put("/leads/{lead_id}")
+async def update_lead(
+    lead_id: int,
+    lead_data: dict,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get intent to knowledge entry mapping."""
-    # Get user's business_id (None for admin = can see all)
+    """Update a lead."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    
+    if business_id is not None:
+        query = query.filter(Lead.business_id == business_id)
+    
+    lead = query.first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Update fields
+    if "name" in lead_data:
+        lead.name = lead_data["name"]
+    if "email" in lead_data:
+        lead.email = lead_data["email"]
+    if "phone" in lead_data:
+        lead.phone = lead_data["phone"]
+    if "status" in lead_data:
+        lead.status = lead_data["status"]
+    if "source_intent" in lead_data:
+        lead.source_intent = lead_data["source_intent"]
+    if "extra_data" in lead_data:
+        lead.extra_data = lead_data["extra_data"]
+    
+    db.commit()
+    db.refresh(lead)
+    
+    return {
+        "id": lead.id,
+        "user_id": lead.user_id,
+        "channel": lead.channel,
+        "name": lead.name,
+        "email": lead.email,
+        "phone": lead.phone,
+        "status": lead.status,
+        "source_intent": lead.source_intent,
+        "created_at": lead.created_at.isoformat(),
+        "updated_at": lead.updated_at.isoformat(),
+    }
+
+
+@router.delete("/leads/{lead_id}")
+async def delete_lead(
+    lead_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a lead."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    
+    if business_id is not None:
+        query = query.filter(Lead.business_id == business_id)
+    
+    lead = query.first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    db.delete(lead)
+    db.commit()
+    
+    return {"success": True, "message": "Lead deleted successfully"}
+
+
+@router.get("/leads/stats/dashboard")
+async def get_lead_stats(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get lead statistics for dashboard."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(Lead)
+    
+    if business_id is not None:
+        query = query.filter(Lead.business_id == business_id)
+    
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+    
+    # Total leads
+    total_leads = query.count()
+    
+    # By status
+    status_counts = db.query(
+        Lead.status,
+        func.count(Lead.id)
+    ).filter(
+        Lead.business_id == business_id if business_id else True
+    ).group_by(Lead.status).all()
+    
+    by_status = defaultdict(int)
+    for status_val, count in status_counts:
+        by_status[status_val] = count
+    
+    # By channel
+    channel_counts = db.query(
+        Lead.channel,
+        func.count(Lead.id)
+    ).filter(
+        Lead.business_id == business_id if business_id else True
+    ).group_by(Lead.channel).all()
+    
+    by_channel = defaultdict(int)
+    for channel_val, count in channel_counts:
+        by_channel[channel_val] = count
+    
+    # Recent leads (last 7 days)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    recent_leads = query.filter(Lead.created_at >= seven_days_ago).count()
+    
+    # Conversion rate
+    total_qualified = by_status.get("qualified", 0) + by_status.get("converted", 0)
+    conversion_rate = (total_qualified / total_leads * 100) if total_leads > 0 else 0
+    
+    return {
+        "total_leads": total_leads,
+        "by_status": dict(by_status),
+        "by_channel": dict(by_channel),
+        "recent_leads": recent_leads,
+        "conversion_rate": round(conversion_rate, 2),
+        "new_count": by_status.get("new", 0),
+        "contacted_count": by_status.get("contacted", 0),
+        "qualified_count": by_status.get("qualified", 0),
+        "converted_count": by_status.get("converted", 0),
+    }
+
+
+@router.post("/leads/bulk/update-status")
+async def bulk_update_lead_status(
+    data: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk update lead status."""
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Knowledge base access requires a business account"
+            detail="Lead management requires a business account"
         )
     
-    start_date = datetime.utcnow() - timedelta(days=30)
+    lead_ids = data.get("lead_ids", [])
+    new_status = data.get("status")
     
-    # Get all intents from conversations (filtered by business)
-    conv_intent_filter = and_(
-        Conversation.created_at >= start_date,
-        Conversation.business_id == business_id
+    if not lead_ids or not new_status:
+        raise HTTPException(
+            status_code=400,
+            detail="lead_ids and status are required"
+        )
+    
+    query = db.query(Lead).filter(
+        Lead.id.in_(lead_ids),
+        Lead.business_id == business_id
     )
-    conversation_intents = db.query(Conversation.intent, func.count(Conversation.id).label("count")).filter(
-        conv_intent_filter
-    ).group_by(Conversation.intent).all()
     
-    # Get all knowledge entries (filtered by business)
-    knowledge_entries = db.query(KnowledgeEntry).filter(
-        KnowledgeEntry.business_id == business_id
-    ).all()
+    updated_count = query.update(
+        {"status": new_status, "updated_at": datetime.utcnow()},
+        synchronize_session=False
+    )
     
-    # Build mapping
-    mapping = []
-    for intent, count in conversation_intents:
-        if intent and intent != "unknown":
-            linked_entries = [entry for entry in knowledge_entries if entry.intent == intent]
-            mapping.append({
-                "intent": intent,
-                "conversation_count": count,
-                "knowledge_entries": [
-                    {
-                        "id": entry.id,
-                        "question": entry.question,
-                        "is_active": entry.is_active,
-                    }
-                    for entry in linked_entries
-                ],
-                "has_coverage": len(linked_entries) > 0,
-            })
+    db.commit()
     
     return {
-        "mapping": mapping,
+        "success": True,
+        "message": f"{updated_count} leads updated to {new_status}",
+        "updated_count": updated_count
     }
 
 
-@router.get("/knowledge/{entry_id}")
-async def get_knowledge_entry_detail(
-    entry_id: int,
+@router.post("/leads/bulk/delete")
+async def bulk_delete_leads(
+    data: dict,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get detailed knowledge entry with usage data."""
-    # Get user's business_id (None for admin = can see all)
+    """Bulk delete leads."""
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Knowledge base access requires a business account"
+            detail="Lead management requires a business account"
         )
     
-    from sqlalchemy import or_
-    import json
+    lead_ids = data.get("lead_ids", [])
     
-    entry = db.query(KnowledgeEntry).filter(
-        KnowledgeEntry.id == entry_id,
-        KnowledgeEntry.business_id == business_id
-    ).first()
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="lead_ids is required")
     
-    if not entry:
-        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    query = db.query(Lead).filter(
+        Lead.id.in_(lead_ids),
+        Lead.business_id == business_id
+    )
     
-    start_date = datetime.utcnow() - timedelta(days=30)
-    
-    # Get usage timeline
-    keywords = []
-    if entry.keywords:
-        try:
-            keywords = json.loads(entry.keywords) if isinstance(entry.keywords, str) else entry.keywords
-        except:
-            pass
-    
-    # Get conversations with matching keywords
-    usage_timeline = []
-    if keywords and isinstance(keywords, list):
-        for keyword in keywords[:5]:
-            conversations = db.query(Conversation).filter(
-                Conversation.user_message.ilike(f"%{keyword}%"),
-                Conversation.created_at >= start_date
-            ).order_by(Conversation.created_at.desc()).limit(10).all()
-            
-            for conv in conversations:
-                usage_timeline.append({
-                    "type": "used_in_conversation",
-                    "timestamp": conv.created_at.isoformat(),
-                    "conversation_id": conv.id,
-                    "user_message": conv.user_message[:100],
-                    "matched_keyword": keyword,
-                })
-    
-    # Sort by timestamp
-    usage_timeline.sort(key=lambda x: x["timestamp"], reverse=True)
+    deleted_count = query.delete(synchronize_session=False)
+    db.commit()
     
     return {
-        "entry": {
-            "id": entry.id,
-            "question": entry.question,
-            "answer": entry.answer,
-            "keywords": keywords,
-            "intent": entry.intent,
-            "is_active": entry.is_active,
-            "created_at": entry.created_at.isoformat(),
-            "updated_at": entry.updated_at.isoformat(),
-        },
-        "usage_timeline": usage_timeline[:20],
+        "success": True,
+        "message": f"{deleted_count} leads deleted",
+        "deleted_count": deleted_count
+    }
+
+
+@router.get("/leads/{lead_id}/score")
+async def get_lead_score(
+    lead_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Calculate lead score based on various factors."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    
+    if business_id is not None:
+        query = query.filter(Lead.business_id == business_id)
+    
+    lead = query.first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Simple scoring algorithm
+    score = 0
+    factors = []
+    
+    # Has email (+20 points)
+    if lead.email:
+        score += 20
+        factors.append({"factor": "Has email", "points": 20})
+    
+    # Has phone (+20 points)
+    if lead.phone:
+        score += 20
+        factors.append({"factor": "Has phone", "points": 20})
+    
+    # Has name (+10 points)
+    if lead.name:
+        score += 10
+        factors.append({"factor": "Has name", "points": 10})
+    
+    # Source intent (+15 points)
+    if lead.source_intent:
+        score += 15
+        factors.append({"factor": "Has source intent", "points": 15})
+    
+    # Status progression
+    status_points = {
+        "new": 10,
+        "contacted": 20,
+        "qualified": 35,
+        "converted": 50
+    }
+    status_score = status_points.get(lead.status, 0)
+    score += status_score
+    factors.append({"factor": f"Status: {lead.status}", "points": status_score})
+    
+    # Recency (newer leads get more points)
+    from datetime import datetime, timedelta
+    days_old = (datetime.utcnow() - lead.created_at).days
+    if days_old <= 1:
+        recency_score = 15
+        factors.append({"factor": "Very recent (< 1 day)", "points": 15})
+    elif days_old <= 7:
+        recency_score = 10
+        factors.append({"factor": "Recent (< 7 days)", "points": 10})
+    elif days_old <= 30:
+        recency_score = 5
+        factors.append({"factor": "Recent (< 30 days)", "points": 5})
+    else:
+        recency_score = 0
+    score += recency_score
+    
+    # Determine quality
+    if score >= 80:
+        quality = "hot"
+    elif score >= 60:
+        quality = "warm"
+    elif score >= 40:
+        quality = "cold"
+    else:
+        quality = "ice"
+    
+    return {
+        "lead_id": lead_id,
+        "score": score,
+        "quality": quality,
+        "factors": factors,
+        "max_score": 150,
+        "percentage": round((score / 150) * 100, 2)
     }
 
 
@@ -2213,6 +2690,325 @@ async def test_rule(
         "confidence": "high" if intent_value != "unknown" else "low",
         "rule_matched": intent_value != "unknown",
         "expected_path": "rule_based" if intent_value != "unknown" else "fallback",
+    }
+
+
+# ========== AI RULES CRUD OPERATIONS ==========
+
+@router.get("/ai-rules")
+async def get_ai_rules(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    intent: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all AI rules for the business."""
+    from app.models import AIRule
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI rules access requires a business account"
+        )
+    
+    query = db.query(AIRule).filter(AIRule.business_id == business_id)
+    
+    # Apply filters
+    if intent:
+        query = query.filter(AIRule.intent == intent)
+    if is_active is not None:
+        query = query.filter(AIRule.is_active == is_active)
+    
+    # Get total count
+    total = query.count()
+    
+    # Apply pagination and ordering (priority first, then created_at)
+    offset = (page - 1) * limit
+    rules = query.order_by(AIRule.priority.asc(), AIRule.created_at.desc()).offset(offset).limit(limit).all()
+    
+    # Build response
+    result_rules = []
+    for rule in rules:
+        keywords = []
+        if rule.keywords:
+            try:
+                keywords = json.loads(rule.keywords) if isinstance(rule.keywords, str) else rule.keywords
+            except:
+                keywords = []
+        
+        result_rules.append({
+            "id": rule.id,
+            "intent": rule.intent,
+            "name": rule.name,
+            "description": rule.description,
+            "keywords": keywords,
+            "response": rule.response,
+            "priority": rule.priority,
+            "is_active": rule.is_active,
+            "trigger_count": rule.trigger_count,
+            "last_triggered_at": rule.last_triggered_at.isoformat() if rule.last_triggered_at else None,
+            "created_at": rule.created_at.isoformat(),
+            "updated_at": rule.updated_at.isoformat(),
+        })
+    
+    return {
+        "rules": result_rules,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit,
+    }
+
+
+@router.post("/ai-rules")
+async def create_ai_rule(
+    intent: str,
+    keywords: List[str],
+    response: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    priority: int = 100,
+    is_active: bool = True,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new AI rule."""
+    from app.models import AIRule
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="AI rules access requires a business account"
+        )
+    
+    # Validate required fields
+    if not intent or not keywords or not response:
+        raise HTTPException(status_code=400, detail="Intent, keywords, and response are required")
+    
+    # Create rule
+    rule = AIRule(
+        business_id=business_id,
+        intent=intent.strip().lower(),
+        name=name.strip() if name else None,
+        description=description.strip() if description else None,
+        keywords=json.dumps(keywords),
+        response=response.strip(),
+        priority=priority,
+        is_active=is_active,
+        created_by_user_id=current_user.id,
+    )
+    
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    
+    return {
+        "id": rule.id,
+        "intent": rule.intent,
+        "name": rule.name,
+        "description": rule.description,
+        "keywords": json.loads(rule.keywords),
+        "response": rule.response,
+        "priority": rule.priority,
+        "is_active": rule.is_active,
+        "created_at": rule.created_at.isoformat(),
+    }
+
+
+@router.get("/ai-rules/{rule_id}")
+async def get_ai_rule(
+    rule_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a specific AI rule."""
+    from app.models import AIRule
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="AI rules access requires a business account"
+        )
+    
+    rule = db.query(AIRule).filter(
+        AIRule.id == rule_id,
+        AIRule.business_id == business_id
+    ).first()
+    
+    if not rule:
+        raise HTTPException(status_code=404, detail="AI rule not found")
+    
+    keywords = []
+    if rule.keywords:
+        try:
+            keywords = json.loads(rule.keywords)
+        except:
+            keywords = []
+    
+    return {
+        "id": rule.id,
+        "intent": rule.intent,
+        "name": rule.name,
+        "description": rule.description,
+        "keywords": keywords,
+        "response": rule.response,
+        "priority": rule.priority,
+        "is_active": rule.is_active,
+        "trigger_count": rule.trigger_count,
+        "last_triggered_at": rule.last_triggered_at.isoformat() if rule.last_triggered_at else None,
+        "created_at": rule.created_at.isoformat(),
+        "updated_at": rule.updated_at.isoformat(),
+    }
+
+
+@router.put("/ai-rules/{rule_id}")
+async def update_ai_rule(
+    rule_id: int,
+    intent: Optional[str] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    keywords: Optional[List[str]] = None,
+    response: Optional[str] = None,
+    priority: Optional[int] = None,
+    is_active: Optional[bool] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update an AI rule."""
+    from app.models import AIRule
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="AI rules access requires a business account"
+        )
+    
+    # Get rule
+    rule = db.query(AIRule).filter(
+        AIRule.id == rule_id,
+        AIRule.business_id == business_id
+    ).first()
+    
+    if not rule:
+        raise HTTPException(status_code=404, detail="AI rule not found")
+    
+    # Update fields
+    if intent is not None:
+        rule.intent = intent.strip().lower()
+    if name is not None:
+        rule.name = name.strip() if name else None
+    if description is not None:
+        rule.description = description.strip() if description else None
+    if keywords is not None:
+        rule.keywords = json.dumps(keywords)
+    if response is not None:
+        rule.response = response.strip()
+    if priority is not None:
+        rule.priority = priority
+    if is_active is not None:
+        rule.is_active = is_active
+    
+    rule.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(rule)
+    
+    return {
+        "id": rule.id,
+        "intent": rule.intent,
+        "name": rule.name,
+        "description": rule.description,
+        "keywords": json.loads(rule.keywords),
+        "response": rule.response,
+        "priority": rule.priority,
+        "is_active": rule.is_active,
+        "updated_at": rule.updated_at.isoformat(),
+    }
+
+
+@router.delete("/ai-rules/{rule_id}")
+async def delete_ai_rule(
+    rule_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an AI rule."""
+    from app.models import AIRule
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="AI rules access requires a business account"
+        )
+    
+    # Get rule
+    rule = db.query(AIRule).filter(
+        AIRule.id == rule_id,
+        AIRule.business_id == business_id
+    ).first()
+    
+    if not rule:
+        raise HTTPException(status_code=404, detail="AI rule not found")
+    
+    db.delete(rule)
+    db.commit()
+    
+    return {"success": True, "message": "AI rule deleted successfully"}
+
+
+@router.post("/ai-rules/bulk/delete")
+async def bulk_delete_ai_rules(
+    rule_ids: List[int],
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete AI rules."""
+    from app.models import AIRule
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="AI rules access requires a business account"
+        )
+    
+    if not rule_ids or not isinstance(rule_ids, list):
+        raise HTTPException(status_code=400, detail="Invalid rule_ids format")
+    
+    # Get all rules that belong to this business
+    rules = db.query(AIRule).filter(
+        AIRule.id.in_(rule_ids),
+        AIRule.business_id == business_id
+    ).all()
+    
+    deleted_count = len(rules)
+    
+    for rule in rules:
+        db.delete(rule)
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "requested_count": len(rule_ids),
     }
 
 
@@ -2633,4 +3429,738 @@ async def create_ad_asset(
         "platform": asset.platform,
         "status": asset.status,
         "created_at": asset.created_at.isoformat(),
+    }
+
+
+@router.get("/ads/assets/{asset_id}")
+async def get_ad_asset(
+    asset_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a specific ad asset."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Ad assets require a business account"
+        )
+    
+    asset = db.query(AdAsset).filter(
+        AdAsset.id == asset_id,
+        AdAsset.business_id == business_id
+    ).first()
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    import json
+    extra_data = {}
+    if asset.extra_data:
+        try:
+            extra_data = json.loads(asset.extra_data)
+        except:
+            pass
+    
+    return {
+        "id": asset.id,
+        "title": asset.title,
+        "asset_type": asset.asset_type,
+        "content": asset.content,
+        "platform": asset.platform,
+        "status": asset.status,
+        "extra_data": extra_data,
+        "created_at": asset.created_at.isoformat(),
+        "updated_at": asset.updated_at.isoformat(),
+    }
+
+
+@router.put("/ads/assets/{asset_id}")
+async def update_ad_asset(
+    asset_id: int,
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update an ad asset."""
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Ad assets require a business account"
+        )
+    
+    asset = db.query(AdAsset).filter(
+        AdAsset.id == asset_id,
+        AdAsset.business_id == business_id
+    ).first()
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    # Update fields
+    if "title" in request:
+        asset.title = request["title"]
+    if "content" in request:
+        asset.content = request["content"]
+    if "platform" in request:
+        asset.platform = request["platform"]
+    if "status" in request:
+        asset.status = request["status"]
+    if "extra_data" in request:
+        if isinstance(request["extra_data"], dict):
+            asset.extra_data = json.dumps(request["extra_data"])
+        else:
+            asset.extra_data = request["extra_data"]
+    
+    asset.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(asset)
+    
+    return {
+        "id": asset.id,
+        "title": asset.title,
+        "asset_type": asset.asset_type,
+        "status": asset.status,
+        "updated_at": asset.updated_at.isoformat(),
+    }
+
+
+@router.delete("/ads/assets/{asset_id}")
+async def delete_ad_asset(
+    asset_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an ad asset."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Ad assets require a business account"
+        )
+    
+    asset = db.query(AdAsset).filter(
+        AdAsset.id == asset_id,
+        AdAsset.business_id == business_id
+    ).first()
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    db.delete(asset)
+    db.commit()
+    
+    return {"success": True, "message": "Asset deleted successfully"}
+
+
+@router.get("/ads/assets")
+async def list_ad_assets(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    asset_type: Optional[str] = None,
+    platform: Optional[str] = None,
+    status: Optional[str] = None,
+    campaign_name: Optional[str] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all ad assets with filtering."""
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Ad assets require a business account"
+        )
+    
+    query = db.query(AdAsset).filter(AdAsset.business_id == business_id)
+    
+    # Apply filters
+    if asset_type:
+        query = query.filter(AdAsset.asset_type == asset_type)
+    if platform:
+        query = query.filter(AdAsset.platform == platform)
+    if status:
+        query = query.filter(AdAsset.status == status)
+    
+    # Get total count
+    total = query.count()
+    
+    # Apply pagination
+    offset = (page - 1) * limit
+    assets = query.order_by(AdAsset.created_at.desc()).offset(offset).limit(limit).all()
+    
+    # Build response
+    result_assets = []
+    for asset in assets:
+        extra_data = {}
+        if asset.extra_data:
+            try:
+                extra_data = json.loads(asset.extra_data)
+            except:
+                pass
+        
+        # Filter by campaign if specified
+        if campaign_name and extra_data.get("campaign_name") != campaign_name:
+            continue
+        
+        result_assets.append({
+            "id": asset.id,
+            "title": asset.title,
+            "asset_type": asset.asset_type,
+            "platform": asset.platform,
+            "status": asset.status,
+            "campaign_name": extra_data.get("campaign_name", "Uncategorized"),
+            "created_at": asset.created_at.isoformat(),
+            "updated_at": asset.updated_at.isoformat(),
+        })
+    
+    return {
+        "assets": result_assets,
+        "total": len(result_assets),
+        "page": page,
+        "limit": limit,
+        "total_pages": (len(result_assets) + limit - 1) // limit,
+    }
+
+
+# ========== CONVERSATION TAGS & BULK ACTIONS ==========
+
+@router.get("/conversations/tags")
+async def get_conversation_tags(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all conversation tags for the current business."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(ConversationTag)
+    if business_id is not None:
+        query = query.filter(ConversationTag.business_id == business_id)
+    
+    tags = query.order_by(ConversationTag.name).all()
+    
+    return {
+        "tags": [
+            {
+                "id": tag.id,
+                "name": tag.name,
+                "color": tag.color,
+                "description": tag.description,
+                "created_at": tag.created_at.isoformat(),
+            }
+            for tag in tags
+        ]
+    }
+
+
+@router.post("/conversations/tags")
+async def create_conversation_tag(
+    name: str,
+    color: Optional[str] = None,
+    description: Optional[str] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new conversation tag."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(status_code=403, detail="Tags require a business account")
+    
+    # Check if tag name already exists for this business
+    existing_tag = db.query(ConversationTag).filter(
+        ConversationTag.business_id == business_id,
+        ConversationTag.name == name
+    ).first()
+    
+    if existing_tag:
+        raise HTTPException(status_code=400, detail="Tag with this name already exists")
+    
+    tag = ConversationTag(
+        business_id=business_id,
+        name=name,
+        color=color,
+        description=description,
+        created_by_user_id=current_user.id,
+    )
+    
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    
+    return {
+        "id": tag.id,
+        "name": tag.name,
+        "color": tag.color,
+        "description": tag.description,
+        "created_at": tag.created_at.isoformat(),
+    }
+
+
+@router.put("/conversations/tags/{tag_id}")
+async def update_conversation_tag(
+    tag_id: int,
+    name: Optional[str] = None,
+    color: Optional[str] = None,
+    description: Optional[str] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a conversation tag."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(ConversationTag).filter(ConversationTag.id == tag_id)
+    if business_id is not None:
+        query = query.filter(ConversationTag.business_id == business_id)
+    
+    tag = query.first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    
+    if name:
+        tag.name = name
+    if color:
+        tag.color = color
+    if description is not None:
+        tag.description = description
+    
+    db.commit()
+    db.refresh(tag)
+    
+    return {
+        "id": tag.id,
+        "name": tag.name,
+        "color": tag.color,
+        "description": tag.description,
+    }
+
+
+@router.delete("/conversations/tags/{tag_id}")
+async def delete_conversation_tag(
+    tag_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a conversation tag."""
+    business_id = get_user_business_id(current_user, db)
+    
+    query = db.query(ConversationTag).filter(ConversationTag.id == tag_id)
+    if business_id is not None:
+        query = query.filter(ConversationTag.business_id == business_id)
+    
+    tag = query.first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    
+    # Delete all tag relations first
+    db.query(ConversationTagRelation).filter(
+        ConversationTagRelation.tag_id == tag_id
+    ).delete()
+    
+    db.delete(tag)
+    db.commit()
+    
+    return {"success": True}
+
+
+@router.post("/conversations/{conversation_id}/tags")
+async def add_tag_to_conversation(
+    conversation_id: int,
+    tag_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a tag to a conversation."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Verify conversation exists and belongs to business
+    conv_query = db.query(Conversation).filter(Conversation.id == conversation_id)
+    if business_id is not None:
+        conv_query = conv_query.filter(Conversation.business_id == business_id)
+    
+    conversation = conv_query.first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Verify tag exists and belongs to business
+    tag_query = db.query(ConversationTag).filter(ConversationTag.id == tag_id)
+    if business_id is not None:
+        tag_query = tag_query.filter(ConversationTag.business_id == business_id)
+    
+    tag = tag_query.first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    
+    # Check if already tagged
+    existing = db.query(ConversationTagRelation).filter(
+        ConversationTagRelation.conversation_id == conversation_id,
+        ConversationTagRelation.tag_id == tag_id
+    ).first()
+    
+    if existing:
+        return {"success": True, "message": "Already tagged"}
+    
+    relation = ConversationTagRelation(
+        conversation_id=conversation_id,
+        tag_id=tag_id,
+        tagged_by_user_id=current_user.id,
+    )
+    
+    db.add(relation)
+    db.commit()
+    
+    return {"success": True}
+
+
+@router.delete("/conversations/{conversation_id}/tags/{tag_id}")
+async def remove_tag_from_conversation(
+    conversation_id: int,
+    tag_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove a tag from a conversation."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Verify conversation belongs to business
+    conv_query = db.query(Conversation).filter(Conversation.id == conversation_id)
+    if business_id is not None:
+        conv_query = conv_query.filter(Conversation.business_id == business_id)
+    
+    conversation = conv_query.first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Delete tag relation
+    relation = db.query(ConversationTagRelation).filter(
+        ConversationTagRelation.conversation_id == conversation_id,
+        ConversationTagRelation.tag_id == tag_id
+    ).first()
+    
+    if relation:
+        db.delete(relation)
+        db.commit()
+    
+    return {"success": True}
+
+
+@router.post("/conversations/bulk/tag")
+async def bulk_tag_conversations(
+    conversation_ids: List[int],
+    tag_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a tag to multiple conversations at once."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Verify tag exists
+    tag_query = db.query(ConversationTag).filter(ConversationTag.id == tag_id)
+    if business_id is not None:
+        tag_query = tag_query.filter(ConversationTag.business_id == business_id)
+    
+    tag = tag_query.first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    
+    # Verify all conversations belong to business
+    conv_query = db.query(Conversation).filter(Conversation.id.in_(conversation_ids))
+    if business_id is not None:
+        conv_query = conv_query.filter(Conversation.business_id == business_id)
+    
+    conversations = conv_query.all()
+    found_ids = [c.id for c in conversations]
+    
+    # Add tags (skip if already exists)
+    added_count = 0
+    for conv_id in found_ids:
+        existing = db.query(ConversationTagRelation).filter(
+            ConversationTagRelation.conversation_id == conv_id,
+            ConversationTagRelation.tag_id == tag_id
+        ).first()
+        
+        if not existing:
+            relation = ConversationTagRelation(
+                conversation_id=conv_id,
+                tag_id=tag_id,
+                tagged_by_user_id=current_user.id,
+            )
+            db.add(relation)
+            added_count += 1
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "tagged_count": added_count,
+        "total_requested": len(conversation_ids),
+        "found_count": len(found_ids),
+    }
+
+
+@router.post("/conversations/bulk/export")
+async def bulk_export_conversations(
+    conversation_ids: List[int],
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export multiple conversations to JSON."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Verify all conversations belong to business
+    conv_query = db.query(Conversation).filter(Conversation.id.in_(conversation_ids))
+    if business_id is not None:
+        conv_query = conv_query.filter(Conversation.business_id == business_id)
+    
+    conversations = conv_query.all()
+    
+    export_data = []
+    for conv in conversations:
+        # Get messages
+        message_filter = and_(
+            Message.user_id == conv.user_id,
+            Message.channel == conv.channel
+        )
+        if business_id is not None:
+            message_filter = and_(message_filter, Message.business_id == business_id)
+        
+        messages = db.query(Message).filter(message_filter).order_by(Message.created_at).all()
+        
+        # Get tags
+        tag_relations = db.query(ConversationTagRelation).filter(
+            ConversationTagRelation.conversation_id == conv.id
+        ).all()
+        tag_ids = [rel.tag_id for rel in tag_relations]
+        tags = db.query(ConversationTag).filter(ConversationTag.id.in_(tag_ids)).all() if tag_ids else []
+        
+        # Get assignment
+        assignment = db.query(ConversationAssignment).filter(
+            ConversationAssignment.conversation_id == conv.id
+        ).first()
+        
+        export_data.append({
+            "id": conv.id,
+            "user_id": conv.user_id,
+            "channel": conv.channel,
+            "user_message": conv.user_message,
+            "bot_reply": conv.bot_reply,
+            "intent": conv.intent,
+            "created_at": conv.created_at.isoformat(),
+            "messages": [
+                {
+                    "text": msg.message_text,
+                    "is_from_user": msg.is_from_user,
+                    "intent": msg.intent,
+                    "timestamp": msg.created_at.isoformat(),
+                }
+                for msg in messages
+            ],
+            "tags": [{"id": tag.id, "name": tag.name, "color": tag.color} for tag in tags],
+            "assignment": {
+                "assigned_to_user_id": assignment.assigned_to_user_id,
+                "notes": assignment.notes,
+                "assigned_at": assignment.created_at.isoformat(),
+            } if assignment else None,
+        })
+    
+    return {
+        "conversations": export_data,
+        "total": len(export_data),
+        "exported_at": datetime.utcnow().isoformat(),
+    }
+
+
+# ========== CONVERSATION ASSIGNMENTS ==========
+
+@router.post("/conversations/{conversation_id}/assign")
+async def assign_conversation(
+    conversation_id: int,
+    assigned_to_user_id: int,
+    notes: Optional[str] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Assign a conversation to a team member."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Verify conversation exists and belongs to business
+    conv_query = db.query(Conversation).filter(Conversation.id == conversation_id)
+    if business_id is not None:
+        conv_query = conv_query.filter(Conversation.business_id == business_id)
+    
+    conversation = conv_query.first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Verify assignee exists and belongs to same business
+    assignee_query = db.query(UserModel).filter(UserModel.id == assigned_to_user_id)
+    if business_id is not None:
+        assignee_query = assignee_query.filter(UserModel.business_id == business_id)
+    
+    assignee = assignee_query.first()
+    if not assignee:
+        raise HTTPException(status_code=404, detail="User not found or not in same business")
+    
+    # Check if already assigned
+    existing_assignment = db.query(ConversationAssignment).filter(
+        ConversationAssignment.conversation_id == conversation_id
+    ).first()
+    
+    if existing_assignment:
+        # Update existing assignment
+        existing_assignment.assigned_to_user_id = assigned_to_user_id
+        existing_assignment.assigned_by_user_id = current_user.id
+        existing_assignment.notes = notes
+        existing_assignment.updated_at = datetime.utcnow()
+    else:
+        # Create new assignment
+        assignment = ConversationAssignment(
+            conversation_id=conversation_id,
+            assigned_to_user_id=assigned_to_user_id,
+            assigned_by_user_id=current_user.id,
+            notes=notes,
+        )
+        db.add(assignment)
+    
+    db.commit()
+    
+    return {"success": True}
+
+
+@router.delete("/conversations/{conversation_id}/assign")
+async def unassign_conversation(
+    conversation_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Unassign a conversation from a team member."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Verify conversation belongs to business
+    conv_query = db.query(Conversation).filter(Conversation.id == conversation_id)
+    if business_id is not None:
+        conv_query = conv_query.filter(Conversation.business_id == business_id)
+    
+    conversation = conv_query.first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Delete assignment
+    assignment = db.query(ConversationAssignment).filter(
+        ConversationAssignment.conversation_id == conversation_id
+    ).first()
+    
+    if assignment:
+        db.delete(assignment)
+        db.commit()
+    
+    return {"success": True}
+
+
+# ========== CONVERSATION ANALYTICS ==========
+
+@router.get("/conversations/analytics")
+async def get_conversation_analytics(
+    days: int = Query(7, ge=1, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get conversation analytics including response times and engagement metrics."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Date range
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=days)
+    
+    # Base filters
+    conv_filter = Conversation.created_at >= start_date
+    if business_id is not None:
+        conv_filter = and_(conv_filter, Conversation.business_id == business_id)
+    
+    # Total conversations
+    total_conversations = db.query(func.count(Conversation.id)).filter(conv_filter).scalar() or 0
+    
+    # Unique users
+    unique_users = db.query(func.count(func.distinct(Conversation.user_id))).filter(conv_filter).scalar() or 0
+    
+    # Average messages per conversation
+    message_filter = Message.created_at >= start_date
+    if business_id is not None:
+        message_filter = and_(message_filter, Message.business_id == business_id)
+    
+    total_messages = db.query(func.count(Message.id)).filter(message_filter).scalar() or 0
+    avg_messages_per_conv = round(total_messages / max(total_conversations, 1), 2)
+    
+    # Conversations by channel
+    channel_stats = db.query(
+        Conversation.channel,
+        func.count(Conversation.id).label("count")
+    ).filter(conv_filter).group_by(Conversation.channel).all()
+    
+    # Conversations by intent
+    intent_stats = db.query(
+        Conversation.intent,
+        func.count(Conversation.id).label("count")
+    ).filter(conv_filter).group_by(Conversation.intent).all()
+    
+    # Tagged conversations count
+    tagged_count = db.query(func.count(func.distinct(ConversationTagRelation.conversation_id))).join(
+        Conversation, Conversation.id == ConversationTagRelation.conversation_id
+    ).filter(conv_filter).scalar() or 0
+    
+    # Assigned conversations count
+    assigned_count = db.query(func.count(func.distinct(ConversationAssignment.conversation_id))).join(
+        Conversation, Conversation.id == ConversationAssignment.conversation_id
+    ).filter(conv_filter).scalar() or 0
+    
+    # Most active tags
+    tag_stats = db.query(
+        ConversationTag.id,
+        ConversationTag.name,
+        ConversationTag.color,
+        func.count(ConversationTagRelation.conversation_id).label("usage_count")
+    ).join(ConversationTagRelation).join(Conversation).filter(conv_filter).group_by(
+        ConversationTag.id, ConversationTag.name, ConversationTag.color
+    ).order_by(func.count(ConversationTagRelation.conversation_id).desc()).limit(10).all()
+    
+    return {
+        "summary": {
+            "total_conversations": total_conversations,
+            "unique_users": unique_users,
+            "avg_messages_per_conversation": avg_messages_per_conv,
+            "tagged_conversations": tagged_count,
+            "assigned_conversations": assigned_count,
+        },
+        "channels": [
+            {"channel": channel, "count": count}
+            for channel, count in channel_stats
+        ],
+        "intents": [
+            {"intent": intent, "count": count}
+            for intent, count in intent_stats
+        ],
+        "popular_tags": [
+            {
+                "id": tag_id,
+                "name": name,
+                "color": color,
+                "usage_count": usage_count,
+            }
+            for tag_id, name, color, usage_count in tag_stats
+        ],
+        "date_range": {
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "days": days,
+        },
     }

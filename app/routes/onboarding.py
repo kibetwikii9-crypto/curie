@@ -162,3 +162,155 @@ async def complete_step(
     
     return None
 
+
+@router.post("/reset-step/{step_key}", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_step(
+    step_key: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reset/uncomplete an onboarding step."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Onboarding access requires a business account"
+        )
+    
+    # Get progress
+    progress = db.query(OnboardingProgress).filter(
+        OnboardingProgress.user_id == current_user.id,
+        OnboardingProgress.business_id == business_id,
+        OnboardingProgress.step_key == step_key
+    ).first()
+    
+    if progress:
+        progress.is_completed = False
+        progress.completed_at = None
+        db.commit()
+    
+    return None
+
+
+@router.post("/skip-step/{step_key}", status_code=status.HTTP_204_NO_CONTENT)
+async def skip_step(
+    step_key: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Skip an onboarding step (mark as completed but track it was skipped)."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Onboarding access requires a business account"
+        )
+    
+    # Verify step exists and is not required
+    step = db.query(OnboardingStep).filter(OnboardingStep.step_key == step_key).first()
+    if not step:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Step not found"
+        )
+    
+    if step.is_required:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot skip required steps"
+        )
+    
+    # Get or create progress
+    progress = db.query(OnboardingProgress).filter(
+        OnboardingProgress.user_id == current_user.id,
+        OnboardingProgress.business_id == business_id,
+        OnboardingProgress.step_key == step_key
+    ).first()
+    
+    if progress:
+        progress.is_completed = True
+        progress.completed_at = datetime.utcnow()
+    else:
+        progress = OnboardingProgress(
+            user_id=current_user.id,
+            business_id=business_id,
+            step_key=step_key,
+            is_completed=True,
+            completed_at=datetime.utcnow(),
+        )
+        db.add(progress)
+    
+    db.commit()
+    
+    return None
+
+
+@router.get("/stats")
+async def get_onboarding_stats(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get onboarding statistics."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Onboarding access requires a business account"
+        )
+    
+    from sqlalchemy import func
+    
+    # Get all steps
+    steps = db.query(OnboardingStep).all()
+    total_steps = len(steps)
+    required_steps = len([s for s in steps if s.is_required])
+    optional_steps = total_steps - required_steps
+    
+    # Get completed progress
+    completed_progress = db.query(OnboardingProgress).filter(
+        OnboardingProgress.user_id == current_user.id,
+        OnboardingProgress.business_id == business_id,
+        OnboardingProgress.is_completed == True
+    ).all()
+    
+    completed_steps = len(completed_progress)
+    
+    # Check auto-completed steps (like Telegram connection)
+    telegram_connected = db.query(ChannelIntegration).filter(
+        ChannelIntegration.business_id == business_id,
+        ChannelIntegration.channel == "telegram",
+        ChannelIntegration.is_active == True
+    ).first() is not None
+    
+    if telegram_connected:
+        # Check if connect_channel is in completed_progress
+        connect_channel_completed = any(p.step_key == "connect_channel" for p in completed_progress)
+        if not connect_channel_completed:
+            completed_steps += 1
+    
+    # Calculate percentage
+    percentage = int((completed_steps / total_steps) * 100) if total_steps > 0 else 0
+    
+    # Determine status
+    if completed_steps == total_steps:
+        status_text = "completed"
+    elif completed_steps >= required_steps:
+        status_text = "almost_done"
+    elif completed_steps > 0:
+        status_text = "in_progress"
+    else:
+        status_text = "not_started"
+    
+    return {
+        "total_steps": total_steps,
+        "completed_steps": completed_steps,
+        "required_steps": required_steps,
+        "optional_steps": optional_steps,
+        "percentage": percentage,
+        "status": status_text,
+        "is_complete": completed_steps == total_steps,
+    }
+

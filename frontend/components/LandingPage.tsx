@@ -9,10 +9,11 @@ import AuthModal from './AuthModal';
 import dynamic from 'next/dynamic';
 
 // Dynamically import 3D background for better performance
-const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
-  ssr: false,
-  loading: () => null,
-});
+// Disabled for local dev (works on Render)
+// const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
+//   ssr: false,
+//   loading: () => null,
+// });
 
 export default function LandingPage() {
   const router = useRouter();
@@ -52,10 +53,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
-      {/* 3D Animated Background - ALWAYS SHOW FOR TESTING */}
-      <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
+      {/* 3D Animated Background - Disabled for local dev (works on Render) */}
+      {/* <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
         <AnimatedBackground3D />
-      </Suspense>
+      </Suspense> */}
 
       {/* Navigation */}
       <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6">

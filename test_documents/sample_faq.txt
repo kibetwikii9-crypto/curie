@@ -1,0 +1,64 @@
+Company FAQ - Customer Support
+
+Business Hours
+Our customer support team is available Monday through Friday from 9:00 AM to 6:00 PM EST. We are closed on weekends and major holidays. For urgent matters outside business hours, you can email support@company.com and we will respond within 24 hours.
+
+Pricing Information
+We offer three pricing tiers to suit different business needs:
+- Basic Plan: $25 per month - Includes up to 1,000 conversations and basic features
+- Professional Plan: $49 per month - Includes up to 5,000 conversations, advanced analytics, and priority support
+- Enterprise Plan: $99 per month - Unlimited conversations, custom integrations, dedicated account manager, and 24/7 support
+
+All plans include a 14-day free trial with no credit card required.
+
+Refund Policy
+We offer a 30-day money-back guarantee on all paid plans. If you're not satisfied with our service, simply contact us within 30 days of your purchase for a full refund, no questions asked.
+
+Getting Started
+To get started with our platform:
+1. Sign up for a free account at our website
+2. Connect your messaging channels (WhatsApp, Telegram, etc.)
+3. Upload your knowledge base or FAQs
+4. Customize your AI assistant's behavior with custom rules
+5. Start chatting with customers!
+
+The entire setup process takes about 15-20 minutes.
+
+Technical Support
+If you encounter any technical issues:
+- Check our Help Center at help.company.com
+- Email our support team at support@company.com
+- For enterprise customers, call our dedicated hotline at 1-800-SUPPORT
+- Join our community forum for peer-to-peer help
+
+Our average response time is under 2 hours during business hours.
+
+Data Security
+We take data security very seriously:
+- All data is encrypted in transit and at rest using AES-256 encryption
+- We are GDPR and CCPA compliant
+- Regular security audits are performed quarterly
+- We never share your data with third parties
+- Two-factor authentication is available for all accounts
+- Automatic backups are performed daily
+
+Payment Methods
+We accept the following payment methods:
+- All major credit cards (Visa, Mastercard, American Express, Discover)
+- PayPal
+- Bank transfers for enterprise plans
+- Cryptocurrency (Bitcoin, Ethereum) for annual plans
+
+All transactions are processed securely through our payment partners.
+
+Cancellation
+You can cancel your subscription at any time with no cancellation fees. Simply go to your account settings and click "Cancel Subscription". You will continue to have access to your account until the end of your current billing period.
+
+Custom Integrations
+For enterprise customers, we offer custom integrations with:
+- CRM systems (Salesforce, HubSpot, Pipedrive)
+- E-commerce platforms (Shopify, WooCommerce, Magento)
+- Help desk software (Zendesk, Freshdesk, Intercom)
+- Custom APIs and webhooks
+
+Contact our sales team to discuss your integration needs.

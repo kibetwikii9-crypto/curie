@@ -9,7 +9,7 @@ All models are designed for Supabase PostgreSQL.
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Float, Index
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -607,4 +607,170 @@ class OnboardingProgress(Base):
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# ========== CONVERSATION TAGS & ASSIGNMENTS ==========
+
+class ConversationTag(Base):
+    """
+    Conversation tag model for categorizing conversations.
+    """
+    __tablename__ = "conversation_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    name = Column(String, nullable=False, index=True)
+    color = Column(String, nullable=True)  # Hex color code for UI
+    description = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ConversationTagRelation(Base):
+    """
+    Many-to-many relationship between conversations and tags.
+    """
+    __tablename__ = "conversation_tag_relations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    tag_id = Column(Integer, ForeignKey("conversation_tags.id"), nullable=False, index=True)
+    tagged_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ConversationAssignment(Base):
+    """
+    Conversation assignment model for assigning conversations to team members.
+    """
+    __tablename__ = "conversation_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# ========== AI RULES & AUTOMATION ==========
+
+class AIRule(Base):
+    """
+    AI Rule model for intent detection and automated responses.
+    
+    Stores rule configurations for:
+    - Intent detection (greeting, pricing, help, etc.)
+    - Keyword matching
+    - Automated response templates
+    - Priority/ordering
+    - Active/inactive status
+    """
+    __tablename__ = "ai_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    
+    # Rule identification
+    intent = Column(String, nullable=False, index=True)  # greeting, pricing, help, human, etc.
+    name = Column(String, nullable=True)  # Optional friendly name
+    description = Column(Text, nullable=True)  # Optional description
+    
+    # Matching configuration
+    keywords = Column(Text, nullable=False)  # JSON array of keywords
+    
+    # Response configuration
+    response = Column(Text, nullable=False)  # Response template
+    
+    # Rule behavior
+    priority = Column(Integer, default=100, nullable=False)  # Lower = higher priority
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Metadata
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Statistics (optional)
+    trigger_count = Column(Integer, default=0, nullable=False)  # How many times triggered
+    last_triggered_at = Column(DateTime, nullable=True)  # Last time triggered
+
+
+# ========== PERFORMANCE INDEXES ==========
+# Composite indexes for frequently queried column combinations
+# These dramatically improve query performance for dashboard and filtering
+
+# Conversations - composite indexes for common query patterns
+Index('idx_conversations_business_created', Conversation.business_id, Conversation.created_at)
+Index('idx_conversations_business_intent', Conversation.business_id, Conversation.intent)
+Index('idx_conversations_business_channel', Conversation.business_id, Conversation.channel)
+Index('idx_conversations_user_channel', Conversation.user_id, Conversation.channel)
+
+# Messages - composite indexes
+Index('idx_messages_business_created', Message.business_id, Message.created_at)
+Index('idx_messages_conversation_created', Message.conversation_id, Message.created_at)
+Index('idx_messages_user_channel', Message.user_id, Message.channel)
+
+# Leads - composite indexes for filtering and reporting
+Index('idx_leads_business_status', Lead.business_id, Lead.status)
+Index('idx_leads_business_created', Lead.business_id, Lead.created_at)
+Index('idx_leads_status_created', Lead.status, Lead.created_at)
+
+# Knowledge entries - for RAG queries
+Index('idx_knowledge_business_active', KnowledgeEntry.business_id, KnowledgeEntry.is_active)
+Index('idx_knowledge_business_intent', KnowledgeEntry.business_id, KnowledgeEntry.intent)
+
+# Conversation memory - for AI context retrieval
+Index('idx_memory_user_channel', ConversationMemory.user_id, ConversationMemory.channel)
+Index('idx_memory_business_updated', ConversationMemory.business_id, ConversationMemory.updated_at)
+
+# Analytics events - for dashboard aggregations
+Index('idx_analytics_business_type_created', AnalyticsEvent.business_id, AnalyticsEvent.event_type, AnalyticsEvent.created_at)
+Index('idx_analytics_channel_created', AnalyticsEvent.channel, AnalyticsEvent.created_at)
+
+# Handoffs - for queue management
+Index('idx_handoffs_business_status', Handoff.business_id, Handoff.status)
+Index('idx_handoffs_business_priority', Handoff.business_id, Handoff.priority)
+Index('idx_handoffs_assigned_status', Handoff.assigned_to_user_id, Handoff.status)
+
+# Notifications - for user inbox
+Index('idx_notifications_user_isread', Notification.user_id, Notification.is_read)
+Index('idx_notifications_user_created', Notification.user_id, Notification.created_at)
+
+# Orders - for sales reporting
+Index('idx_orders_business_status', Order.business_id, Order.status)
+Index('idx_orders_business_created', Order.business_id, Order.created_at)
+Index('idx_orders_business_payment', Order.business_id, Order.payment_status)
+
+# Products - for catalog queries
+Index('idx_products_business_active', Product.business_id, Product.is_active)
+Index('idx_products_business_category', Product.business_id, Product.category)
+
+# Services - for service catalog
+Index('idx_services_business_active', Service.business_id, Service.is_active)
+
+# AI Rules - for intent matching
+Index('idx_airules_business_active', AIRule.business_id, AIRule.is_active)
+Index('idx_airules_business_intent', AIRule.business_id, AIRule.intent)
+Index('idx_airules_business_priority', AIRule.business_id, AIRule.priority)
+
+# Channel Integrations - for webhook routing
+Index('idx_integrations_channel_active', ChannelIntegration.channel, ChannelIntegration.is_active)
+Index('idx_integrations_business_channel', ChannelIntegration.business_id, ChannelIntegration.channel)
+
+# Ad Assets - for ad studio
+Index('idx_adassets_business_status', AdAsset.business_id, AdAsset.status)
+
+# Audit logs - for security reviews
+Index('idx_audit_business_action', AuditLog.business_id, AuditLog.action)
+Index('idx_audit_user_created', AuditLog.user_id, AuditLog.created_at)
+
+# API Keys - for auth
+Index('idx_apikeys_business_active', APIKey.business_id, APIKey.is_active)
+
+# Sessions - for active session lookup
+Index('idx_sessions_user_active', Session.user_id, Session.is_active)
+Index('idx_sessions_expires_active', Session.expires_at, Session.is_active)
 
