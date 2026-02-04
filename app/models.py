@@ -848,7 +848,7 @@ class Invoice(Base):
     # Relationships
     business = relationship("Business", back_populates="invoices")
     subscription = relationship("Subscription", back_populates="invoices")
-    payment = relationship("Payment", back_populates="invoice", uselist=False)
+    payment = relationship("Payment", back_populates="invoice", uselist=False, foreign_keys="[Invoice.payment_id]")
     line_items = relationship("InvoiceLineItem", back_populates="invoice")
 
 
@@ -902,7 +902,7 @@ class Payment(Base):
     
     # Relationships
     business = relationship("Business", back_populates="payments")
-    invoice = relationship("Invoice", back_populates="payment")
+    invoice = relationship("Invoice", back_populates="payment", foreign_keys="[Payment.invoice_id]")
     payment_method = relationship("PaymentMethod", back_populates="payments")
 
 
