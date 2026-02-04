@@ -495,20 +495,18 @@ export default function IntegrationsPage() {
     `);
 
     try {
+      // Use api.get() to send JWT token with request
       const response = await api.get('/api/integrations/instagram/connect', {
         headers: {
           Accept: 'application/json',
         },
-        validateStatus: (status) => status < 500,
       });
 
-      if (response.status === 302 || response.data?.redirect_url) {
-        const redirectUrl = response.data?.redirect_url || response.headers?.location;
-        if (redirectUrl) {
-          popup.location.href = redirectUrl;
-        }
-      } else if (response.request.responseURL) {
-        popup.location.href = response.request.responseURL;
+      // Backend returns auth_url in JSON
+      if (response.data?.auth_url) {
+        popup.location.href = response.data.auth_url;
+      } else {
+        throw new Error('No auth_url in response');
       }
 
       // Listen for messages from popup
@@ -613,20 +611,18 @@ export default function IntegrationsPage() {
     `);
 
     try {
+      // Use api.get() to send JWT token with request
       const response = await api.get('/api/integrations/messenger/connect', {
         headers: {
           Accept: 'application/json',
         },
-        validateStatus: (status) => status < 500,
       });
 
-      if (response.status === 302 || response.data?.redirect_url) {
-        const redirectUrl = response.data?.redirect_url || response.headers?.location;
-        if (redirectUrl) {
-          popup.location.href = redirectUrl;
-        }
-      } else if (response.request.responseURL) {
-        popup.location.href = response.request.responseURL;
+      // Backend returns auth_url in JSON
+      if (response.data?.auth_url) {
+        popup.location.href = response.data.auth_url;
+      } else {
+        throw new Error('No auth_url in response');
       }
 
       // Listen for messages from popup

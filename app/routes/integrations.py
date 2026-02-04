@@ -1307,35 +1307,47 @@ async def check_integrations_health(
 
 @router.get("/instagram/connect")
 async def initiate_instagram_oauth(
+    request: Request,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Initiate Instagram OAuth flow.
-    Step 1: Redirect user to Meta's Instagram OAuth consent screen.
+    Step 1: Generate auth URL and return it (or redirect).
+    
+    Supports both:
+    - Browser redirect: Returns RedirectResponse (302)
+    - API call: Returns JSON with auth_url (for frontend to redirect)
     """
-    business_id = get_user_business_id(current_user, db)
-    
-    if business_id is None:
-        return Response(
-            content=_get_error_html("Instagram integration requires a business account."),
-            media_type="text/html"
-        )
-    
-    # Check if user already has Instagram connected
-    existing = db.query(ChannelIntegration).filter(
-        ChannelIntegration.business_id == business_id,
-        ChannelIntegration.channel == "instagram",
-        ChannelIntegration.is_active == True
-    ).first()
-    
-    if existing:
-        return Response(
-            content=_get_error_html("Instagram account is already connected."),
-            media_type="text/html"
-        )
-    
     try:
+        # Check user role
+        if current_user.role not in ["admin", "business_owner"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Admin and Business Owner roles can connect integrations"
+            )
+        
+        business_id = get_user_business_id(current_user, db)
+        
+        if business_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Instagram integration requires a business account."
+            )
+        
+        # Check if user already has Instagram connected
+        existing = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "instagram",
+            ChannelIntegration.is_active == True
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Instagram account is already connected."
+            )
+        
         # Generate state token with user_id for callback verification
         state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
         
@@ -1347,14 +1359,23 @@ async def initiate_instagram_oauth(
         
         log.info(f"Instagram OAuth initiated for user {current_user.id}")
         
-        # Redirect to Meta OAuth consent screen
+        # Check Accept header to determine response format
+        accept_header = request.headers.get("Accept", "")
+        
+        # If request wants JSON (API call from frontend), return JSON
+        if "application/json" in accept_header:
+            return JSONResponse(content={"auth_url": auth_url, "state": state_token})
+        
+        # Redirect to Meta (for direct browser navigation)
         return RedirectResponse(url=auth_url, status_code=302)
         
+    except HTTPException:
+        raise
     except Exception as e:
-        log.error(f"Error initiating Instagram OAuth: {e}")
-        return Response(
-            content=_get_error_html(f"Failed to initiate Instagram connection: {str(e)}"),
-            media_type="text/html"
+        log.error(f"Error initiating Instagram OAuth: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to initiate Instagram connection: {str(e)}"
         )
 
 
@@ -1685,35 +1706,47 @@ async def disconnect_instagram(
 
 @router.get("/messenger/connect")
 async def initiate_messenger_oauth(
+    request: Request,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Initiate Facebook Messenger OAuth flow.
-    Step 1: Redirect user to Meta's Messenger OAuth consent screen.
+    Step 1: Generate auth URL and return it (or redirect).
+    
+    Supports both:
+    - Browser redirect: Returns RedirectResponse (302)
+    - API call: Returns JSON with auth_url (for frontend to redirect)
     """
-    business_id = get_user_business_id(current_user, db)
-    
-    if business_id is None:
-        return Response(
-            content=_get_error_html("Messenger integration requires a business account."),
-            media_type="text/html"
-        )
-    
-    # Check if user already has Messenger connected
-    existing = db.query(ChannelIntegration).filter(
-        ChannelIntegration.business_id == business_id,
-        ChannelIntegration.channel == "messenger",
-        ChannelIntegration.is_active == True
-    ).first()
-    
-    if existing:
-        return Response(
-            content=_get_error_html("Facebook Messenger is already connected."),
-            media_type="text/html"
-        )
-    
     try:
+        # Check user role
+        if current_user.role not in ["admin", "business_owner"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Admin and Business Owner roles can connect integrations"
+            )
+        
+        business_id = get_user_business_id(current_user, db)
+        
+        if business_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Messenger integration requires a business account."
+            )
+        
+        # Check if user already has Messenger connected
+        existing = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "messenger",
+            ChannelIntegration.is_active == True
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Facebook Messenger is already connected."
+            )
+        
         # Generate state token with user_id for callback verification
         state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
         
@@ -1725,14 +1758,23 @@ async def initiate_messenger_oauth(
         
         log.info(f"Messenger OAuth initiated for user {current_user.id}")
         
-        # Redirect to Meta OAuth consent screen
+        # Check Accept header to determine response format
+        accept_header = request.headers.get("Accept", "")
+        
+        # If request wants JSON (API call from frontend), return JSON
+        if "application/json" in accept_header:
+            return JSONResponse(content={"auth_url": auth_url, "state": state_token})
+        
+        # Redirect to Meta (for direct browser navigation)
         return RedirectResponse(url=auth_url, status_code=302)
         
+    except HTTPException:
+        raise
     except Exception as e:
-        log.error(f"Error initiating Messenger OAuth: {e}")
-        return Response(
-            content=_get_error_html(f"Failed to initiate Messenger connection: {str(e)}"),
-            media_type="text/html"
+        log.error(f"Error initiating Messenger OAuth: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to initiate Messenger connection: {str(e)}"
         )
 
 
