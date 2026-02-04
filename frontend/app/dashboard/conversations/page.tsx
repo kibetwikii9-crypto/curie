@@ -439,7 +439,7 @@ export default function ConversationsPage() {
   };
 
   const selectAllVisible = () => {
-    const allIds = new Set(filteredConversations.map((c: ConversationListItem) => c.id));
+    const allIds = new Set<number>(filteredConversations.map((c: ConversationListItem) => c.id as number));
     setSelectedConversations(allIds);
   };
 
