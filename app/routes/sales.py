@@ -1,13 +1,14 @@
 """Sales and Products API routes."""
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import Product, DigitalAsset, Service, Bundle, Order, OrderItem, User as UserModel
+from app.models import Product, DigitalAsset, Service, Bundle, Order, OrderItem, User as UserModel, Conversation, Lead
 from app.routes.auth import get_current_user, get_user_business_id
+from app.services.sales_ai import SalesAIService
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sales", tags=["sales"])
@@ -956,5 +957,342 @@ async def get_sales_stats(
         "orders_by_status": {status: count for status, count in orders_by_status},
         "total_products": total_products,
         "active_products": active_products,
+    }
+
+
+# ========== AI-POWERED FEATURES ==========
+
+class AIDescriptionRequest(BaseModel):
+    product_name: str
+    category: Optional[str] = None
+    key_features: Optional[List[str]] = None
+
+
+class AIPricingRequest(BaseModel):
+    product_name: str
+    category: Optional[str] = None
+    description: Optional[str] = None
+    competitor_prices: Optional[List[float]] = None
+
+
+@router.post("/ai/generate-description")
+async def generate_product_description(
+    request: AIDescriptionRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate AI-powered product description."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI features require a business account"
+        )
+    
+    try:
+        ai_service = SalesAIService()
+        description = await ai_service.generate_product_description(
+            product_name=request.product_name,
+            category=request.category,
+            key_features=request.key_features
+        )
+        
+        return {
+            "success": True,
+            "description": description
+        }
+    except Exception as e:
+        log.error(f"Error generating description: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate description: {str(e)}"
+        )
+
+
+@router.post("/ai/suggest-price")
+async def suggest_product_price(
+    request: AIPricingRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get AI-powered pricing suggestion."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI features require a business account"
+        )
+    
+    try:
+        ai_service = SalesAIService()
+        pricing = await ai_service.suggest_price(
+            product_name=request.product_name,
+            category=request.category,
+            description=request.description,
+            competitor_prices=request.competitor_prices
+        )
+        
+        return {
+            "success": True,
+            **pricing
+        }
+    except Exception as e:
+        log.error(f"Error suggesting price: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to suggest price: {str(e)}"
+        )
+
+
+@router.post("/ai/generate-tags")
+async def generate_product_tags(
+    product_name: str = Body(..., embed=True),
+    description: Optional[str] = Body(None, embed=True),
+    category: Optional[str] = Body(None, embed=True),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate AI-optimized tags for product."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI features require a business account"
+        )
+    
+    try:
+        ai_service = SalesAIService()
+        tags = await ai_service.optimize_product_tags(
+            product_name=product_name,
+            description=description,
+            category=category
+        )
+        
+        return {
+            "success": True,
+            "tags": tags
+        }
+    except Exception as e:
+        log.error(f"Error generating tags: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate tags: {str(e)}"
+        )
+
+
+# ========== INTEGRATION WITH CONVERSATIONS & LEADS ==========
+
+class CreateOrderFromConversationRequest(BaseModel):
+    conversation_id: int
+    product_ids: List[int]
+    quantities: List[int]
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+
+
+@router.post("/orders/from-conversation")
+async def create_order_from_conversation(
+    request: CreateOrderFromConversationRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create an order from a conversation (AI detected purchase intent)."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Order creation requires a business account"
+        )
+    
+    # Verify conversation belongs to this business
+    conversation = db.query(Conversation).filter(
+        Conversation.id == request.conversation_id,
+        Conversation.business_id == business_id
+    ).first()
+    
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    # Calculate total
+    total_amount = 0
+    order_items_data = []
+    
+    for product_id, quantity in zip(request.product_ids, request.quantities):
+        product = db.query(Product).filter(
+            Product.id == product_id,
+            Product.business_id == business_id
+        ).first()
+        
+        if not product:
+            continue
+        
+        item_total = product.price * quantity
+        total_amount += item_total
+        
+        order_items_data.append({
+            "product_id": product_id,
+            "item_type": "product",
+            "name": product.name,
+            "quantity": quantity,
+            "unit_price": product.price,
+            "total_price": item_total,
+        })
+    
+    # Create order
+    from datetime import datetime
+    order = Order(
+        business_id=business_id,
+        conversation_id=request.conversation_id,
+        customer_name=request.customer_name or conversation.customer_name,
+        customer_email=request.customer_email,
+        customer_phone=request.customer_phone or conversation.phone_number,
+        status="pending",
+        total_amount=total_amount,
+        currency="USD",
+        payment_status="pending",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    
+    db.add(order)
+    db.flush()
+    
+    # Add order items
+    for item_data in order_items_data:
+        order_item = OrderItem(
+            order_id=order.id,
+            **item_data
+        )
+        db.add(order_item)
+    
+    db.commit()
+    db.refresh(order)
+    
+    log.info(f"Order created from conversation {conversation.id}: Order #{order.id}, Total ${total_amount}")
+    
+    return {
+        "success": True,
+        "message": "Order created successfully",
+        "order_id": order.id,
+        "total_amount": total_amount
+    }
+
+
+@router.post("/orders/{order_id}/link-lead")
+async def link_order_to_lead(
+    order_id: int,
+    lead_id: int = Body(..., embed=True),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Link an order to a lead (convert lead to customer)."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Order access requires a business account"
+        )
+    
+    # Verify order
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.business_id == business_id
+    ).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+    
+    # Verify lead
+    lead = db.query(Lead).filter(
+        Lead.id == lead_id,
+        Lead.business_id == business_id
+    ).first()
+    
+    if not lead:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found"
+        )
+    
+    # Link order to lead
+    order.lead_id = lead_id
+    
+    # Update lead status to converted
+    lead.status = "converted"
+    
+    from datetime import datetime
+    order.updated_at = datetime.utcnow()
+    lead.updated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    log.info(f"Order #{order.id} linked to Lead #{lead.id} - Lead converted to customer")
+    
+    return {
+        "success": True,
+        "message": "Order linked to lead successfully. Lead marked as converted."
+    }
+
+
+@router.get("/orders/{order_id}/conversation")
+async def get_order_conversation(
+    order_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the conversation associated with an order."""
+    business_id = get_user_business_id(current_user, db)
+    
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Order access requires a business account"
+        )
+    
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.business_id == business_id
+    ).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+    
+    if not order.conversation_id:
+        return {
+            "has_conversation": False,
+            "message": "No conversation linked to this order"
+        }
+    
+    conversation = db.query(Conversation).filter(
+        Conversation.id == order.conversation_id
+    ).first()
+    
+    if not conversation:
+        return {
+            "has_conversation": False,
+            "message": "Conversation not found"
+        }
+    
+    return {
+        "has_conversation": True,
+        "conversation_id": conversation.id,
+        "customer_name": conversation.customer_name,
+        "channel": conversation.channel,
+        "created_at": conversation.created_at.isoformat(),
     }
 

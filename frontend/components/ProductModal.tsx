@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Sparkles, Zap } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ export default function ProductModal({ isOpen, onClose, onSave, product, isLoadi
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [isSuggestingPrice, setIsSuggestingPrice] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -51,6 +54,55 @@ export default function ProductModal({ isOpen, onClose, onSave, product, isLoadi
     }
     setErrors({});
   }, [product, isOpen]);
+
+  const generateDescription = async () => {
+    if (!formData.name.trim()) {
+      alert('Please enter a product name first');
+      return;
+    }
+
+    setIsGeneratingDescription(true);
+    try {
+      const response = await api.post('/api/sales/ai/generate-description', {
+        product_name: formData.name,
+        category: formData.category || null,
+        key_features: formData.tags ? formData.tags.split(',').map(t => t.trim()) : null,
+      });
+
+      if (response.data.success) {
+        setFormData({ ...formData, description: response.data.description });
+      }
+    } catch (error: any) {
+      alert('Failed to generate description. AI feature may not be configured.');
+    } finally {
+      setIsGeneratingDescription(false);
+    }
+  };
+
+  const suggestPrice = async () => {
+    if (!formData.name.trim()) {
+      alert('Please enter a product name first');
+      return;
+    }
+
+    setIsSuggestingPrice(true);
+    try {
+      const response = await api.post('/api/sales/ai/suggest-price', {
+        product_name: formData.name,
+        category: formData.category || null,
+        description: formData.description || null,
+      });
+
+      if (response.data.success) {
+        setFormData({ ...formData, price: response.data.suggested_price.toString() });
+        alert(`AI Suggested: $${response.data.suggested_price}\n${response.data.reasoning}`);
+      }
+    } catch (error: any) {
+      alert('Failed to suggest price. AI feature may not be configured.');
+    } finally {
+      setIsSuggestingPrice(false);
+    }
+  };
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -124,9 +176,20 @@ export default function ProductModal({ isOpen, onClose, onSave, product, isLoadi
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
+                <button
+                  type="button"
+                  onClick={generateDescription}
+                  disabled={isGeneratingDescription || !formData.name.trim()}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {isGeneratingDescription ? 'Generating...' : 'AI Assist'}
+                </button>
+              </div>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -138,9 +201,20 @@ export default function ProductModal({ isOpen, onClose, onSave, product, isLoadi
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Price *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Price *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={suggestPrice}
+                    disabled={isSuggestingPrice || !formData.name.trim()}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Zap className="h-3 w-3" />
+                    {isSuggestingPrice ? 'Analyzing...' : 'AI Price'}
+                  </button>
+                </div>
                 <input
                   type="number"
                   step="0.01"
