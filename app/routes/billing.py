@@ -352,6 +352,48 @@ async def resume_subscription(
 
 # ========== PAYMENT METHODS ==========
 
+@router.post("/payment-methods/setup")
+async def create_setup_intent(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a SetupIntent for adding a new payment method."""
+    try:
+        business_id = get_user_business_id(current_user, db)
+        if not business_id:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        business = db.query(Business).filter(Business.id == business_id).first()
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Get or create Stripe customer
+        from app.services.stripe_service import StripeService
+        stripe_service = StripeService()
+        
+        if not business.stripe_customer_id:
+            customer = stripe_service.create_customer(
+                email=current_user.email,
+                name=business.name,
+                metadata={"business_id": str(business_id)}
+            )
+            business.stripe_customer_id = customer.id
+            db.commit()
+        
+        # Create SetupIntent
+        import stripe
+        setup_intent = stripe.SetupIntent.create(
+            customer=business.stripe_customer_id,
+            payment_method_types=["card"],
+        )
+        
+        return {"client_secret": setup_intent.client_secret}
+        
+    except Exception as e:
+        log.error(f"Error creating setup intent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/payment-methods")
 async def get_payment_methods(
     current_user: UserModel = Depends(get_current_user),
