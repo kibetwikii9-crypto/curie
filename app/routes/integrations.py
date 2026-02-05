@@ -182,6 +182,18 @@ async def connect_telegram(
             detail="Only Admin and Business Owner roles can connect integrations"
         )
     
+    # Check channel limit (feature gating)
+    business_id = get_user_business_id(current_user, db)
+    if business_id:
+        from app.services.usage_service import UsageService
+        usage_service = UsageService(db)
+        can_add, reason = usage_service.can_use_resource(business_id, "channel")
+        if not can_add:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Channel limit reached. {reason}. Please upgrade your plan to add more channels."
+            )
+    
     # Validate bot token format (basic check)
     if not request.bot_token or len(request.bot_token) < 20:
         raise HTTPException(
@@ -667,6 +679,16 @@ async def initiate_whatsapp_oauth(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Integrations require a business account. Admin users cannot manage integrations."
+            )
+        
+        # Check channel limit (feature gating)
+        from app.services.usage_service import UsageService
+        usage_service = UsageService(db)
+        can_add, reason = usage_service.can_use_resource(business_id, "channel")
+        if not can_add:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Channel limit reached. {reason}. Please upgrade your plan to add more channels."
             )
         
         # Check if Meta OAuth is configured
@@ -1335,6 +1357,16 @@ async def initiate_instagram_oauth(
                 detail="Instagram integration requires a business account."
             )
         
+        # Check channel limit (feature gating)
+        from app.services.usage_service import UsageService
+        usage_service = UsageService(db)
+        can_add, reason = usage_service.can_use_resource(business_id, "channel")
+        if not can_add:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Channel limit reached. {reason}. Please upgrade your plan to add more channels."
+            )
+        
         # Check if user already has Instagram connected
         existing = db.query(ChannelIntegration).filter(
             ChannelIntegration.business_id == business_id,
@@ -1734,6 +1766,16 @@ async def initiate_messenger_oauth(
                 detail="Messenger integration requires a business account."
             )
         
+        # Check channel limit (feature gating)
+        from app.services.usage_service import UsageService
+        usage_service = UsageService(db)
+        can_add, reason = usage_service.can_use_resource(business_id, "channel")
+        if not can_add:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Channel limit reached. {reason}. Please upgrade your plan to add more channels."
+            )
+        
         # Check if user already has Messenger connected
         existing = db.query(ChannelIntegration).filter(
             ChannelIntegration.business_id == business_id,
@@ -2070,6 +2112,16 @@ async def initiate_email_oauth(
                 detail="Email integration requires a business account."
             )
         
+        # Check channel limit (feature gating)
+        from app.services.usage_service import UsageService
+        usage_service = UsageService(db)
+        can_add, reason = usage_service.can_use_resource(business_id, "channel")
+        if not can_add:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Channel limit reached. {reason}. Please upgrade your plan to add more channels."
+            )
+        
         # Check if user already has email connected
         existing = db.query(ChannelIntegration).filter(
             ChannelIntegration.business_id == business_id,
@@ -2300,6 +2352,16 @@ async def create_webchat_widget(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Business account required"
+            )
+        
+        # Check channel limit (feature gating)
+        from app.services.usage_service import UsageService
+        usage_service = UsageService(db)
+        can_add, reason = usage_service.can_use_resource(business_id, "channel")
+        if not can_add:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Channel limit reached. {reason}. Please upgrade your plan to add more channels."
             )
         
         log.info(f"Creating webchat widget for user {current_user.id}, business {business_id}")
