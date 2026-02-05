@@ -1091,11 +1091,28 @@ async def upload_knowledge_document(
         
         # Validate file size (max 10MB)
         max_size = 10 * 1024 * 1024  # 10MB
-        if len(file_content) > max_size:
+        file_size_bytes = len(file_content)
+        if file_size_bytes > max_size:
             raise HTTPException(
                 status_code=400,
-                detail=f"File too large. Maximum size is 10MB. Your file is {len(file_content) / 1024 / 1024:.1f}MB"
+                detail=f"File too large. Maximum size is 10MB. Your file is {file_size_bytes / 1024 / 1024:.1f}MB"
             )
+        
+        # Track storage usage for billing (convert bytes to MB)
+        try:
+            from app.services.usage_service import UsageService
+            usage_service = UsageService(db)
+            file_size_mb = file_size_bytes / 1024 / 1024
+            usage_service.track_usage(
+                business_id=business_id,
+                resource_type="storage",
+                resource_id=f"doc_{filename}",
+                quantity=int(file_size_mb) + 1  # Round up to nearest MB
+            )
+            log.debug(f"storage_usage_tracked business_id={business_id} size_mb={file_size_mb:.2f}")
+        except Exception as usage_error:
+            # Don't fail upload if usage tracking fails
+            log.warning(f"storage_usage_tracking_failed business_id={business_id} error={str(usage_error)}")
         
         # Parse document to extract text
         log.info(f"Parsing uploaded document: {filename} ({len(file_content)} bytes)")

@@ -76,6 +76,23 @@ async def save_conversation(
                 intent=intent,
             )
             db.add(conversation)
+            db.flush()  # Flush to get conversation.id before commit
+            
+            # Track usage for billing
+            try:
+                from app.services.usage_service import UsageService
+                usage_service = UsageService(db)
+                usage_service.track_usage(
+                    business_id=business_id,
+                    resource_type="conversation",
+                    resource_id=str(conversation.id),
+                    quantity=1
+                )
+                log.debug(f"usage_tracked business_id={business_id} resource=conversation conversation_id={conversation.id}")
+            except Exception as usage_error:
+                # Don't fail conversation save if usage tracking fails
+                log.warning(f"usage_tracking_failed business_id={business_id} error={str(usage_error)}")
+            
             # get_db_context() automatically commits on success
 
         log.info(f"✅ conversation_saved user_id={user_id} business_id={business_id} channel={channel} intent={intent} conversation_id={conversation.id}")

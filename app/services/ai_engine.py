@@ -388,7 +388,23 @@ async def process_message_with_gpt(
                 response = completion.choices[0].message.content
                 
                 if response and response.strip():
-                    log.info(f"✅ gpt_response_generated user_id={message.user_id} model=gpt-4o tokens={completion.usage.total_tokens}")
+                    tokens_used = completion.usage.total_tokens
+                    log.info(f"✅ gpt_response_generated user_id={message.user_id} model=gpt-4o tokens={tokens_used}")
+                    
+                    # Track AI token usage for billing
+                    try:
+                        from app.services.usage_service import UsageService
+                        usage_service = UsageService(db)
+                        usage_service.track_usage(
+                            business_id=business_id,
+                            resource_type="ai_tokens",
+                            resource_id=f"gpt-4o_{message.user_id}",
+                            quantity=tokens_used
+                        )
+                        log.debug(f"ai_token_usage_tracked business_id={business_id} tokens={tokens_used}")
+                    except Exception as usage_error:
+                        # Don't fail AI response if usage tracking fails
+                        log.warning(f"ai_token_usage_tracking_failed business_id={business_id} error={str(usage_error)}")
                     
                     # Update memory with detected intent (simplified - using "conversation" as intent)
                     _update_conversation_memory(db, business_id, message.user_id, message.channel, "conversation")
