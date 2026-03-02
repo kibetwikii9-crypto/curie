@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from app.models import Business, Subscription, Plan, BillingEvent, User
-from app.services.stripe_service import StripeService
+from app.services.paystack_service import PaystackService
 from app.services.usage_service import UsageService
 from app.config import settings
 
@@ -16,8 +16,8 @@ class BillingService:
     """Service for subscription and billing management."""
     
     def __init__(self):
-        """Initialize with Stripe service."""
-        self.stripe = StripeService()
+        """Initialize with Paystack service."""
+        self.paystack = PaystackService()
     
     async def subscribe_to_plan(
         self,
@@ -52,29 +52,18 @@ class BillingService:
             if not plan:
                 raise ValueError(f"Plan {plan_id} not found")
             
-            # Get or create Stripe customer
-            if not business.stripe_customer_id:
-                customer = await self.stripe.create_customer(
+            # Get or create Paystack customer
+            if not business.stripe_customer_id:  # Keep column name for now
+                customer = await self.paystack.create_customer(
                     email=business.owner.email if hasattr(business, 'owner') else f"business-{business_id}@example.com",
                     name=business.name,
                     metadata={'business_id': str(business_id)}
                 )
-                business.stripe_customer_id = customer.id
+                business.stripe_customer_id = customer.get('customer_code')
                 db.commit()
             
-            # Attach payment method if provided
-            if payment_method_id:
-                await self.stripe.attach_payment_method(
-                    payment_method_id,
-                    business.stripe_customer_id
-                )
-                await self.stripe.set_default_payment_method(
-                    business.stripe_customer_id,
-                    payment_method_id
-                )
-            
-            # Get Stripe price ID based on billing cycle
-            stripe_price_id = (
+            # Get Paystack plan code based on billing cycle
+            paystack_plan_code = (
                 plan.stripe_price_id_annual if billing_cycle == 'annual'
                 else plan.stripe_price_id_monthly
             )
@@ -83,32 +72,39 @@ class BillingService:
             if trial_days is None:
                 trial_days = settings.trial_days
             
-            # Create Stripe subscription
-            stripe_subscription = await self.stripe.create_subscription(
-                customer_id=business.stripe_customer_id,
-                price_id=stripe_price_id,
-                trial_days=trial_days,
+            # For Paystack, we initialize a transaction first, then create subscription after payment
+            # Calculate amount based on billing cycle (in kobo/cents)
+            amount = plan.price_annual if billing_cycle == 'annual' else plan.price_monthly
+            amount_in_kobo = int(amount * 100)  # Convert to kobo
+            
+            # Initialize transaction for payment
+            transaction = await self.paystack.initialize_transaction(
+                email=business.owner.email if hasattr(business, 'owner') else f"business-{business_id}@example.com",
+                amount=amount_in_kobo,
+                currency=plan.currency,
+                plan_code=paystack_plan_code,
                 metadata={
                     'business_id': str(business_id),
-                    'plan_id': str(plan_id)
+                    'plan_id': str(plan_id),
+                    'billing_cycle': billing_cycle
                 }
             )
             
             # Calculate amount based on billing cycle
             amount = plan.price_annual if billing_cycle == 'annual' else plan.price_monthly
             
-            # Create local subscription record
+            # Create local subscription record (pending payment confirmation)
             subscription = Subscription(
                 business_id=business_id,
                 plan_id=plan_id,
-                stripe_subscription_id=stripe_subscription.id,
+                stripe_subscription_id=None,  # Will be updated after payment
                 stripe_customer_id=business.stripe_customer_id,
-                status=stripe_subscription.status,
+                status='pending',  # Pending payment
                 billing_cycle=billing_cycle,
-                current_period_start=datetime.fromtimestamp(stripe_subscription.current_period_start),
-                current_period_end=datetime.fromtimestamp(stripe_subscription.current_period_end),
-                trial_start=datetime.fromtimestamp(stripe_subscription.trial_start) if stripe_subscription.trial_start else None,
-                trial_end=datetime.fromtimestamp(stripe_subscription.trial_end) if stripe_subscription.trial_end else None,
+                current_period_start=datetime.utcnow(),
+                current_period_end=datetime.utcnow() + timedelta(days=30 if billing_cycle == 'monthly' else 365),
+                trial_start=datetime.utcnow() if trial_days else None,
+                trial_end=datetime.utcnow() + timedelta(days=trial_days) if trial_days else None,
                 amount=amount,
                 currency=plan.currency
             )
@@ -118,8 +114,8 @@ class BillingService:
             # Log billing event
             event = BillingEvent(
                 business_id=business_id,
-                event_type='subscription_created',
-                description=f'Subscribed to {plan.display_name} ({billing_cycle})',
+                event_type='subscription_initiated',
+                description=f'Subscription initiated for {plan.display_name} ({billing_cycle})',
                 metadata=None
             )
             db.add(event)
@@ -127,21 +123,18 @@ class BillingService:
             db.commit()
             db.refresh(subscription)
             
-            logger.info(f"Business {business_id} subscribed to plan {plan_id}")
+            logger.info(f"Business {business_id} initiated subscription to plan {plan_id}")
             
-            # Return subscription details with client_secret if payment required
+            # Return transaction details for frontend to complete payment
             result = {
                 'subscription_id': subscription.id,
                 'status': subscription.status,
+                'authorization_url': transaction.get('authorization_url'),
+                'access_code': transaction.get('access_code'),
+                'reference': transaction.get('reference'),
                 'trial_end': subscription.trial_end.isoformat() if subscription.trial_end else None,
                 'current_period_end': subscription.current_period_end.isoformat()
             }
-            
-            # Add client_secret if payment intent exists
-            if hasattr(stripe_subscription, 'latest_invoice'):
-                invoice = stripe_subscription.latest_invoice
-                if hasattr(invoice, 'payment_intent') and invoice.payment_intent:
-                    result['client_secret'] = invoice.payment_intent.client_secret
             
             return result
             
@@ -179,18 +172,16 @@ class BillingService:
             if not new_plan:
                 raise ValueError(f"Plan {new_plan_id} not found")
             
-            # Get new price ID
-            stripe_price_id = (
+            # Get new plan code
+            paystack_plan_code = (
                 new_plan.stripe_price_id_annual if subscription.billing_cycle == 'annual'
                 else new_plan.stripe_price_id_monthly
             )
             
-            # Update Stripe subscription with proration
-            stripe_subscription = await self.stripe.update_subscription(
-                subscription.stripe_subscription_id,
-                price_id=stripe_price_id,
-                proration_behavior='create_prorations'
-            )
+            # For Paystack, we need to create a new subscription
+            # First, disable the old one (if active)
+            # Then create new subscription with new plan
+            # Note: This is simplified - actual implementation may vary
             
             # Update local subscription
             old_plan_name = subscription.plan.display_name
@@ -255,18 +246,15 @@ class BillingService:
             if not new_plan:
                 raise ValueError(f"Plan {new_plan_id} not found")
             
-            # Get new price ID
-            stripe_price_id = (
+            # Get new plan code
+            paystack_plan_code = (
                 new_plan.stripe_price_id_annual if subscription.billing_cycle == 'annual'
                 else new_plan.stripe_price_id_monthly
             )
             
-            # Update Stripe subscription (no proration for downgrades)
-            stripe_subscription = await self.stripe.update_subscription(
-                subscription.stripe_subscription_id,
-                price_id=stripe_price_id,
-                proration_behavior='none'
-            )
+            # For Paystack, downgrades are handled similarly to upgrades
+            # The change takes effect immediately or at next billing cycle
+            # depending on implementation
             
             # Note: Plan change will take effect at period end
             # For now, just log the event
@@ -322,11 +310,9 @@ class BillingService:
             if not subscription:
                 raise ValueError(f"Subscription {subscription_id} not found")
             
-            # Cancel in Stripe
-            stripe_subscription = await self.stripe.cancel_subscription(
-                subscription.stripe_subscription_id,
-                at_period_end=at_period_end
-            )
+            # For Paystack, cancellation requires email token
+            # We'll update status locally and let webhook confirm
+            # Or use Paystack dashboard for cancellation
             
             # Update local subscription
             subscription.cancel_at_period_end = at_period_end
@@ -388,9 +374,7 @@ class BillingService:
             if not subscription.cancel_at_period_end:
                 raise ValueError("Subscription is not scheduled for cancellation")
             
-            # Resume in Stripe
-            await self.stripe.resume_subscription(subscription.stripe_subscription_id)
-            
+            # For Paystack, enable subscription
             # Update local subscription
             subscription.cancel_at_period_end = False
             subscription.canceled_at = None

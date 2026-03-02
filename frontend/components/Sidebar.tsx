@@ -18,7 +18,6 @@ import {
   Shield,
   Bell,
   CheckCircle2,
-  ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,17 +27,16 @@ const navigation = [
   { name: 'Knowledge Base', href: '/dashboard/knowledge', icon: BookOpen },
   { name: 'AI Rules', href: '/dashboard/ai-rules', icon: Zap },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-  { name: 'Sales & Products', href: '/dashboard/sales-products', icon: ShoppingBag },
   { name: 'Ad Studio', href: '/dashboard/ads', icon: Video },
-  { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
-  { name: 'Users & Roles', href: '/dashboard/users', icon: Users },
-  { name: 'Handoff', href: '/dashboard/handoff', icon: UserCheck },
-  { name: 'Leads', href: '/dashboard/leads', icon: TrendingUp },
+  { name: 'Integrations', href: '/dashboard/integrations', icon: Plug, comingSoon: true },
+  { name: 'Users & Roles', href: '/dashboard/users', icon: Users, comingSoon: true },
+  { name: 'Handoff', href: '/dashboard/handoff', icon: UserCheck, comingSoon: true },
+  { name: 'Leads', href: '/dashboard/leads', icon: TrendingUp, comingSoon: true },
   { name: 'Billing', href: '/dashboard/billing', icon: CreditCard, comingSoon: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-  { name: 'Security', href: '/dashboard/security', icon: Shield },
-  { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-  { name: 'Onboarding', href: '/dashboard/onboarding', icon: CheckCircle2 },
+  { name: 'Security', href: '/dashboard/security', icon: Shield, comingSoon: true },
+  { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, comingSoon: true },
+  { name: 'Onboarding', href: '/dashboard/onboarding', icon: CheckCircle2, comingSoon: true },
 ];
 
 export default function Sidebar() {
@@ -49,9 +47,7 @@ export default function Sidebar() {
       <div className="flex flex-col w-64">
         <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           <div className="flex items-center flex-shrink-0 px-4">
-            <h1 className="text-xl font-bold text-[#007FFF]">
-              Automify
-            </h1>
+            <h1 className="text-2xl font-bold text-primary-600">Automify</h1>
           </div>
           <div className="mt-5 flex-grow flex flex-col">
             <nav className="flex-1 px-2 space-y-1">
@@ -81,9 +77,7 @@ export default function Sidebar() {
                       {item.name}
                     </div>
                     {item.comingSoon && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium">
-                        Soon
-                      </span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">Soon</span>
                     )}
                   </Link>
                 );

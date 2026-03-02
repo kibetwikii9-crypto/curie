@@ -1,4 +1,4 @@
-"""Stripe webhook handlers."""
+"""Paystack webhook handlers."""
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, status
@@ -6,19 +6,19 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Subscription, Invoice, Payment, PaymentMethod, BillingEvent, Business
-from app.services.stripe_service import StripeService
+from app.services.paystack_service import PaystackService
 from app.config import settings
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
-@router.post("/stripe")
-async def stripe_webhook(request: Request):
+@router.post("/paystack")
+async def paystack_webhook(request: Request):
     """
-    Handle Stripe webhook events.
+    Handle Paystack webhook events.
     
-    Stripe sends webhook events for subscription updates, payments, etc.
+    Paystack sends webhook events for subscription updates, payments, etc.
     We verify the signature and process the event.
     """
     db = SessionLocal()
@@ -26,81 +26,64 @@ async def stripe_webhook(request: Request):
     try:
         # Get raw body and signature
         payload = await request.body()
-        signature = request.headers.get('stripe-signature')
+        signature = request.headers.get('x-paystack-signature')
         
         if not signature:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing stripe-signature header"
+                detail="Missing x-paystack-signature header"
             )
         
         # Verify webhook signature
-        stripe_service = StripeService()
+        paystack_service = PaystackService()
         
-        try:
-            event = stripe_service.construct_webhook_event(
-                payload=payload,
-                signature=signature,
-                webhook_secret=settings.stripe_webhook_secret
-            )
-        except ValueError as e:
-            log.error(f"Invalid webhook signature: {e}")
+        if not paystack_service.verify_webhook_signature(payload, signature):
+            log.error("Invalid webhook signature")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid signature"
             )
         
+        # Parse webhook payload
+        import json
+        payload_dict = json.loads(payload)
+        event = paystack_service.parse_webhook_event(payload_dict)
+        
         # Handle different event types
         event_type = event['type']
-        data = event['data']['object']
+        data = event['data']
         
-        log.info(f"Received Stripe webhook: {event_type}")
+        log.info(f"Received Paystack webhook: {event_type}")
         
         # ========== SUBSCRIPTION EVENTS ==========
         
-        if event_type == 'customer.subscription.created':
+        if event_type == 'subscription.create':
             await handle_subscription_created(db, data)
             
-        elif event_type == 'customer.subscription.updated':
-            await handle_subscription_updated(db, data)
+        elif event_type == 'subscription.disable':
+            await handle_subscription_disabled(db, data)
             
-        elif event_type == 'customer.subscription.deleted':
-            await handle_subscription_deleted(db, data)
-            
-        elif event_type == 'customer.subscription.trial_will_end':
-            await handle_trial_will_end(db, data)
+        elif event_type == 'subscription.enable':
+            await handle_subscription_enabled(db, data)
         
-        # ========== PAYMENT INTENT EVENTS ==========
+        # ========== CHARGE/PAYMENT EVENTS ==========
         
-        elif event_type == 'payment_intent.succeeded':
-            await handle_payment_succeeded(db, data)
+        elif event_type == 'charge.success':
+            await handle_charge_success(db, data)
             
-        elif event_type == 'payment_intent.payment_failed':
-            await handle_payment_failed(db, data)
+        elif event_type == 'charge.failed':
+            await handle_charge_failed(db, data)
         
         # ========== INVOICE EVENTS ==========
         
-        elif event_type == 'invoice.paid':
-            await handle_invoice_paid(db, data)
+        elif event_type == 'invoice.create':
+            await handle_invoice_created(db, data)
+            
+        elif event_type == 'invoice.update':
+            await handle_invoice_updated(db, data)
             
         elif event_type == 'invoice.payment_failed':
             await handle_invoice_payment_failed(db, data)
-            
-        elif event_type == 'invoice.upcoming':
-            await handle_invoice_upcoming(db, data)
-        
-        # ========== PAYMENT METHOD EVENTS ==========
-        
-        elif event_type == 'payment_method.attached':
-            await handle_payment_method_attached(db, data)
-            
-        elif event_type == 'payment_method.detached':
-            await handle_payment_method_detached(db, data)
-        
-        # ========== CHECKOUT EVENTS ==========
-        
-        elif event_type == 'checkout.session.completed':
-            await handle_checkout_completed(db, data)
         
         else:
             log.info(f"Unhandled webhook event: {event_type}")
@@ -123,58 +106,33 @@ async def stripe_webhook(request: Request):
 # ========== WEBHOOK EVENT HANDLERS ==========
 
 async def handle_subscription_created(db: Session, data: dict):
-    """Handle subscription.created event."""
-    subscription_id = data['id']
-    customer_id = data['customer']
-    status_value = data['status']
+    """Handle subscription.create event."""
+    subscription_code = data.get('subscription_code')
+    customer_code = data.get('customer', {}).get('customer_code')
+    status_value = data.get('status')
     
-    # Find subscription by Stripe ID
-    subscription = db.query(Subscription).filter(
-        Subscription.stripe_subscription_id == subscription_id
+    # Find subscription by customer code
+    business = db.query(Business).filter(
+        Business.stripe_customer_id == customer_code
     ).first()
     
-    if subscription:
-        subscription.status = status_value
-        subscription.current_period_start = datetime.fromtimestamp(data['current_period_start'])
-        subscription.current_period_end = datetime.fromtimestamp(data['current_period_end'])
+    if business:
+        subscription = db.query(Subscription).filter(
+            Subscription.business_id == business.id
+        ).first()
         
-        log.info(f"Updated subscription {subscription.id} from webhook")
+        if subscription:
+            subscription.stripe_subscription_id = subscription_code
+            subscription.status = status_value
+            log.info(f"Updated subscription {subscription.id} from webhook")
 
 
-async def handle_subscription_updated(db: Session, data: dict):
-    """Handle subscription.updated event."""
-    subscription_id = data['id']
-    status_value = data['status']
+async def handle_subscription_disabled(db: Session, data: dict):
+    """Handle subscription.disable event."""
+    subscription_code = data.get('subscription_code')
     
     subscription = db.query(Subscription).filter(
-        Subscription.stripe_subscription_id == subscription_id
-    ).first()
-    
-    if subscription:
-        subscription.status = status_value
-        subscription.current_period_start = datetime.fromtimestamp(data['current_period_start'])
-        subscription.current_period_end = datetime.fromtimestamp(data['current_period_end'])
-        subscription.updated_at = datetime.utcnow()
-        
-        # Update business payment status
-        business = subscription.business
-        if business:
-            if status_value in ['active', 'trialing']:
-                business.payment_status = 'active'
-            elif status_value == 'past_due':
-                business.payment_status = 'past_due'
-            elif status_value in ['canceled', 'unpaid']:
-                business.payment_status = 'suspended'
-        
-        log.info(f"Subscription {subscription.id} updated: status={status_value}")
-
-
-async def handle_subscription_deleted(db: Session, data: dict):
-    """Handle subscription.deleted event."""
-    subscription_id = data['id']
-    
-    subscription = db.query(Subscription).filter(
-        Subscription.stripe_subscription_id == subscription_id
+        Subscription.stripe_subscription_id == subscription_code
     ).first()
     
     if subscription:
@@ -186,49 +144,43 @@ async def handle_subscription_deleted(db: Session, data: dict):
         if business:
             business.payment_status = 'suspended'
         
-        # Log event
-        event = BillingEvent(
-            business_id=subscription.business_id,
-            event_type='subscription_ended',
-            description='Subscription ended',
-            metadata=None
-        )
-        db.add(event)
-        
-        log.info(f"Subscription {subscription.id} deleted")
+        log.info(f"Subscription {subscription.id} disabled")
 
 
-async def handle_trial_will_end(db: Session, data: dict):
-    """Handle subscription.trial_will_end event."""
-    subscription_id = data['id']
+async def handle_subscription_enabled(db: Session, data: dict):
+    """Handle subscription.enable event."""
+    subscription_code = data.get('subscription_code')
+    status_value = data.get('status')
     
     subscription = db.query(Subscription).filter(
-        Subscription.stripe_subscription_id == subscription_id
+        Subscription.stripe_subscription_id == subscription_code
     ).first()
     
     if subscription:
-        # Log event
-        event = BillingEvent(
-            business_id=subscription.business_id,
-            event_type='trial_ending',
-            description='Trial ending in 3 days',
-            metadata=None
-        )
-        db.add(event)
+        subscription.status = status_value
+        subscription.ended_at = None
+        subscription.updated_at = datetime.utcnow()
         
-        log.info(f"Trial ending soon for subscription {subscription.id}")
-        # TODO: Send email notification
+        # Update business payment status
+        business = subscription.business
+        if business:
+            business.payment_status = 'active'
+        
+        log.info(f"Subscription {subscription.id} enabled: status={status_value}")
 
 
-async def handle_payment_succeeded(db: Session, data: dict):
-    """Handle payment_intent.succeeded event."""
-    payment_intent_id = data['id']
-    amount = data['amount'] / 100  # Convert from cents
-    currency = data['currency'].upper()
+async def handle_charge_success(db: Session, data: dict):
+    """Handle charge.success event."""
+    reference = data.get('reference')
+    amount = data.get('amount') / 100  # Convert from kobo to main currency
+    currency = data.get('currency', 'NGN')
+    customer = data.get('customer', {})
+    customer_email = customer.get('email')
+    authorization = data.get('authorization', {})
     
     # Find or create payment record
     payment = db.query(Payment).filter(
-        Payment.stripe_payment_intent_id == payment_intent_id
+        Payment.stripe_payment_intent_id == reference
     ).first()
     
     if payment:
@@ -236,33 +188,54 @@ async def handle_payment_succeeded(db: Session, data: dict):
         payment.updated_at = datetime.utcnow()
     else:
         # Create new payment record
-        customer_id = data.get('customer')
-        if customer_id:
+        if customer_email:
             business = db.query(Business).filter(
-                Business.stripe_customer_id == customer_id
+                Business.stripe_customer_id == customer.get('customer_code')
             ).first()
             
             if business:
                 payment = Payment(
                     business_id=business.id,
-                    stripe_payment_intent_id=payment_intent_id,
+                    stripe_payment_intent_id=reference,
                     amount=amount,
                     currency=currency,
                     status='succeeded',
                     payment_method_type='card'
                 )
                 db.add(payment)
+                
+                # Save authorization for future charges
+                if authorization.get('authorization_code'):
+                    # Check if payment method already exists
+                    existing_pm = db.query(PaymentMethod).filter(
+                        PaymentMethod.stripe_payment_method_id == authorization['authorization_code'],
+                        PaymentMethod.business_id == business.id
+                    ).first()
+                    
+                    if not existing_pm:
+                        payment_method = PaymentMethod(
+                            business_id=business.id,
+                            stripe_payment_method_id=authorization['authorization_code'],
+                            type='card',
+                            card_brand=authorization.get('brand'),
+                            card_last4=authorization.get('last4'),
+                            card_exp_month=authorization.get('exp_month'),
+                            card_exp_year=authorization.get('exp_year'),
+                            is_default=False,
+                            is_active=True
+                        )
+                        db.add(payment_method)
     
-    log.info(f"Payment succeeded: {payment_intent_id}, amount: {amount} {currency}")
+    log.info(f"Payment succeeded: {reference}, amount: {amount} {currency}")
 
 
-async def handle_payment_failed(db: Session, data: dict):
-    """Handle payment_intent.payment_failed event."""
-    payment_intent_id = data['id']
-    failure_message = data.get('last_payment_error', {}).get('message', 'Unknown error')
+async def handle_charge_failed(db: Session, data: dict):
+    """Handle charge.failed event."""
+    reference = data.get('reference')
+    failure_message = data.get('gateway_response', 'Unknown error')
     
     payment = db.query(Payment).filter(
-        Payment.stripe_payment_intent_id == payment_intent_id
+        Payment.stripe_payment_intent_id == reference
     ).first()
     
     if payment:
@@ -279,125 +252,22 @@ async def handle_payment_failed(db: Session, data: dict):
         )
         db.add(event)
     
-    log.warning(f"Payment failed: {payment_intent_id}, reason: {failure_message}")
-    # TODO: Send email notification
+    log.warning(f"Payment failed: {reference}, reason: {failure_message}")
 
 
-async def handle_invoice_paid(db: Session, data: dict):
-    """Handle invoice.paid event."""
-    invoice_id = data['id']
-    
-    invoice = db.query(Invoice).filter(
-        Invoice.stripe_invoice_id == invoice_id
-    ).first()
-    
-    if invoice:
-        invoice.status = 'paid'
-        invoice.paid_at = datetime.utcnow()
-        
-        log.info(f"Invoice {invoice.invoice_number} marked as paid")
+async def handle_invoice_created(db: Session, data: dict):
+    """Handle invoice.create event."""
+    # Paystack invoice handling
+    log.info("Invoice created event received")
+
+
+async def handle_invoice_updated(db: Session, data: dict):
+    """Handle invoice.update event."""
+    # Paystack invoice handling
+    log.info("Invoice updated event received")
 
 
 async def handle_invoice_payment_failed(db: Session, data: dict):
     """Handle invoice.payment_failed event."""
-    invoice_id = data['id']
-    
-    invoice = db.query(Invoice).filter(
-        Invoice.stripe_invoice_id == invoice_id
-    ).first()
-    
-    if invoice:
-        invoice.status = 'uncollectible'
-        
-        # Log event
-        event = BillingEvent(
-            business_id=invoice.business_id,
-            event_type='invoice_payment_failed',
-            description=f'Invoice {invoice.invoice_number} payment failed',
-            metadata=None
-        )
-        db.add(event)
-        
-        log.warning(f"Invoice {invoice.invoice_number} payment failed")
-
-
-async def handle_invoice_upcoming(db: Session, data: dict):
-    """Handle invoice.upcoming event."""
-    customer_id = data.get('customer')
-    amount_due = data.get('amount_due', 0) / 100
-    
-    business = db.query(Business).filter(
-        Business.stripe_customer_id == customer_id
-    ).first()
-    
-    if business:
-        # Log event
-        event = BillingEvent(
-            business_id=business.id,
-            event_type='invoice_upcoming',
-            description=f'Upcoming invoice: ${amount_due}',
-            metadata=None
-        )
-        db.add(event)
-        
-        log.info(f"Upcoming invoice for business {business.id}: ${amount_due}")
-        # TODO: Send email notification
-
-
-async def handle_payment_method_attached(db: Session, data: dict):
-    """Handle payment_method.attached event."""
-    payment_method_id = data['id']
-    customer_id = data.get('customer')
-    
-    if not customer_id:
-        return
-    
-    business = db.query(Business).filter(
-        Business.stripe_customer_id == customer_id
-    ).first()
-    
-    if business:
-        # Check if payment method already exists
-        existing = db.query(PaymentMethod).filter(
-            PaymentMethod.stripe_payment_method_id == payment_method_id
-        ).first()
-        
-        if not existing and data.get('type') == 'card':
-            card = data.get('card', {})
-            payment_method = PaymentMethod(
-                business_id=business.id,
-                stripe_payment_method_id=payment_method_id,
-                type='card',
-                card_brand=card.get('brand'),
-                card_last4=card.get('last4'),
-                card_exp_month=card.get('exp_month'),
-                card_exp_year=card.get('exp_year'),
-                is_default=False,
-                is_active=True
-            )
-            db.add(payment_method)
-            
-            log.info(f"Payment method attached for business {business.id}")
-
-
-async def handle_payment_method_detached(db: Session, data: dict):
-    """Handle payment_method.detached event."""
-    payment_method_id = data['id']
-    
-    payment_method = db.query(PaymentMethod).filter(
-        PaymentMethod.stripe_payment_method_id == payment_method_id
-    ).first()
-    
-    if payment_method:
-        payment_method.is_active = False
-        log.info(f"Payment method {payment_method.id} detached")
-
-
-async def handle_checkout_completed(db: Session, data: dict):
-    """Handle checkout.session.completed event."""
-    session_id = data['id']
-    customer_id = data.get('customer')
-    subscription_id = data.get('subscription')
-    
-    log.info(f"Checkout completed: session={session_id}, customer={customer_id}, subscription={subscription_id}")
-    # Additional processing if needed
+    # Paystack invoice payment failed handling
+    log.warning("Invoice payment failed event received")

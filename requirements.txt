@@ -48,7 +48,8 @@ redis>=5.0.0  # Optional: For distributed rate limiting (can use in-memory for n
 python-dotenv==1.0.0  # Environment variable management
 
 # Billing & Payments
-stripe>=7.0.0,<8.0.0  # Stripe payment processing
+# Removed: stripe>=7.0.0,<8.0.0  # Stripe payment processing (replaced with Paystack)
+# Paystack doesn't have an official SDK, we use httpx for API calls (already included above)
 reportlab>=4.0.0,<5.0.0  # PDF generation for invoices
 Pillow>=10.0.0  # Image processing (required by reportlab)
 

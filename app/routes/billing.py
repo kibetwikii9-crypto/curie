@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import User as UserModel, Plan, Subscription, Addon, Invoice, PaymentMethod
+from app.models import User as UserModel, Plan, Subscription, Addon, Invoice, PaymentMethod, Business
 from app.routes.auth import get_current_user, get_user_business_id
 from app.services.billing_service import BillingService
 from app.services.usage_service import UsageService
-from app.services.stripe_service import StripeService
+from app.services.paystack_service import PaystackService
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -357,7 +357,7 @@ async def create_setup_intent(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a SetupIntent for adding a new payment method."""
+    """Initialize payment for adding a new payment method (Paystack)."""
     try:
         business_id = get_user_business_id(current_user, db)
         if not business_id:
@@ -367,30 +367,36 @@ async def create_setup_intent(
         if not business:
             raise HTTPException(status_code=404, detail="Business not found")
         
-        # Get or create Stripe customer
-        from app.services.stripe_service import StripeService
-        stripe_service = StripeService()
+        # Get or create Paystack customer
+        from app.services.paystack_service import PaystackService
+        paystack_service = PaystackService()
         
-        if not business.stripe_customer_id:
-            customer = stripe_service.create_customer(
+        if not business.stripe_customer_id:  # Keep column name for backward compatibility
+            customer = await paystack_service.create_customer(
                 email=current_user.email,
                 name=business.name,
                 metadata={"business_id": str(business_id)}
             )
-            business.stripe_customer_id = customer.id
+            business.stripe_customer_id = customer.get('customer_code')
             db.commit()
         
-        # Create SetupIntent
-        import stripe
-        setup_intent = stripe.SetupIntent.create(
-            customer=business.stripe_customer_id,
-            payment_method_types=["card"],
+        # Initialize a minimal transaction to get payment authorization
+        # Amount set to 50 NGN (0.5 kobo) for card verification
+        transaction = await paystack_service.initialize_transaction(
+            email=current_user.email,
+            amount=5000,  # 50 NGN in kobo
+            currency="NGN",
+            metadata={"type": "card_verification", "business_id": str(business_id)}
         )
         
-        return {"client_secret": setup_intent.client_secret}
+        return {
+            "authorization_url": transaction.get('authorization_url'),
+            "access_code": transaction.get('access_code'),
+            "reference": transaction.get('reference')
+        }
         
     except Exception as e:
-        log.error(f"Error creating setup intent: {str(e)}")
+        log.error(f"Error creating payment setup: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -504,9 +510,8 @@ async def delete_payment_method(
                 detail="Payment method not found"
             )
         
-        # Detach from Stripe
-        stripe_service = StripeService()
-        await stripe_service.detach_payment_method(payment_method.stripe_payment_method_id)
+        # For Paystack, we just deactivate locally
+        # Paystack doesn't have a direct "detach" - authorizations persist
         
         # Delete from database
         db.delete(payment_method)
@@ -619,7 +624,7 @@ async def create_checkout_session(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create Stripe Checkout session."""
+    """Create Paystack payment initialization."""
     try:
         business_id = get_user_business_id(current_user, db)
         if not business_id:
@@ -629,7 +634,6 @@ async def create_checkout_session(
             )
         
         # Get business
-        from app.models import Business
         business = db.query(Business).filter(Business.id == business_id).first()
         
         if not business:
@@ -646,40 +650,49 @@ async def create_checkout_session(
                 detail="Plan not found"
             )
         
-        # Get or create Stripe customer
-        stripe_service = StripeService()
+        # Get or create Paystack customer
+        paystack_service = PaystackService()
         if not business.stripe_customer_id:
-            customer = await stripe_service.create_customer(
+            customer = await paystack_service.create_customer(
                 email=current_user.email,
                 name=business.name,
                 metadata={'business_id': str(business_id)}
             )
-            business.stripe_customer_id = customer.id
+            business.stripe_customer_id = customer.get('customer_code')
             db.commit()
         
-        # Get price ID
-        price_id = (
+        # Get plan code
+        plan_code = (
             plan.stripe_price_id_annual if request.billing_cycle == 'annual'
             else plan.stripe_price_id_monthly
         )
         
-        # Create checkout session
-        session = await stripe_service.create_checkout_session(
-            customer_id=business.stripe_customer_id,
-            price_id=price_id,
-            success_url=request.success_url,
-            cancel_url=request.cancel_url,
-            trial_days=14,
+        # Calculate amount
+        amount = (
+            plan.price_annual if request.billing_cycle == 'annual'
+            else plan.price_monthly
+        )
+        amount_in_kobo = int(amount * 100)
+        
+        # Initialize transaction
+        transaction = await paystack_service.initialize_transaction(
+            email=current_user.email,
+            amount=amount_in_kobo,
+            currency=plan.currency,
+            plan_code=plan_code,
+            callback_url=request.success_url,
             metadata={
                 'business_id': str(business_id),
-                'plan_id': str(request.plan_id)
+                'plan_id': str(request.plan_id),
+                'billing_cycle': request.billing_cycle
             }
         )
         
         return {
             "success": True,
-            "session_id": session.id,
-            "url": session.url
+            "authorization_url": transaction.get('authorization_url'),
+            "access_code": transaction.get('access_code'),
+            "reference": transaction.get('reference')
         }
     except Exception as e:
         log.error(f"Failed to create checkout session: {e}")

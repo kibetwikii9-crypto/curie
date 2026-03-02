@@ -8,8 +8,6 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     dockerfilePath: null  # Use buildpacks, not Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: BOT_TOKEN
         sync: false  # You'll set this manually in Render dashboard
       - key: PUBLIC_URL
@@ -24,8 +22,6 @@ services:
           property: host
       - key: DATABASE_URL
         sync: false  # Set this manually with your Supabase connection string
-      - key: SECRET_KEY
-        sync: false  # Set this manually - generate a strong random key
       - key: LOG_LEVEL
         value: INFO
       - key: OPENAI_API_KEY
@@ -39,18 +35,10 @@ services:
     plan: free  # Change to 'starter' or 'standard' for production
     buildCommand: cd frontend && npm install && npm run build
     startCommand: cd frontend && npm start
-    # NOTE: NEXT_PUBLIC_API_URL is intentionally NOT listed here
-    # 
-    # Why: Render's Blueprint system can overwrite manual env vars on redeploy.
-    # Even with sync: false, Blueprint redeploys can reset it to just the service name.
-    #
-    # SOLUTION: Set NEXT_PUBLIC_API_URL ONLY in Render Dashboard (not in render.yaml)
-    # 
-    # Steps:
-    # 1. Go to Render Dashboard → automify-ai-frontend → Environment tab
-    # 2. Add: NEXT_PUBLIC_API_URL = https://automify-ai-backend-xxxx.onrender.com
-    # 3. Make sure it's NOT managed by Blueprint (should show as "Manual" not "Blueprint")
-    #
-    # This prevents Render from overwriting it during Blueprint redeploys.
-    envVars: []
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: automify-ai-backend
+          property: host
 

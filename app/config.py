@@ -38,11 +38,11 @@ class Settings(BaseSettings):
     # Website Chat Widget (No external setup needed - fully automated)
     widget_secret_key: str = ""  # Secret key for widget authentication (set via WIDGET_SECRET_KEY env var, auto-generated if empty)
     
-    # ========== BILLING & STRIPE ==========
-    # Stripe API Keys
-    stripe_public_key: str = ""  # Stripe Publishable Key (set via STRIPE_PUBLIC_KEY env var)
-    stripe_secret_key: str = ""  # Stripe Secret Key (set via STRIPE_SECRET_KEY env var)
-    stripe_webhook_secret: str = ""  # Stripe Webhook Secret (set via STRIPE_WEBHOOK_SECRET env var)
+    # ========== BILLING & PAYSTACK ==========
+    # Paystack API Keys
+    paystack_public_key: str = ""  # Paystack Publishable Key (set via PAYSTACK_PUBLIC_KEY env var)
+    paystack_secret_key: str = ""  # Paystack Secret Key (set via PAYSTACK_SECRET_KEY env var)
+    paystack_webhook_secret: str = ""  # Paystack Webhook Secret (set via PAYSTACK_WEBHOOK_SECRET env var)
     
     # Billing Configuration
     trial_days: int = 14  # Free trial period in days (set via TRIAL_DAYS env var)

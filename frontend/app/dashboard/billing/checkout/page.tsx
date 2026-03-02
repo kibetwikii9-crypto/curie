@@ -5,13 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import CheckoutForm from '@/components/billing/CheckoutForm';
 import { ArrowLeft, Loader2, XCircle } from 'lucide-react';
-
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 function CheckoutContent() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -21,7 +16,7 @@ function CheckoutContent() {
   const planId = searchParams.get('plan_id');
   const billingCycle = searchParams.get('billing_cycle') as 'monthly' | 'annual' || 'monthly';
   
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Redirect if not authenticated
@@ -43,7 +38,7 @@ function CheckoutContent() {
 
   const selectedPlan = plansData?.find((p: any) => p.id === parseInt(planId || '0'));
 
-  // Create checkout session
+  // Create checkout session with Paystack
   useEffect(() => {
     if (!selectedPlan || !isAuthenticated) return;
 
@@ -51,10 +46,12 @@ function CheckoutContent() {
       try {
         const response = await api.post('/api/billing/checkout/create-session', {
           plan_id: selectedPlan.id,
-          billing_cycle: billingCycle
+          billing_cycle: billingCycle,
+          success_url: `${window.location.origin}/dashboard/billing?success=true`,
+          cancel_url: `${window.location.origin}/dashboard/billing/plans`
         });
         
-        setClientSecret(response.data.client_secret);
+        setAuthorizationUrl(response.data.authorization_url);
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to create checkout session');
       }
@@ -112,8 +109,8 @@ function CheckoutContent() {
     );
   }
 
-  // Waiting for client secret
-  if (!clientSecret) {
+  // Waiting for authorization URL
+  if (!authorizationUrl) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
@@ -145,32 +142,14 @@ function CheckoutContent() {
         </div>
 
         {/* Checkout Form */}
-        <Elements 
-          stripe={stripePromise} 
-          options={{
-            clientSecret,
-            appearance: {
-              theme: 'stripe',
-              variables: {
-                colorPrimary: '#6366f1',
-                colorBackground: '#ffffff',
-                colorText: '#1f2937',
-                colorDanger: '#ef4444',
-                fontFamily: 'system-ui, sans-serif',
-                spacingUnit: '4px',
-                borderRadius: '8px',
-              },
-            },
-          }}
-        >
-          <CheckoutForm
-            planName={selectedPlan.display_name}
-            amount={amount}
-            billingCycle={billingCycle}
-            onSuccess={handleSuccess}
-            onError={(err) => setError(err)}
-          />
-        </Elements>
+        <CheckoutForm
+          planName={selectedPlan.display_name}
+          amount={amount}
+          billingCycle={billingCycle}
+          authorizationUrl={authorizationUrl}
+          onSuccess={handleSuccess}
+          onError={(err) => setError(err)}
+        />
 
         {/* Trust Badges */}
         <div className="mt-8 flex items-center justify-center gap-6 text-sm text-gray-600 dark:text-gray-400">
