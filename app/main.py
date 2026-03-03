@@ -88,22 +88,46 @@ app.add_middleware(
 # Add exception handlers to ensure CORS headers on all error responses
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request, exc):
+    origin = request.headers.get("origin", "")
+    # Only allow origin if it's in our whitelist
+    allowed_origin = origin if origin in cors_origins else ""
+    
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
         headers={
-            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Origin": allowed_origin or origin,
             "Access-Control-Allow-Credentials": "true",
         }
     )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
+    origin = request.headers.get("origin", "")
+    allowed_origin = origin if origin in cors_origins else ""
+    
     return JSONResponse(
         status_code=422,
         content={"detail": exc.errors()},
         headers={
-            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Origin": allowed_origin or origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+# Add a catch-all exception handler for 500 errors
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    origin = request.headers.get("origin", "")
+    allowed_origin = origin if origin in cors_origins else ""
+    
+    log.error(f"❌ Unhandled exception: {exc}", exc_info=True)
+    
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={
+            "Access-Control-Allow-Origin": allowed_origin or origin,
             "Access-Control-Allow-Credentials": "true",
         }
     )
