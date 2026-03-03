@@ -47,12 +47,6 @@ cors_origins.append("https://curie-frontend-8hvz.onrender.com")
 cors_origins.append("https://automify-ai-frontend.onrender.com")
 cors_origins.append("https://www.automifyyai.com")
 cors_origins.append("https://automifyyai.com")
-# Add custom domain
-cors_origins.append("https://www.automifyyai.com")
-cors_origins.append("https://automifyyai.com")
-# Add custom domain
-cors_origins.append("https://www.automifyyai.com")
-cors_origins.append("https://automifyyai.com")
 
 # In production, if FRONTEND_URL is not set, don't allow all origins
 # Use explicit whitelist only
