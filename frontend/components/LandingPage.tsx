@@ -210,6 +210,128 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Stats & Social Proof Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
+        <div className="max-w-7xl mx-auto">
+          {/* Trust Badges */}
+          <div className="text-center mb-12">
+            <p className="text-sm text-gray-400 mb-6 uppercase tracking-wide">Trusted by businesses worldwide</p>
+            <div className="flex flex-wrap justify-center items-center gap-8 mb-12 opacity-60">
+              <div className="text-2xl font-bold text-white">🏢 Enterprise</div>
+              <div className="text-2xl font-bold text-white">🚀 Startups</div>
+              <div className="text-2xl font-bold text-white">🛍️ E-commerce</div>
+              <div className="text-2xl font-bold text-white">💼 SaaS</div>
+            </div>
+          </div>
+
+          {/* Key Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
+            {[
+              { value: '10K+', label: 'Messages Handled Daily', icon: '💬' },
+              { value: '99.9%', label: 'Uptime Guarantee', icon: '⚡' },
+              { value: '15+', label: 'Platform Integrations', icon: '🔗' },
+              { value: '<2s', label: 'Response Time', icon: '⏱️' },
+            ].map((stat, idx) => (
+              <div
+                key={idx}
+                className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-[#007FFF]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#007FFF]/10 text-center group"
+              >
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
+                  {stat.icon}
+                </div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-[#007FFF] to-[#D4AF37] bg-clip-text text-transparent mb-2">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-gray-400">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Live Demo Preview */}
+          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-md rounded-3xl p-8 border border-white/10 hover:border-[#007FFF]/30 transition-all duration-500 shadow-2xl">
+            <div className="text-center mb-8">
+              <h3 className="text-2xl font-bold text-white mb-3">See It In Action</h3>
+              <p className="text-gray-300">Watch how our AI handles real customer conversations</p>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Chat Preview 1 */}
+              <div className="bg-black/40 rounded-2xl p-6 border border-[#007FFF]/20">
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold">
+                    WA
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white">WhatsApp</div>
+                    <div className="text-xs text-green-400 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                      Live
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-end">
+                    <div className="bg-[#007FFF] text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
+                      What are your pricing plans?
+                    </div>
+                  </div>
+                  <div className="flex justify-start">
+                    <div className="bg-white/10 text-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[85%] text-sm">
+                      We have 3 plans: Starter ($29/mo), Professional ($99/mo), and Enterprise (custom). 
+                      Each includes multi-channel support and AI responses. Would you like details on a specific plan? 🚀
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chat Preview 2 */}
+              <div className="bg-black/40 rounded-2xl p-6 border border-purple-500/20">
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-600 flex items-center justify-center text-white font-bold">
+                    IG
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white">Instagram</div>
+                    <div className="text-xs text-purple-400 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                      Live
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-end">
+                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
+                      Do you integrate with Shopify?
+                    </div>
+                  </div>
+                  <div className="flex justify-start">
+                    <div className="bg-white/10 text-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[85%] text-sm">
+                      Yes! We integrate with Shopify, WooCommerce, and major e-commerce platforms. 
+                      You can sync products, track orders, and handle customer inquiries automatically. 🛍️
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Button */}
+            <div className="text-center mt-8">
+              <button
+                onClick={() => {
+                  setAuthModalTab('signup');
+                  setShowAuthModal(true);
+                }}
+                className="group inline-flex items-center gap-2 px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-[#007FFF] to-[#0066CC] hover:from-[#0066CC] hover:to-[#007FFF] rounded-xl transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/50 hover:scale-105"
+              >
+                Try It Free Now
+                <Sparkles className="h-5 w-5 group-hover:rotate-12 transition-transform" />
+              </button>
+              <p className="text-sm text-gray-400 mt-3">No credit card required • 14-day free trial</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Learn More Section */}
       <section ref={featuresRef} className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
