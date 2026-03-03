@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 from app.logging_config import init_logging
@@ -21,10 +23,27 @@ from app.models import (
     AnalyticsEvent,
     AdAsset,
 )  # Import all models to register with Base
+from app.middleware.security import (
+    limiter,
+    SecurityHeadersMiddleware,
+    DDoSProtectionMiddleware,
+    TimeoutMiddleware,
+    rate_limit_handler,
+)
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 init_logging(settings.log_level)
 
-app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
+app = FastAPI(
+    title="Curie - Multi-Platform Messaging API",
+    version="0.1.0",
+    docs_url="/docs" if not settings.maintenance_mode else None,
+    redoc_url="/redoc" if not settings.maintenance_mode else None,
+)
+
+# Attach rate limiter to app
+app.state.limiter = limiter
 
 # Add CORS middleware FIRST (must be first to ensure all responses have CORS headers)
 # Support both local development and production (Render)
@@ -62,12 +81,37 @@ cors_origins = list(dict.fromkeys(cors_origins))
 # Log CORS origins for debugging
 log.info(f"🌐 CORS configured for origins: {cors_origins}")
 
+# ========== SECURITY MIDDLEWARE STACK ==========
+# Order matters! Add from most general to most specific
+
+# 1. Trusted Host Protection (prevent host header attacks)
+allowed_hosts = [
+    "localhost",
+    "127.0.0.1",
+    "automify-ai-backend.onrender.com",
+    "automifyyai.com",
+    "www.automifyyai.com",
+]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+# 2. GZip Compression (reduce bandwidth, improve performance)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# 3. DDoS Protection (must be early in chain)
+app.add_middleware(DDoSProtectionMiddleware, max_requests_per_second=50)
+
+# 4. Request Timeout Protection
+app.add_middleware(TimeoutMiddleware, timeout_seconds=30)
+
+# 5. Security Headers
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Add a middleware to log requests and CORS headers (for debugging)
 @app.middleware("http")
 async def log_cors_headers(request, call_next):
     origin = request.headers.get("origin")
     if origin:
-        log.info(f"📨 Request from origin: {origin} to {request.url.path}")
+        log.debug(f"📨 Request from origin: {origin} to {request.url.path}")
     
     response = await call_next(request)
     
@@ -76,11 +120,11 @@ async def log_cors_headers(request, call_next):
     if origin and not cors_header:
         log.warning(f"⚠️  Missing CORS header for origin {origin} on {request.url.path}")
     elif cors_header:
-        log.info(f"✅ CORS header set: {cors_header} for {request.url.path}")
+        log.debug(f"✅ CORS header set: {cors_header} for {request.url.path}")
     
     return response
 
-# Add CORS middleware - MUST BE FIRST
+# 6. CORS middleware - AFTER security headers but before routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -89,6 +133,14 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# 7. Rate Limiting Middleware - LAST before routes
+app.add_middleware(SlowAPIMiddleware)
+
+# ========== EXCEPTION HANDLERS ==========
+
+# Rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 # Add exception handlers to ensure CORS headers on all error responses
 @app.exception_handler(StarletteHTTPException)

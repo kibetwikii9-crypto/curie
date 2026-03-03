@@ -44,6 +44,9 @@ markdown>=3.5.0  # Parse Markdown files
 slowapi>=0.1.9  # Rate limiting for FastAPI
 redis>=5.0.0  # Optional: For distributed rate limiting (can use in-memory for now)
 
+# Security Headers & Protection
+secure>=0.3.0  # Security headers middleware
+
 # Utilities
 python-dotenv==1.0.0  # Environment variable management
 
