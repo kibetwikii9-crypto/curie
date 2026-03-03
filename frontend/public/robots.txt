@@ -1,0 +1,10 @@
+# Allow all search engines to crawl the site
+User-agent: *
+Allow: /
+
+# Disallow crawling of dashboard pages (require authentication)
+Disallow: /dashboard/
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://automifyyai.com/sitemap.xml
