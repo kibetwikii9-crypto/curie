@@ -44,14 +44,18 @@ if hasattr(settings, "frontend_url") and settings.frontend_url:
 # For production, allow common Render frontend URLs
 # Add your specific frontend URL here or via FRONTEND_URL env var
 cors_origins.append("https://curie-frontend-8hvz.onrender.com")
-# Also add automify frontend domain (if you're keeping automify services)
 cors_origins.append("https://automify-ai-frontend.onrender.com")
+cors_origins.append("https://www.automifyyai.com")
+cors_origins.append("https://automifyyai.com")
+# Add custom domain
+cors_origins.append("https://www.automifyyai.com")
+cors_origins.append("https://automifyyai.com")
+# Add custom domain
+cors_origins.append("https://www.automifyyai.com")
+cors_origins.append("https://automifyyai.com")
 
-# In production, if FRONTEND_URL is not set, allow all origins (less secure but works)
-# Remove this in production and set FRONTEND_URL explicitly
-if not frontend_url_env and not (hasattr(settings, "frontend_url") and settings.frontend_url):
-    # Allow all origins in development (not recommended for production)
-    cors_origins = ["*"]
+# In production, if FRONTEND_URL is not set, don't allow all origins
+# Use explicit whitelist only
 
 app.add_middleware(
     CORSMiddleware,
