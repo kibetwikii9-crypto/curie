@@ -68,8 +68,8 @@ export default function Header() {
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex-1">
-          {/* Page Title & Breadcrumb */}
+        <div className="flex-1 md:block hidden">
+          {/* Page Title & Breadcrumb - Hidden on mobile to save space */}
           <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
             {breadcrumbs.map((crumb, index) => (
               <div key={crumb.path} className="flex items-center">
@@ -81,6 +81,12 @@ export default function Header() {
             ))}
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {currentPageTitle}
+          </h2>
+        </div>
+        {/* Mobile title - centered */}
+        <div className="md:hidden flex-1 text-center">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
             {currentPageTitle}
           </h2>
         </div>
