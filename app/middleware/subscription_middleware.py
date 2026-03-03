@@ -186,8 +186,10 @@ class SubscriptionMiddleware:
             raise
         except Exception as e:
             logger.error(f"Failed to check usage limit: {e}")
-            # Allow on errors to avoid blocking users
-            pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to verify usage limits. Please try again."
+            )
 
 
 # Helper functions for route dependencies

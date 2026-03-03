@@ -245,12 +245,13 @@ class UsageService:
                 return True
             
             # Check if exceeded
-            return not limit_info.get('exceeded', True)
+            exceeded = limit_info.get('exceeded', False)
+            return not exceeded
             
         except Exception as e:
             logger.error(f"Failed to check if resource can be used: {e}")
-            # Default to allowing to avoid blocking users on errors
-            return True
+            # Block on errors to prevent unlimited usage
+            return False
     
     @staticmethod
     async def get_overage(

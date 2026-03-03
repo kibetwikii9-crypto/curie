@@ -105,6 +105,7 @@ export default function AdStudioPage() {
   const [videoObjective, setVideoObjective] = useState('');
   const [videoPlatform, setVideoPlatform] = useState('');
   const [videoTemplate, setVideoTemplate] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [videoHeadline, setVideoHeadline] = useState('');
   const [videoText, setVideoText] = useState('');
   const [videoCta, setVideoCta] = useState('');
@@ -338,6 +339,18 @@ export default function AdStudioPage() {
 
   const prevVideoStep = () => {
     if (videoStep > 1) setVideoStep(videoStep - 1);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const fileArray = Array.from(files);
+      setUploadedFiles(prev => [...prev, ...fileArray]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const getStatusColor = (status: string) => {
@@ -1356,11 +1369,50 @@ export default function AdStudioPage() {
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                           Drag & drop your images or videos here
                         </p>
-                        <button className="inline-flex items-center px-6 py-3 text-sm font-medium text-white bg-primary-600 rounded-lg shadow-md hover:bg-primary-700">
+                        <label htmlFor="file-upload" className="inline-flex items-center px-6 py-3 text-sm font-medium text-white bg-primary-600 rounded-lg shadow-md hover:bg-primary-700 cursor-pointer">
                           <Plus className="h-5 w-5 mr-2" />
                           Choose Files
-                        </button>
+                        </label>
+                        <input
+                          id="file-upload"
+                          type="file"
+                          accept="image/*,video/*"
+                          multiple
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
                       </div>
+                      
+                      {/* Display uploaded files */}
+                      {uploadedFiles.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Uploaded Files ({uploadedFiles.length})
+                          </h5>
+                          <div className="grid grid-cols-2 gap-3">
+                            {uploadedFiles.map((file, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  {file.type.startsWith('video/') ? (
+                                    <Video className="h-5 w-5 text-red-600 flex-shrink-0" />
+                                  ) : (
+                                    <ImageIcon className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                                  )}
+                                  <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                    {file.name}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => removeFile(index)}
+                                  className="ml-2 text-red-600 hover:text-red-700 flex-shrink-0"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {brandData && (
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg">
                           <div className="flex items-center gap-2 text-sm text-blue-900 dark:text-blue-400">
