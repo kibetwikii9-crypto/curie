@@ -7,47 +7,31 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import PaymentMethodCard from '@/components/billing/PaymentMethodCard';
 import { Plus, CreditCard, AlertCircle } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
-  const stripe = useStripe();
-  const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
-
+    
     setIsProcessing(true);
     setError(null);
 
     try {
-      const { error: submitError } = await elements.submit();
-      if (submitError) {
-        setError(submitError.message || 'Failed to add card');
-        setIsProcessing(false);
-        return;
-      }
-
-      const { error: confirmError } = await stripe.confirmSetup({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/dashboard/billing/payment-methods?success=true`,
-        },
-      });
-
-      if (confirmError) {
-        setError(confirmError.message || 'Failed to add card');
+      // Initialize Paystack payment
+      const response = await api.post('/api/billing/payment-methods/setup', { email });
+      
+      if (response.data.authorization_url) {
+        // Redirect to Paystack payment page
+        window.location.href = response.data.authorization_url;
       } else {
-        onSuccess();
+        setError('Failed to initialize payment');
+        setIsProcessing(false);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
-    } finally {
+      setError(err.response?.data?.detail || 'An unexpected error occurred');
       setIsProcessing(false);
     }
   };
@@ -56,9 +40,16 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Card Details
+          Email for Payment
         </h3>
-        <PaymentElement />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter your email"
+          required
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
+        />
       </div>
 
       {error && (
@@ -70,10 +61,10 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={!stripe || isProcessing}
+          disabled={isProcessing || !email}
           className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50"
         >
-          {isProcessing ? 'Adding...' : 'Add Card'}
+          {isProcessing ? 'Processing...' : 'Continue to Payment'}
         </button>
         <button
           type="button"
@@ -93,7 +84,6 @@ export default function PaymentMethodsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showAddCard, setShowAddCard] = useState(false);
-  const [setupSecret, setSetupSecret] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -137,17 +127,6 @@ export default function PaymentMethodsPage() {
     }
   });
 
-  // Create setup intent for adding card
-  const handleAddCard = async () => {
-    try {
-      const response = await api.post('/api/billing/payment-methods/setup');
-      setSetupSecret(response.data.client_secret);
-      setShowAddCard(true);
-    } catch (error) {
-      alert('Failed to initialize card setup');
-    }
-  };
-
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -164,40 +143,25 @@ export default function PaymentMethodsPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Payment Methods</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage your credit cards and payment options</p>
+          <p className="text-gray-600 dark:text-gray-400">Manage your payment options</p>
         </div>
 
         {/* Add Card Modal */}
-        {showAddCard && setupSecret && (
+        {showAddCard && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-gray-200 dark:border-gray-700">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
                 Add Payment Method
               </h2>
-              <Elements
-                stripe={stripePromise}
-                options={{
-                  clientSecret: setupSecret,
-                  appearance: {
-                    theme: 'stripe',
-                    variables: {
-                      colorPrimary: '#6366f1',
-                    },
-                  },
+              <AddCardForm
+                onSuccess={() => {
+                  setShowAddCard(false);
+                  queryClient.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });
                 }}
-              >
-                <AddCardForm
-                  onSuccess={() => {
-                    setShowAddCard(false);
-                    setSetupSecret(null);
-                    queryClient.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });
-                  }}
-                  onCancel={() => {
-                    setShowAddCard(false);
-                    setSetupSecret(null);
-                  }}
-                />
-              </Elements>
+                onCancel={() => {
+                  setShowAddCard(false);
+                }}
+              />
             </div>
           </div>
         )}
@@ -216,7 +180,7 @@ export default function PaymentMethodsPage() {
                 Add a payment method to subscribe to a plan and unlock all features
               </p>
               <button
-                onClick={handleAddCard}
+                onClick={() => setShowAddCard(true)}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg font-semibold hover:from-primary-700 hover:to-purple-700 transition-all hover:scale-105 shadow-lg"
               >
                 <Plus className="h-5 w-5" />
@@ -232,7 +196,7 @@ export default function PaymentMethodsPage() {
                 {methods.length} payment method{methods.length !== 1 ? 's' : ''} saved
               </p>
               <button
-                onClick={handleAddCard}
+                onClick={() => setShowAddCard(true)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -259,10 +223,10 @@ export default function PaymentMethodsPage() {
                 <AlertCircle className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                    Your cards are secure
+                    Your payments are secure
                   </h3>
                   <p className="text-sm text-blue-800 dark:text-blue-300">
-                    All payment information is encrypted and securely stored by Stripe. 
+                    All payment information is encrypted and securely processed by Paystack. 
                     We never see or store your full card details.
                   </p>
                 </div>
