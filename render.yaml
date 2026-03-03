@@ -33,7 +33,7 @@ services:
     name: automify-ai-frontend
     runtime: node
     plan: free  # Change to 'starter' or 'standard' for production
-    buildCommand: cd frontend && npm install && npm run build
+    buildCommand: cd frontend && rm -rf .next && npm install && npm run build
     startCommand: cd frontend && npm start
     envVars:
       - key: NEXT_PUBLIC_API_URL
