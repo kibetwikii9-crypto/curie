@@ -41,11 +41,13 @@ cors_origins = [
 # Add production frontend URL from environment variable
 frontend_url_env = os.getenv("FRONTEND_URL", "")
 if frontend_url_env:
-    cors_origins.append(frontend_url_env)
+    # Strip trailing slashes to avoid duplicates
+    cors_origins.append(frontend_url_env.rstrip('/'))
 
 # Also add from settings if set
 if hasattr(settings, "frontend_url") and settings.frontend_url:
-    cors_origins.append(settings.frontend_url)
+    # Strip trailing slashes to avoid duplicates
+    cors_origins.append(settings.frontend_url.rstrip('/'))
 
 # For production, allow common Render frontend URLs
 # Add your specific frontend URL here or via FRONTEND_URL env var
@@ -53,6 +55,9 @@ cors_origins.append("https://curie-frontend-8hvz.onrender.com")
 cors_origins.append("https://automify-ai-frontend.onrender.com")
 cors_origins.append("https://www.automifyyai.com")
 cors_origins.append("https://automifyyai.com")
+
+# Remove any duplicates
+cors_origins = list(dict.fromkeys(cors_origins))
 
 # Log CORS origins for debugging
 log.info(f"🌐 CORS configured for origins: {cors_origins}")
