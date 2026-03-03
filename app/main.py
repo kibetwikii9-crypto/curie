@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.logging_config import init_logging
@@ -23,9 +26,12 @@ init_logging(settings.log_level)
 
 app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
 
-# Add CORS middleware
+# Add CORS middleware FIRST (must be first to ensure all responses have CORS headers)
 # Support both local development and production (Render)
 import os
+import logging
+
+log = logging.getLogger(__name__)
 
 cors_origins = [
     "http://localhost:3000",
@@ -48,16 +54,59 @@ cors_origins.append("https://automify-ai-frontend.onrender.com")
 cors_origins.append("https://www.automifyyai.com")
 cors_origins.append("https://automifyyai.com")
 
-# In production, if FRONTEND_URL is not set, don't allow all origins
-# Use explicit whitelist only
+# Log CORS origins for debugging
+log.info(f"🌐 CORS configured for origins: {cors_origins}")
 
+# Add a middleware to log requests and CORS headers (for debugging)
+@app.middleware("http")
+async def log_cors_headers(request, call_next):
+    origin = request.headers.get("origin")
+    if origin:
+        log.info(f"📨 Request from origin: {origin} to {request.url.path}")
+    
+    response = await call_next(request)
+    
+    # Log CORS headers in response
+    cors_header = response.headers.get("access-control-allow-origin")
+    if origin and not cors_header:
+        log.warning(f"⚠️  Missing CORS header for origin {origin} on {request.url.path}")
+    elif cors_header:
+        log.info(f"✅ CORS header set: {cors_header} for {request.url.path}")
+    
+    return response
+
+# Add CORS middleware - MUST BE FIRST
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Add exception handlers to ensure CORS headers on all error responses
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 app.include_router(api_router)
 
