@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
@@ -14,59 +14,17 @@ const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
   loading: () => null,
 });
 
-// Hook for intersection observer animations
-function useIntersectionObserver(options = {}) {
-  const [isIntersecting, setIsIntersecting] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsIntersecting(true);
-        }
-      },
-      { threshold: 0.1, ...options }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current);
-      }
-    };
-  }, []);
-
-  return [ref, isIntersecting] as const;
-}
-
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [featuresRef, featuresVisible] = useIntersectionObserver();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.push('/dashboard');
     }
   }, [isAuthenticated, isLoading, router]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-      setPrefersReducedMotion(mediaQuery.matches);
-      
-      const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, []);
 
   if (isLoading) {
     return (
@@ -139,21 +97,21 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
               Multi-Channel AI Business Assistant
-              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent">
                 That Works Everywhere
               </span>
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed">
               Connect with customers across WhatsApp, Telegram, Instagram, and more. 
               Powered by AI that understands context and delivers personalized experiences.
             </p>
 
             {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
@@ -176,7 +134,7 @@ export default function LandingPage() {
             </div>
 
             {/* Optional Visual Element */}
-            <div className="relative mt-16 animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
+            <div className="relative mt-16">
               <div className="relative mx-auto max-w-3xl">
                 <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/30 to-[#D4AF37]/30 rounded-2xl blur-3xl animate-pulse-slow" />
                 <div className="relative bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl hover:border-[#007FFF]/50 transition-all duration-500">
@@ -333,9 +291,9 @@ export default function LandingPage() {
       </section>
 
       {/* Learn More Section */}
-      <section ref={featuresRef} className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
-          <div className={`text-center mb-12 transition-all duration-700 ${featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
               Everything You Need to Scale
             </h2>
@@ -393,12 +351,7 @@ export default function LandingPage() {
               return (
                 <div
                   key={idx}
-                  className={`bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all duration-700 hover:shadow-lg hover:scale-105 hover:-translate-y-2 ${
-                    featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-                  }`}
-                  style={{ 
-                    transitionDelay: featuresVisible ? `${idx * 100}ms` : '0ms'
-                  }}
+                  className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all duration-300 hover:shadow-lg hover:scale-105 hover:-translate-y-2"
                 >
                   <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110`}>
                     <Icon className={`h-6 w-6 ${feature.color}`} />
