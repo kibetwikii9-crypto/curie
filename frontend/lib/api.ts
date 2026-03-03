@@ -25,6 +25,10 @@ function normalizeApiUrl(raw: string): string {
 
   // Bare hostname (e.g. automify-ai-backend or backend.example.com)
   if (/^[\w.-]+$/.test(raw)) {
+    // Special case: if it's a Render service name without .onrender.com, add it
+    if (raw.includes('-') && !raw.includes('.')) {
+      return `https://${raw}.onrender.com`;
+    }
     return `https://${raw.replace(/\/+$/u, '')}`;
   }
 
