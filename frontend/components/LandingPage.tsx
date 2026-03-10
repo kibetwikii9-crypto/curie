@@ -39,14 +39,14 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 relative overflow-hidden">
       {/* 3D Animated Background */}
-      <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
+      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-r from-purple-100 to-blue-100 flex items-center justify-center">Loading...</div>}>
         <AnimatedBackground3D />
       </Suspense>
 
       {/* Navigation */}
-      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6">
+      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6 bg-white/80 backdrop-blur-sm shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
@@ -54,18 +54,10 @@ export default function LandingPage() {
               alt="Automify"
               width={200}
               height={66}
-              className="h-14 w-auto dark:hidden"
+              className="h-14 w-auto"
               priority
             />
-            <Image
-              src="/logo-white-no-tagline.png"
-              alt="Automify"
-              width={200}
-              height={66}
-              className="h-14 w-auto hidden dark:block"
-              priority
-            />
-            <span className="text-2xl font-bold text-[#007FFF]">
+            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
               Automify
             </span>
           </div>
@@ -75,7 +67,7 @@ export default function LandingPage() {
                 setAuthModalTab('signin');
                 setShowAuthModal(true);
               }}
-              className="px-4 py-2 text-sm font-medium text-gray-200 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 transition-colors"
             >
               Sign In
             </button>
@@ -84,7 +76,7 @@ export default function LandingPage() {
                 setAuthModalTab('signup');
                 setShowAuthModal(true);
               }}
-              className="px-6 py-2 text-sm font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-colors shadow-lg shadow-[#007FFF]/20"
+              className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg shadow-purple-500/30"
             >
               Sign Up
             </button>
@@ -97,7 +89,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6 leading-tight">
               Multi-Channel AI Business Assistant
               <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent">
                 That Works Everywhere

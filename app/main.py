@@ -106,21 +106,16 @@ app.add_middleware(TimeoutMiddleware, timeout_seconds=30)
 # 5. Security Headers
 app.add_middleware(SecurityHeadersMiddleware)
 
-# Add a middleware to log requests and CORS headers (for debugging)
+# Reduce logging for faster responses
 @app.middleware("http")
 async def log_cors_headers(request, call_next):
-    origin = request.headers.get("origin")
-    if origin:
-        log.debug(f"📨 Request from origin: {origin} to {request.url.path}")
-    
+    # Only log errors, not every request (faster performance)
     response = await call_next(request)
     
-    # Log CORS headers in response
-    cors_header = response.headers.get("access-control-allow-origin")
-    if origin and not cors_header:
-        log.warning(f"⚠️  Missing CORS header for origin {origin} on {request.url.path}")
-    elif cors_header:
-        log.debug(f"✅ CORS header set: {cors_header} for {request.url.path}")
+    # Only check CORS on actual CORS requests
+    origin = request.headers.get("origin")
+    if origin and not response.headers.get("access-control-allow-origin"):
+        log.warning(f"⚠️  Missing CORS for {origin} on {request.url.path}")
     
     return response
 
