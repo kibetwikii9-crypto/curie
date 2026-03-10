@@ -175,7 +175,7 @@ export default function LandingPage() {
               <button
                 key={platform.name}
                 onClick={() => {
-                  setAuthModalTab('signup');
+                  setAuthModalTab('signin');
                   setShowAuthModal(true);
                 }}
                 className="p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-200 hover:border-purple-400 cursor-pointer transform hover:-translate-y-1"
