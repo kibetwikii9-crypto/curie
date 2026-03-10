@@ -163,13 +163,14 @@ export default function LandingPage() {
             </p>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {[
               { name: 'WhatsApp', logo: '/channels/whatsapp.png', desc: 'Business API' },
               { name: 'Instagram', logo: '/channels/intagram.png', desc: 'Direct Messages' },
               { name: 'Facebook', logo: '/channels/messenger.png', desc: 'Messenger' },
               { name: 'Telegram', logo: '/channels/telegram.png', desc: 'Bot API' },
               { name: 'Email', logo: '/channels/gmail.png', desc: 'Gmail & More' },
+              { name: 'Binance', logo: '/channels/binance.png', desc: 'Crypto Trading' },
             ].map((platform) => (
               <button
                 key={platform.name}
