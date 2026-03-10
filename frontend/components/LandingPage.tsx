@@ -161,11 +161,64 @@ export default function LandingPage() {
       </section>
 
       {/* Stats & Social Proof Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16 bg-white/50 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto">
+          {/* Integrations Header */}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-4">
+              Connect Your Channels in Minutes
+            </h2>
+            <p className="text-lg text-gray-700 max-w-2xl mx-auto">
+              One platform to manage all your customer conversations
+            </p>
+          </div>
+          
+          {/* Integration Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12">
+            {[
+              { name: 'WhatsApp', color: 'from-green-400 to-green-600', icon: '💬', desc: 'Business API' },
+              { name: 'Instagram', color: 'from-pink-500 to-purple-600', icon: '📸', desc: 'Direct Messages' },
+              { name: 'Facebook', color: 'from-blue-500 to-blue-700', icon: '👍', desc: 'Messenger' },
+              { name: 'Telegram', color: 'from-blue-400 to-cyan-500', icon: '✈️', desc: 'Bot API' },
+              { name: 'Email', color: 'from-red-500 to-orange-600', icon: '📧', desc: 'Gmail & More' },
+            ].map((platform) => (
+              <button
+                key={platform.name}
+                onClick={() => {
+                  setAuthModalTab('signup');
+                  setShowAuthModal(true);
+                }}
+                className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-2 border-2 border-gray-100 hover:border-purple-300 group"
+              >
+                <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">{platform.icon}</div>
+                <h3 className="font-bold text-gray-800 text-lg mb-1">{platform.name}</h3>
+                <p className="text-xs text-gray-500 mb-3">{platform.desc}</p>
+                <div className={`h-1.5 w-16 mx-auto bg-gradient-to-r ${platform.color} rounded-full`}></div>
+              </button>
+            ))}
+          </div>
+          
+          <div className="text-center">
+            <button
+              onClick={() => {
+                setAuthModalTab('signup');
+                setShowAuthModal(true);
+              }}
+              className="px-10 py-4 text-lg font-bold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105"
+            >
+              Start Connecting Now - Free Trial
+            </button>
+            <p className="text-sm text-gray-600 mt-3">No credit card required • Setup in 5 minutes</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Badges & Stats */}
       <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
         <div className="max-w-7xl mx-auto">
           {/* Trust Badges */}
           <div className="text-center mb-12">
-            <p className="text-sm text-gray-400 mb-6 uppercase tracking-wide">Trusted by businesses worldwide</p>
+            <p className="text-sm text-gray-600 mb-6 uppercase tracking-wide">Trusted by businesses worldwide</p>
             <div className="flex flex-wrap justify-center items-center gap-8 mb-12 opacity-60">
               <div className="text-2xl font-bold text-white">🏢 Enterprise</div>
               <div className="text-2xl font-bold text-white">🚀 Startups</div>
