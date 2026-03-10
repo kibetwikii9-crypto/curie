@@ -110,16 +110,6 @@ const availableChannels: AvailableChannel[] = [
     color: 'from-blue-500 to-blue-600',
     features: ['Bot commands', 'Group chats', 'File sharing', 'Inline keyboards'],
   },
-  // {
-  //   name: 'Binance',
-  //   id: 'binance',
-  //   status: 'available',
-  //   description: 'Connect Binance API keys to monitor account activity',
-  //   icon: '/binance-icon.png',
-  //   category: 'Exchange',
-  //   color: 'from-yellow-500 to-yellow-600',
-  //   features: ['Account balances', 'Order updates', 'Real-time streams', 'Secure storage'],
-  // },
   {
     name: 'Instagram',
     id: 'instagram',
@@ -1154,22 +1144,6 @@ export default function IntegrationsPage() {
                             )}
                           </span>
                           <div className="flex gap-2">
-                          {integration.channel === 'binance' && (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const res = await api.post('/api/integrations/binance/test');
-                                  const data = res.data;
-                                  alert(data?.success ? `Test passed — assets with balance: ${data.assets_with_balance}` : 'Test completed');
-                                } catch (err: any) {
-                                  alert(err.response?.data?.detail || 'Failed to test Binance connection');
-                                }
-                              }}
-                              className="px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-white dark:bg-gray-700 border border-emerald-300 dark:border-emerald-600 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                            >
-                              Test
-                            </button>
-                          )}
                             <button
                               onClick={() =>
                                 toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })

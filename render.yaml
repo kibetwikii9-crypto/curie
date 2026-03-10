@@ -1,7 +1,7 @@
 services:
   # Backend API Service (FastAPI)
   - type: web
-    name: curie-backend
+    name: automify-ai-backend
     runtime: python
     plan: free  # Change to 'starter' or 'standard' for production
     buildCommand: pip install -r requirements.txt
@@ -13,12 +13,12 @@ services:
       - key: PUBLIC_URL
         fromService:
           type: web
-          name: curie-backend
+          name: automify-ai-backend
           property: host
       - key: FRONTEND_URL
         fromService:
           type: web
-          name: curie-frontend
+          name: automify-ai-frontend
           property: host
       - key: DATABASE_URL
         sync: false  # Set this manually with your Supabase connection string
@@ -30,7 +30,7 @@ services:
 
   # Frontend Service (Next.js)
   - type: web
-    name: curie-frontend
+    name: automify-ai-frontend
     runtime: node
     plan: free  # Change to 'starter' or 'standard' for production
     buildCommand: cd frontend && npm install && npm run build
@@ -39,6 +39,6 @@ services:
       - key: NEXT_PUBLIC_API_URL
         fromService:
           type: web
-          name: curie-backend
+          name: automify-ai-backend
           property: host
 
