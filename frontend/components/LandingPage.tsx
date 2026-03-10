@@ -97,7 +97,7 @@ export default function LandingPage() {
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-700 mb-10 leading-relaxed">
+            <p className="text-xl sm:text-2xl text-gray-800 font-medium mb-10 leading-relaxed">
               Connect with customers across WhatsApp, Telegram, Instagram, and more. 
               Powered by AI that understands context and delivers personalized experiences.
             </p>
@@ -160,97 +160,71 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats & Social Proof Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16 bg-white/50 backdrop-blur-sm">
+      {/* Integrations Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-white/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
-          {/* Integrations Header */}
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
               Connect Your Channels in Minutes
             </h2>
-            <p className="text-lg text-gray-700 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-700 max-w-2xl mx-auto">
               One platform to manage all your customer conversations
             </p>
           </div>
           
-          {/* Integration Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {[
-              { name: 'WhatsApp', color: 'from-green-400 to-green-600', icon: '💬', desc: 'Business API' },
-              { name: 'Instagram', color: 'from-pink-500 to-purple-600', icon: '📸', desc: 'Direct Messages' },
-              { name: 'Facebook', color: 'from-blue-500 to-blue-700', icon: '👍', desc: 'Messenger' },
-              { name: 'Telegram', color: 'from-blue-400 to-cyan-500', icon: '✈️', desc: 'Bot API' },
-              { name: 'Email', color: 'from-red-500 to-orange-600', icon: '📧', desc: 'Gmail & More' },
+              { name: 'WhatsApp', logo: '/channels/whatsapp.png', desc: 'Business API' },
+              { name: 'Instagram', logo: '/channels/instagram.png', desc: 'Direct Messages' },
+              { name: 'Facebook', logo: '/channels/facebook.png', desc: 'Messenger' },
+              { name: 'Telegram', logo: '/channels/telegram.png', desc: 'Bot API' },
+              { name: 'Email', logo: '/channels/gmail.png', desc: 'Gmail & More' },
             ].map((platform) => (
-              <button
+              <div
                 key={platform.name}
-                onClick={() => {
-                  setAuthModalTab('signup');
-                  setShowAuthModal(true);
-                }}
-                className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-2 border-2 border-gray-100 hover:border-purple-300 group"
+                className="p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-200"
               >
-                <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">{platform.icon}</div>
-                <h3 className="font-bold text-gray-800 text-lg mb-1">{platform.name}</h3>
-                <p className="text-xs text-gray-500 mb-3">{platform.desc}</p>
-                <div className={`h-1.5 w-16 mx-auto bg-gradient-to-r ${platform.color} rounded-full`}></div>
-              </button>
+                <div className="w-16 h-16 mx-auto mb-4 relative">
+                  <Image
+                    src={platform.logo}
+                    alt={platform.name}
+                    width={64}
+                    height={64}
+                    className="object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg text-center mb-1">{platform.name}</h3>
+                <p className="text-sm text-gray-600 text-center">{platform.desc}</p>
+              </div>
             ))}
-          </div>
-          
-          <div className="text-center">
-            <button
-              onClick={() => {
-                setAuthModalTab('signup');
-                setShowAuthModal(true);
-              }}
-              className="px-10 py-4 text-lg font-bold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105"
-            >
-              Start Connecting Now - Free Trial
-            </button>
-            <p className="text-sm text-gray-600 mt-3">No credit card required • Setup in 5 minutes</p>
           </div>
         </div>
       </section>
 
-      {/* Trust Badges & Stats */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
+      {/* Stats Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16 bg-gradient-to-br from-purple-50 to-blue-50">
         <div className="max-w-7xl mx-auto">
-          {/* Trust Badges */}
-          <div className="text-center mb-12">
-            <p className="text-sm text-gray-600 mb-6 uppercase tracking-wide">Trusted by businesses worldwide</p>
-            <div className="flex flex-wrap justify-center items-center gap-8 mb-12 opacity-60">
-              <div className="text-2xl font-bold text-white">🏢 Enterprise</div>
-              <div className="text-2xl font-bold text-white">🚀 Startups</div>
-              <div className="text-2xl font-bold text-white">🛍️ E-commerce</div>
-              <div className="text-2xl font-bold text-white">💼 SaaS</div>
-            </div>
-          </div>
-
-          {/* Key Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: '10K+', label: 'Messages Handled Daily', icon: '💬' },
-              { value: '99.9%', label: 'Uptime Guarantee', icon: '⚡' },
-              { value: '15+', label: 'Platform Integrations', icon: '🔗' },
+              { value: '10K+', label: 'Messages Daily', icon: '💬' },
+              { value: '99.9%', label: 'Uptime', icon: '⚡' },
+              { value: '5+', label: 'Integrations', icon: '🔗' },
               { value: '<2s', label: 'Response Time', icon: '⏱️' },
             ].map((stat, idx) => (
-              <div
-                key={idx}
-                className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-[#007FFF]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#007FFF]/10 text-center group"
-              >
-                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                  {stat.icon}
-                </div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-[#007FFF] to-[#D4AF37] bg-clip-text text-transparent mb-2">
-                  {stat.value}
-                </div>
-                <div className="text-sm text-gray-400">{stat.label}</div>
+              <div key={idx} className="text-center">
+                <div className="text-4xl mb-2">{stat.icon}</div>
+                <div className="text-3xl font-bold text-purple-600 mb-1">{stat.value}</div>
+                <div className="text-sm text-gray-700">{stat.label}</div>
               </div>
             ))}
           </div>
+        </div>
+      </section>
 
-          {/* Live Demo Preview */}
+      {/* Demo Section */}
           <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-md rounded-3xl p-8 border border-white/10 hover:border-[#007FFF]/30 transition-all duration-500 shadow-2xl">
             <div className="text-center mb-8">
               <h3 className="text-2xl font-bold text-white mb-3">See It In Action</h3>
