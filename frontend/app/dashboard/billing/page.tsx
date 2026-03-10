@@ -200,10 +200,11 @@ export default function BillingPage() {
                 </div>
               </div>
               <button
-                onClick={() => router.push('/dashboard/billing/addons')}
-                className="text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline"
+                disabled
+                className="text-sm text-gray-400 dark:text-gray-500 font-medium cursor-not-allowed"
               >
-                Browse add-ons →
+                Browse add-ons (Coming Soon) →
+              </button>
               </button>
             </div>
           </div>
