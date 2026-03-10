@@ -48,7 +48,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import ConnectTelegramModal from '@/components/ConnectTelegramModal';
-import ConnectBinanceModal from '@/components/ConnectBinanceModal';
 
 interface Integration {
   id: number;
@@ -172,7 +171,6 @@ export default function IntegrationsPage() {
   const [whatsappStatus, setWhatsappStatus] = useState<Integration | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isBinanceModalOpen, setIsBinanceModalOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editChannelName, setEditChannelName] = useState('');
@@ -297,8 +295,6 @@ export default function IntegrationsPage() {
         await api.delete('/api/integrations/telegram/disconnect');
       } else if (channel === 'whatsapp') {
         await api.delete('/api/integrations/whatsapp/disconnect');
-      } else if (channel === 'binance') {
-        await api.delete('/api/integrations/binance/disconnect');
       }
       fetchIntegrations();
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -1103,22 +1099,6 @@ export default function IntegrationsPage() {
                           >
                             <Edit className="h-3 w-3" />
                           </button>
-                          {integration.channel === 'binance' && (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const res = await api.post('/api/integrations/binance/test');
-                                  const data = res.data;
-                                  alert(data?.success ? `Test passed — assets with balance: ${data.assets_with_balance}` : 'Test completed');
-                                } catch (err: any) {
-                                  alert(err.response?.data?.detail || 'Failed to test Binance connection');
-                                }
-                              }}
-                              className="px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-white dark:bg-gray-700 border border-emerald-300 dark:border-emerald-600 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                            >
-                              Test
-                            </button>
-                          )}
                           <button
                             onClick={() => {
                               if (confirm('Delete this integration?')) {
@@ -1321,8 +1301,6 @@ export default function IntegrationsPage() {
                             connectWhatsApp();
                           } else if (channel.id === 'telegram') {
                             setIsModalOpen(true);
-                          } else if (channel.id === 'binance') {
-                            setIsBinanceModalOpen(true);
                           } else if (channel.id === 'instagram') {
                             connectInstagram();
                           } else if (channel.id === 'messenger') {
@@ -1487,11 +1465,6 @@ export default function IntegrationsPage() {
       <ConnectTelegramModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={handleConnectSuccess}
-      />
-      <ConnectBinanceModal
-        isOpen={isBinanceModalOpen}
-        onClose={() => setIsBinanceModalOpen(false)}
         onSuccess={handleConnectSuccess}
       />
     </div>

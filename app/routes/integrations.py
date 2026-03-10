@@ -15,12 +15,6 @@ from app.routes.auth import get_current_user, get_user_business_id
 from app.services.meta_oauth import MetaOAuthService
 from app.config import settings
 import httpx
-from app.services.binance_service import (
-    test_credentials as binance_test_credentials,
-    create_listen_key as binance_create_listen_key,
-    encrypt_secret as binance_encrypt_secret,
-    decrypt_secret as binance_decrypt_secret,
-)
 
 log = logging.getLogger(__name__)
 router = APIRouter()
