@@ -87,7 +87,7 @@ export default function PaymentMethodsPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
 

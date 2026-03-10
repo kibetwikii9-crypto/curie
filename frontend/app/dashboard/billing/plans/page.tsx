@@ -15,7 +15,7 @@ export default function BillingPlansPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
 
