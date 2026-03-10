@@ -102,28 +102,19 @@ export default function LandingPage() {
               Powered by AI that understands context and delivers personalized experiences.
             </p>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
                   setShowAuthModal(true);
                 }}
-                className="group px-8 py-4 text-lg font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/40 hover:scale-105 flex items-center gap-2"
+                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
               >
                 Get Started Free
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button
-                onClick={() => {
-                  setAuthModalTab('signin');
-                  setShowAuthModal(true);
-                }}
-                className="px-8 py-4 text-lg font-semibold text-white bg-white/10 backdrop-blur-sm border-2 border-white/20 hover:border-[#007FFF] hover:bg-white/20 rounded-lg transition-all hover:scale-105"
-              >
-                Sign In
               </button>
             </div>
+            <p className="text-sm text-gray-600 mb-16">No credit card required • Setup in 5 minutes</p>
 
             {/* Optional Visual Element */}
             <div className="relative mt-16">
