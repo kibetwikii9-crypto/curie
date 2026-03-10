@@ -205,7 +205,6 @@ export default function BillingPage() {
               >
                 Browse add-ons (Coming Soon) →
               </button>
-              </button>
             </div>
           </div>
         </div>
