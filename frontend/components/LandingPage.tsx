@@ -97,7 +97,7 @@ export default function LandingPage() {
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed">
+            <p className="text-xl sm:text-2xl text-gray-700 mb-10 leading-relaxed">
               Connect with customers across WhatsApp, Telegram, Instagram, and more. 
               Powered by AI that understands context and delivers personalized experiences.
             </p>
