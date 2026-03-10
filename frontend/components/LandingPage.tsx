@@ -216,6 +216,8 @@ export default function LandingPage() {
       </section>
 
       {/* Demo Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
+        <div className="max-w-7xl mx-auto">
           <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-md rounded-3xl p-8 border border-white/10 hover:border-[#007FFF]/30 transition-all duration-500 shadow-2xl">
             <div className="text-center mb-8">
               <h3 className="text-2xl font-bold text-white mb-3">See It In Action</h3>
