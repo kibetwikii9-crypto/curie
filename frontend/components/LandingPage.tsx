@@ -166,8 +166,8 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {[
               { name: 'WhatsApp', logo: '/channels/whatsapp.png', desc: 'Business API' },
-              { name: 'Instagram', logo: '/channels/instagram.png', desc: 'Direct Messages' },
-              { name: 'Facebook', logo: '/channels/facebook.png', desc: 'Messenger' },
+              { name: 'Instagram', logo: '/channels/intagram.png', desc: 'Direct Messages' },
+              { name: 'Facebook', logo: '/channels/messenger.png', desc: 'Messenger' },
               { name: 'Telegram', logo: '/channels/telegram.png', desc: 'Bot API' },
               { name: 'Email', logo: '/channels/gmail.png', desc: 'Gmail & More' },
             ].map((platform) => (
