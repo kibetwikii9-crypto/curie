@@ -171,9 +171,13 @@ export default function LandingPage() {
               { name: 'Telegram', logo: '/channels/telegram.png', desc: 'Bot API' },
               { name: 'Email', logo: '/channels/gmail.png', desc: 'Gmail & More' },
             ].map((platform) => (
-              <div
+              <button
                 key={platform.name}
-                className="p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-200"
+                onClick={() => {
+                  setAuthModalTab('signup');
+                  setShowAuthModal(true);
+                }}
+                className="p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-200 hover:border-purple-400 cursor-pointer transform hover:-translate-y-1"
               >
                 <div className="w-16 h-16 mx-auto mb-4 relative">
                   <Image
@@ -189,7 +193,7 @@ export default function LandingPage() {
                 </div>
                 <h3 className="font-bold text-gray-900 text-lg text-center mb-1">{platform.name}</h3>
                 <p className="text-sm text-gray-600 text-center">{platform.desc}</p>
-              </div>
+              </button>
             ))}
           </div>
         </div>
