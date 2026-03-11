@@ -58,7 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       params.append('username', email);
       params.append('password', password);
 
-      console.log('Attempting login to:', api.defaults.baseURL + '/api/auth/login');
+      const loginUrl = api.defaults.baseURL + '/api/auth/login';
+      console.log('[Auth] Attempting login to:', loginUrl);
       
       const response = await api.post('/api/auth/login', params, {
         headers: {
@@ -80,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('User data not received');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('[Auth] Login error:', error);
       
       // Provide more detailed error messages
       if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
