@@ -203,7 +203,7 @@ export default function BillingPage() {
                 disabled
                 className="text-sm text-gray-400 dark:text-gray-500 font-medium cursor-not-allowed"
               >
-                Browse add-ons (Coming Soon) →
+                Browse add-ons →
               </button>
             </div>
           </div>
