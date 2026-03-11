@@ -35,21 +35,25 @@ cors_origins = [
 # Add production frontend URL from environment variable
 frontend_url_env = os.getenv("FRONTEND_URL", "")
 if frontend_url_env:
-    cors_origins.append(frontend_url_env)
+    cors_origins.append(frontend_url_env.rstrip('/'))
 
 # Also add from settings if set
 if hasattr(settings, "frontend_url") and settings.frontend_url:
-    cors_origins.append(settings.frontend_url)
+    cors_origins.append(settings.frontend_url.rstrip('/'))
 
-# For production, allow common Render frontend URLs
-# Add your specific frontend URL here or via FRONTEND_URL env var
+# Add all known frontend URLs
 cors_origins.append("https://curie-frontend-8hvz.onrender.com")
+cors_origins.append("https://automify-ai-frontend.onrender.com")
+cors_origins.append("https://www.automifyyai.com")
+cors_origins.append("https://automifyyai.com")
 
-# In production, if FRONTEND_URL is not set, allow all origins (less secure but works)
-# Remove this in production and set FRONTEND_URL explicitly
-if not frontend_url_env and not (hasattr(settings, "frontend_url") and settings.frontend_url):
-    # Allow all origins in development (not recommended for production)
-    cors_origins = ["*"]
+# Remove duplicates
+cors_origins = list(dict.fromkeys(cors_origins))
+
+# Log CORS configuration for debugging
+import logging
+log = logging.getLogger(__name__)
+log.info(f"🌐 CORS configured for origins: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,9 +61,43 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(api_router)
+
+
+# ========== GLOBAL EXCEPTION HANDLERS ==========
+# Ensure CORS headers are included even on error responses
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with CORS headers."""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Catch-all exception handler with CORS headers."""
+    log.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
 
 
 @app.on_event("startup")
