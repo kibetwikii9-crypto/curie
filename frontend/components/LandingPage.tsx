@@ -42,8 +42,9 @@ export default function LandingPage() {
               alt="Automify"
               width={200}
               height={66}
-              className="h-14 w-auto"
+              className="h-14 w-auto select-none pointer-events-none"
               priority
+              draggable={false}
             />
             <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
               Automify
@@ -105,14 +106,18 @@ export default function LandingPage() {
 
             {/* Right Side - Image */}
             <div className="order-2">
-              <div className="relative w-full h-auto">
+              <div className="relative w-full aspect-[6/5]">
                 <Image
                   src="/hero-conv.png"
                   alt="Automify AI Conversations"
                   width={600}
                   height={500}
-                  className="w-full h-auto rounded-2xl shadow-2xl"
+                  className="w-full h-full object-contain rounded-2xl shadow-2xl select-none"
                   priority
+                  loading="eager"
+                  placeholder="blur"
+                  blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjUwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjUwMCIgZmlsbD0iI2UwZTdmZiIvPjwvc3ZnPg=="
+                  draggable={false}
                   onError={(e) => {
                     console.log('Image load error');
                     e.currentTarget.style.display = 'none';
@@ -158,7 +163,8 @@ export default function LandingPage() {
                     alt={platform.name}
                     width={64}
                     height={64}
-                    className="object-contain"
+                    className="object-contain select-none pointer-events-none"
+                    draggable={false}
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
                     }}
