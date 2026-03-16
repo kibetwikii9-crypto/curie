@@ -3,10 +3,32 @@
 import { useAuth } from '@/lib/auth';
 import { LogOut, Moon, Sun } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+
+const pageNames: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/dashboard/conversations': 'Conversations',
+  '/dashboard/knowledge': 'Knowledge Base',
+  '/dashboard/ai-rules': 'AI Rules',
+  '/dashboard/analytics': 'Analytics',
+  '/dashboard/ads': 'Ad Studio',
+  '/dashboard/integrations': 'Integrations',
+  '/dashboard/users': 'Users & Roles',
+  '/dashboard/handoff': 'Handoff',
+  '/dashboard/leads': 'Leads',
+  '/dashboard/billing': 'Billing',
+  '/dashboard/settings': 'Settings',
+  '/dashboard/security': 'Security',
+  '/dashboard/notifications': 'Notifications',
+  '/dashboard/onboarding': 'Onboarding',
+  '/dashboard/sales-products': 'Sales & Products',
+};
 
 export default function Header() {
   const { user, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
+  const pathname = usePathname();
+  const currentPage = pageNames[pathname] || 'Dashboard';
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -30,7 +52,7 @@ export default function Header() {
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center space-x-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Dashboard
+            {currentPage}
           </h2>
         </div>
         <div className="flex items-center space-x-4">
