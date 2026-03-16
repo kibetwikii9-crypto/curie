@@ -6,12 +6,14 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import PlanCard from '@/components/billing/PlanCard';
+import PaymentMethodSelector from '@/components/billing/PaymentMethodSelector';
 import { Check, X } from 'lucide-react';
 
 export default function BillingPlansPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [isAnnual, setIsAnnual] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'crypto'>('card');
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -44,7 +46,7 @@ export default function BillingPlansPage() {
       window.location.href = 'mailto:sales@automify.ai?subject=Enterprise Plan Inquiry';
       return;
     }
-    router.push(`/dashboard/billing/checkout?plan_id=${plan.id}&billing_cycle=${isAnnual ? 'annual' : 'monthly'}`);
+    router.push(`/dashboard/billing/checkout?plan_id=${plan.id}&billing_cycle=${isAnnual ? 'annual' : 'monthly'}&payment_method=${selectedPaymentMethod}`);
   };
 
   const currentPlanId = subscriptionData?.subscription?.plan?.id;
@@ -99,6 +101,12 @@ export default function BillingPlansPage() {
             </button>
           </div>
         </div>
+
+        {/* Payment Method Selector */}
+        <PaymentMethodSelector
+          selectedMethod={selectedPaymentMethod}
+          onMethodChange={setSelectedPaymentMethod}
+        />
 
         {/* Plan Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">

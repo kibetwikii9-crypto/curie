@@ -51,6 +51,7 @@ class CheckoutRequest(BaseModel):
     billing_cycle: str = 'monthly'
     success_url: str
     cancel_url: str
+    payment_method_type: str = 'card'  # card or crypto
 
 
 # ========== PLANS ==========
@@ -624,7 +625,7 @@ async def create_checkout_session(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create Paystack payment initialization."""
+    """Create payment initialization for card or crypto."""
     try:
         business_id = get_user_business_id(current_user, db)
         if not business_id:
@@ -650,50 +651,85 @@ async def create_checkout_session(
                 detail="Plan not found"
             )
         
-        # Get or create Paystack customer
-        paystack_service = PaystackService()
-        if not business.stripe_customer_id:
-            customer = await paystack_service.create_customer(
-                email=current_user.email,
-                name=business.name,
-                metadata={'business_id': str(business_id)}
-            )
-            business.stripe_customer_id = customer.get('customer_code')
-            db.commit()
-        
-        # Get plan code
-        plan_code = (
-            plan.stripe_price_id_annual if request.billing_cycle == 'annual'
-            else plan.stripe_price_id_monthly
-        )
-        
         # Calculate amount
         amount = (
             plan.price_annual if request.billing_cycle == 'annual'
             else plan.price_monthly
         )
-        amount_in_kobo = int(amount * 100)
         
-        # Initialize transaction
-        transaction = await paystack_service.initialize_transaction(
-            email=current_user.email,
-            amount=amount_in_kobo,
-            currency=plan.currency,
-            plan_code=plan_code,
-            callback_url=request.success_url,
-            metadata={
-                'business_id': str(business_id),
-                'plan_id': str(request.plan_id),
-                'billing_cycle': request.billing_cycle
+        if request.payment_method_type == 'crypto':
+            # Use Binance for crypto payments
+            from app.services.binance_service import BinancePayService
+            binance_service = BinancePayService()
+            
+            order_result = await binance_service.create_prepay_order(
+                amount=amount,
+                currency="USDT",  # Default to USDT
+                description=f"{plan.display_name} - {request.billing_cycle.capitalize()} Plan",
+                order_id=f"sub_{business_id}_{request.plan_id}_{int(datetime.utcnow().timestamp())}"
+            )
+            
+            if not order_result.get('success'):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to create crypto payment: {order_result.get('error')}"
+                )
+            
+            # Generate QR code
+            qr_code_data = binance_service.generate_qr_code(order_result['qr_code_url'])
+            
+            return {
+                "success": True,
+                "payment_method": "crypto",
+                "qr_code": qr_code_data,
+                "qr_url": order_result['qr_code_url'],
+                "prepay_id": order_result['prepay_id'],
+                "order_id": order_result['order_id'],
+                "amount": amount,
+                "currency": "USDT"
             }
-        )
         
-        return {
-            "success": True,
-            "authorization_url": transaction.get('authorization_url'),
-            "access_code": transaction.get('access_code'),
-            "reference": transaction.get('reference')
-        }
+        else:
+            # Default to Paystack for card payments
+            paystack_service = PaystackService()
+            if not business.stripe_customer_id:
+                customer = await paystack_service.create_customer(
+                    email=current_user.email,
+                    name=business.name,
+                    metadata={'business_id': str(business_id)}
+                )
+                business.stripe_customer_id = customer.get('customer_code')
+                db.commit()
+            
+            # Get plan code
+            plan_code = (
+                plan.stripe_price_id_annual if request.billing_cycle == 'annual'
+                else plan.stripe_price_id_monthly
+            )
+            
+            amount_in_kobo = int(amount * 100)
+            
+            # Initialize transaction
+            transaction = await paystack_service.initialize_transaction(
+                email=current_user.email,
+                amount=amount_in_kobo,
+                currency=plan.currency,
+                plan_code=plan_code,
+                callback_url=request.success_url,
+                metadata={
+                    'business_id': str(business_id),
+                    'plan_id': str(request.plan_id),
+                    'billing_cycle': request.billing_cycle
+                }
+            )
+            
+            return {
+                "success": True,
+                "payment_method": "card",
+                "authorization_url": transaction.get('authorization_url'),
+                "access_code": transaction.get('access_code'),
+                "reference": transaction.get('reference')
+            }
     except Exception as e:
         log.error(f"Failed to create checkout session: {e}")
         raise HTTPException(

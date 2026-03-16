@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     paystack_secret_key: str = ""  # Paystack Secret Key (set via PAYSTACK_SECRET_KEY env var)
     paystack_webhook_secret: str = ""  # Paystack Webhook Secret (set via PAYSTACK_WEBHOOK_SECRET env var)
     
+    # Binance Pay API Keys
+    binance_api_key: str = ""  # Binance Pay API Key (set via BINANCE_API_KEY env var)
+    binance_secret_key: str = ""  # Binance Pay Secret Key (set via BINANCE_SECRET_KEY env var)
+    binance_merchant_id: str = ""  # Binance Pay Merchant ID (set via BINANCE_MERCHANT_ID env var)
+    
     # Billing Configuration
     trial_days: int = 14  # Free trial period in days (set via TRIAL_DAYS env var)
     invoice_prefix: str = "INV"  # Invoice number prefix (set via INVOICE_PREFIX env var)

@@ -31,6 +31,9 @@ pyotp>=2.9.0  # TOTP for 2FA authentication
 # AI & LLM
 openai>=1.12.0  # OpenAI GPT API client
 
+# QR Code Generation
+qrcode[pil]>=7.0.0  # QR code generation for crypto payments
+
 # Document Processing
 python-docx>=1.1.0  # Parse Word documents (.docx)
 PyPDF2>=3.0.0  # Parse PDF documents

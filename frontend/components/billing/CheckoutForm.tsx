@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface CheckoutFormProps {
   planName: string;
   amount: number;
   billingCycle: 'monthly' | 'annual';
-  authorizationUrl?: string;
+  checkoutData?: any;
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }
@@ -16,14 +17,18 @@ export default function CheckoutForm({
   planName, 
   amount, 
   billingCycle,
-  authorizationUrl,
+  checkoutData,
   onSuccess,
   onError 
 }: CheckoutFormProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cryptoPaymentStatus, setCryptoPaymentStatus] = useState<'pending' | 'completed' | 'failed'>('pending');
 
-  const handlePayment = () => {
+  const isCryptoPayment = checkoutData?.payment_method === 'crypto';
+  const authorizationUrl = checkoutData?.authorization_url;
+
+  const handleCardPayment = () => {
     if (!authorizationUrl) {
       setErrorMessage('Payment initialization failed. Please try again.');
       onError?.('No authorization URL');
@@ -35,6 +40,46 @@ export default function CheckoutForm({
     // Redirect to Paystack payment page
     window.location.href = authorizationUrl;
   };
+
+  const handleCryptoPayment = () => {
+    // For crypto payments, we just show the QR code and wait for webhook
+    // The backend will handle the subscription creation automatically
+    setCryptoPaymentStatus('pending');
+  };
+
+  // Poll for crypto payment completion
+  useEffect(() => {
+    if (!isCryptoPayment || cryptoPaymentStatus !== 'pending') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        // Check if subscription was created
+        const response = await api.get('/api/billing/subscription');
+        const data = response.data;
+        
+        if (data.subscription && data.subscription.status === 'active') {
+          setCryptoPaymentStatus('completed');
+          onSuccess?.();
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error('Error polling payment status:', error);
+      }
+    }, 5000); // Check every 5 seconds
+
+    // Stop polling after 10 minutes
+    const timeout = setTimeout(() => {
+      clearInterval(pollInterval);
+      setCryptoPaymentStatus('failed');
+      setErrorMessage('Payment timeout. Please try again or contact support.');
+      onError?.('Payment timeout');
+    }, 600000); // 10 minutes
+
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(timeout);
+    };
+  }, [isCryptoPayment, cryptoPaymentStatus, onSuccess, onError]);
 
   return (
     <div className="space-y-6">
@@ -83,29 +128,82 @@ export default function CheckoutForm({
         </div>
       )}
 
-      {/* Payment Button */}
-      <button
-        type="button"
-        onClick={handlePayment}
-        disabled={!authorizationUrl || isProcessing}
-        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-xl font-semibold text-lg hover:from-primary-700 hover:to-purple-700 transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Redirecting to payment...
-          </>
-        ) : (
-          <>
-            <CheckCircle className="h-5 w-5" />
-            Proceed to Payment
-          </>
-        )}
-      </button>
+      {/* Crypto Payment QR Code */}
+      {isCryptoPayment && checkoutData && (
+        <div className="bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-lg p-6 border border-orange-200 dark:border-orange-800">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 text-center">
+            Complete Payment with Crypto
+          </h3>
+          
+          <div className="text-center mb-6">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Scan the QR code below with your Binance app to complete the payment
+            </p>
+            
+            {checkoutData.qr_code && (
+              <div className="inline-block p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+                <img 
+                  src={checkoutData.qr_code} 
+                  alt="Crypto Payment QR Code" 
+                  className="w-48 h-48 mx-auto"
+                />
+              </div>
+            )}
+            
+            <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-medium">Amount: {checkoutData.amount} {checkoutData.currency}</p>
+              <p className="text-xs mt-1">Payment will be processed automatically once confirmed</p>
+            </div>
+          </div>
+
+          {/* Payment Status */}
+          <div className="text-center">
+            {cryptoPaymentStatus === 'pending' && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm font-medium">Waiting for payment confirmation...</span>
+              </div>
+            )}
+            
+            {cryptoPaymentStatus === 'completed' && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-lg">
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Payment completed! Setting up your subscription...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Card Payment Button */}
+      {!isCryptoPayment && (
+        <button
+          type="button"
+          onClick={handleCardPayment}
+          disabled={!authorizationUrl || isProcessing}
+          className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-xl font-semibold text-lg hover:from-primary-700 hover:to-purple-700 transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Redirecting to payment...
+            </>
+          ) : (
+            <>
+              <CheckCircle className="h-5 w-5" />
+              Proceed to Payment
+            </>
+          )}
+        </button>
+      )}
 
       {/* Security Notice */}
       <p className="text-center text-xs text-gray-600 dark:text-gray-400">
-        🔒 Secured by Paystack. Your payment information is encrypted and secure.
+        {isCryptoPayment ? (
+          <>🔒 Secured by Binance Pay. Your crypto transactions are secure and private.</>
+        ) : (
+          <>🔒 Secured by Paystack. Your payment information is encrypted and secure.</>
+        )}
       </p>
     </div>
   );

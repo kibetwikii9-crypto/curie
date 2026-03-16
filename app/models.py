@@ -904,7 +904,7 @@ class Payment(Base):
 
 
 class PaymentMethod(Base):
-    """Saved payment methods (cards, etc.)."""
+    """Saved payment methods (cards, crypto, etc.)."""
     __tablename__ = "payment_methods"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -914,11 +914,15 @@ class PaymentMethod(Base):
     stripe_payment_method_id = Column(String(255), unique=True, index=True)
     
     # Card details (last 4, brand, etc.)
-    type = Column(String(20), default="card")  # card, bank_account, etc.
+    type = Column(String(20), default="card")  # card, crypto, bank_account, etc.
     card_brand = Column(String(20))  # visa, mastercard, etc.
     card_last4 = Column(String(4))
     card_exp_month = Column(Integer)
     card_exp_year = Column(Integer)
+    
+    # Crypto details
+    crypto_currency = Column(String(10))  # BTC, ETH, USDT, etc.
+    crypto_address = Column(String(255))  # Wallet address if applicable
     
     # Status
     is_default = Column(Boolean, default=False)

@@ -15,7 +15,9 @@ function CheckoutContent() {
   
   const planId = searchParams.get('plan_id');
   const billingCycle = searchParams.get('billing_cycle') as 'monthly' | 'annual' || 'monthly';
+  const paymentMethod = searchParams.get('payment_method') as 'card' | 'crypto' || 'card';
   
+  const [checkoutData, setCheckoutData] = useState<any>(null);
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +40,7 @@ function CheckoutContent() {
 
   const selectedPlan = plansData?.find((p: any) => p.id === parseInt(planId || '0'));
 
-  // Create checkout session with Paystack
+  // Create checkout session with Paystack or Binance
   useEffect(() => {
     if (!selectedPlan || !isAuthenticated) return;
 
@@ -47,18 +49,25 @@ function CheckoutContent() {
         const response = await api.post('/api/billing/checkout/create-session', {
           plan_id: selectedPlan.id,
           billing_cycle: billingCycle,
+          payment_method_type: paymentMethod,
           success_url: `${window.location.origin}/dashboard/billing?success=true`,
           cancel_url: `${window.location.origin}/dashboard/billing/plans`
         });
         
-        setAuthorizationUrl(response.data.authorization_url);
+        setCheckoutData(response.data);
+        
+        // For card payments, set authorization URL
+        if (response.data.payment_method === 'card') {
+          setAuthorizationUrl(response.data.authorization_url);
+        }
+        // For crypto payments, the data contains QR code info
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to create checkout session');
       }
     };
 
     createCheckoutSession();
-  }, [selectedPlan, billingCycle, isAuthenticated]);
+  }, [selectedPlan, billingCycle, paymentMethod, isAuthenticated]);
 
   // Calculate amount
   const amount = selectedPlan 
@@ -146,7 +155,7 @@ function CheckoutContent() {
           planName={selectedPlan.display_name}
           amount={amount}
           billingCycle={billingCycle}
-          authorizationUrl={authorizationUrl}
+          checkoutData={checkoutData}
           onSuccess={handleSuccess}
           onError={(err) => setError(err)}
         />

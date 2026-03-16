@@ -138,6 +138,83 @@ class BillingService:
             
             return result
             
+    async def create_subscription(
+        self,
+        business_id: int,
+        plan_id: int,
+        billing_cycle: str = 'monthly',
+        payment_method_type: str = 'card'
+    ) -> Subscription:
+        """
+        Create a subscription (used for crypto payments where payment is already confirmed).
+        
+        Args:
+            business_id: Business ID
+            plan_id: Plan ID
+            billing_cycle: 'monthly' or 'annual'
+            payment_method_type: 'card' or 'crypto'
+            
+        Returns:
+            Created subscription object
+        """
+        from app.database import SessionLocal
+        db = SessionLocal()
+        
+        try:
+            # Get business and plan
+            business = db.query(Business).filter(Business.id == business_id).first()
+            plan = db.query(Plan).filter(Plan.id == plan_id).first()
+            
+            if not business:
+                raise ValueError(f"Business {business_id} not found")
+            if not plan:
+                raise ValueError(f"Plan {plan_id} not found")
+            
+            # Calculate amount and period
+            amount = plan.price_annual if billing_cycle == 'annual' else plan.price_monthly
+            period_days = 365 if billing_cycle == 'annual' else 30
+            
+            # Create subscription
+            subscription = Subscription(
+                business_id=business_id,
+                plan_id=plan_id,
+                stripe_subscription_id=None,
+                stripe_customer_id=business.stripe_customer_id,
+                status='active',
+                billing_cycle=billing_cycle,
+                current_period_start=datetime.utcnow(),
+                current_period_end=datetime.utcnow() + timedelta(days=period_days),
+                trial_start=None,
+                trial_end=None,
+                amount=amount,
+                currency=plan.currency
+            )
+            
+            db.add(subscription)
+            
+            # Log billing event
+            event = BillingEvent(
+                business_id=business_id,
+                event_type='subscription_created',
+                description=f'Subscription created for {plan.display_name} ({billing_cycle}) via {payment_method_type}',
+                metadata={'payment_method_type': payment_method_type}
+            )
+            db.add(event)
+            
+            db.commit()
+            db.refresh(subscription)
+            
+            logger.info(f"Business {business_id} created subscription to plan {plan_id} via {payment_method_type}")
+            
+            return subscription
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to create subscription: {e}")
+            raise
+        finally:
+            db.close()
+            
         except Exception as e:
             logger.error(f"Failed to subscribe to plan: {e}")
             db.rollback()

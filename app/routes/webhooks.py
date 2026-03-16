@@ -271,3 +271,141 @@ async def handle_invoice_payment_failed(db: Session, data: dict):
     """Handle invoice.payment_failed event."""
     # Paystack invoice payment failed handling
     log.warning("Invoice payment failed event received")
+
+
+@router.post("/binance")
+async def binance_webhook(request: Request):
+    """
+    Handle Binance Pay webhook events.
+    
+    Binance sends webhook events for payment confirmations.
+    We verify the signature and process the event.
+    """
+    db = SessionLocal()
+    
+    try:
+        # Get raw body and headers
+        payload = await request.body()
+        payload_str = payload.decode('utf-8')
+        
+        timestamp = request.headers.get('BinancePay-Timestamp')
+        nonce = request.headers.get('BinancePay-Nonce')
+        signature = request.headers.get('BinancePay-Signature')
+        
+        if not all([timestamp, nonce, signature]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required headers"
+            )
+        
+        # Verify webhook signature
+        from app.services.binance_service import BinancePayService
+        binance_service = BinancePayService()
+        
+        if not binance_service.verify_webhook_signature(payload_str, signature, timestamp, nonce):
+            log.error("Invalid Binance webhook signature")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid signature"
+            )
+        
+        # Parse webhook payload
+        import json
+        payload_dict = json.loads(payload_str)
+        
+        # Handle different event types
+        event_type = payload_dict.get('bizType')
+        
+        if event_type == 'PAY':
+            # Payment successful
+            data = payload_dict.get('data', {})
+            merchant_trade_no = data.get('merchantTradeNo')
+            prepay_id = data.get('prepayId')
+            total_fee = data.get('totalFee')  # Amount in minor units
+            
+            if merchant_trade_no and merchant_trade_no.startswith('sub_'):
+                # This is a subscription payment
+                parts = merchant_trade_no.split('_')
+                if len(parts) >= 3:
+                    business_id = int(parts[1])
+                    plan_id = int(parts[2])
+                    
+                    # Get business and plan
+                    business = db.query(Business).filter(Business.id == business_id).first()
+                    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+                    
+                    if business and plan:
+                        # Create subscription
+                        from app.services.billing_service import BillingService
+                        billing_service = BillingService()
+                        
+                        # Determine billing cycle from order ID or default to monthly
+                        billing_cycle = 'annual' if 'annual' in merchant_trade_no else 'monthly'
+                        
+                        subscription = await billing_service.create_subscription(
+                            business_id=business_id,
+                            plan_id=plan_id,
+                            billing_cycle=billing_cycle,
+                            payment_method_type='crypto'
+                        )
+                        
+                        # Create payment record
+                        payment = Payment(
+                            business_id=business_id,
+                            amount=float(total_fee) / 100,  # Convert from minor units
+                            currency='USDT',
+                            status='completed',
+                            payment_method_type='crypto',
+                            transaction_id=prepay_id,
+                            metadata={'binance_order_id': merchant_trade_no}
+                        )
+                        db.add(payment)
+                        
+                        # Create billing event
+                        event = BillingEvent(
+                            business_id=business_id,
+                            event_type='payment_succeeded',
+                            event_data=payload_dict,
+                            description=f'Crypto payment succeeded: {merchant_trade_no}',
+                            metadata={'prepay_id': prepay_id}
+                        )
+                        db.add(event)
+                        
+                        db.commit()
+                        log.info(f"Binance payment processed successfully: {merchant_trade_no}")
+                    else:
+                        log.error(f"Business or plan not found for payment: {merchant_trade_no}")
+                else:
+                    log.error(f"Invalid subscription order format: {merchant_trade_no}")
+            else:
+                log.warning(f"Unknown Binance payment order: {merchant_trade_no}")
+        
+        elif event_type == 'PAY_FAILED':
+            # Payment failed
+            data = payload_dict.get('data', {})
+            merchant_trade_no = data.get('merchantTradeNo')
+            
+            log.warning(f"Binance payment failed: {merchant_trade_no}")
+            
+            # Create billing event for failed payment
+            event = BillingEvent(
+                event_type='payment_failed',
+                event_data=payload_dict,
+                description=f'Crypto payment failed: {merchant_trade_no}',
+                metadata=None
+            )
+            db.add(event)
+            db.commit()
+        
+        # Return success response
+        return {"returnCode": "SUCCESS", "returnMessage": "Webhook processed successfully"}
+        
+    except Exception as e:
+        log.error(f"Error processing Binance webhook: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Webhook processing failed"
+        )
+    finally:
+        db.close()
