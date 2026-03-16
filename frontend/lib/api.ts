@@ -30,10 +30,17 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Only redirect to login on 401 if it's NOT from the login/register endpoints
+    // (those should be handled by the component's error handling)
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
+                          error.config?.url?.includes('/auth/register');
+    
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token');
-        window.location.href = '/login';
+        // Don't redirect to /login since it doesn't exist, just reload the page
+        // The auth state will be cleared and user will see landing page
+        window.location.href = '/';
       }
     }
     return Promise.reject(error);
