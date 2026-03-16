@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import UsageWidget from '@/components/billing/UsageWidget';
-import { CreditCard, FileText, Package, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { CreditCard, FileText, Package, TrendingUp, Calendar, AlertCircle, Coins, CheckCircle, ArrowRight } from 'lucide-react';
 
 export default function BillingPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -178,14 +178,14 @@ export default function BillingPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Payment Methods</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">1</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">2</p>
                 </div>
               </div>
               <button
                 onClick={() => router.push('/dashboard/billing/payment-methods')}
                 className="text-sm text-primary-600 dark:text-primary-400 font-medium hover:underline"
               >
-                Manage cards →
+                View methods →
               </button>
             </div>
 
@@ -215,6 +215,155 @@ export default function BillingPage() {
             <UsageWidget usage={usage} planName={subscription?.plan?.name} />
           </div>
         )}
+
+        {/* Payment Methods Section */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Payment Methods</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Choose how you want to pay for your subscription</p>
+            </div>
+            <button
+              onClick={() => router.push('/dashboard/billing/plans')}
+              className="flex items-center gap-2 px-4 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors text-sm font-medium"
+            >
+              View Plans
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Paystack Card Payment */}
+            <div className="group bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 transition-all hover:shadow-xl overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg">
+                      <CreditCard className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Card Payment</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Visa, Mastercard, Verve</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs font-semibold">
+                    <CheckCircle className="h-3 w-3" />
+                    Active
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                    <span>Instant payment confirmation</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                    <span>Supports all major cards</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                    <span>Automatic subscription renewal</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                    <span>Secure PCI-compliant processing</span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Powered by</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">Paystack</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 pb-6">
+                <button
+                  onClick={() => router.push('/dashboard/billing/plans')}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                >
+                  Pay with Card
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Binance Crypto Payment */}
+            <div className="group bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-500 transition-all hover:shadow-xl overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-gradient-to-br from-orange-500 to-yellow-500 rounded-xl shadow-lg">
+                      <Coins className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Cryptocurrency</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">USDT, BTC, ETH</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs font-semibold">
+                    <CheckCircle className="h-3 w-3" />
+                    Active
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                    <span>Pay with multiple cryptocurrencies</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                    <span>Lower transaction fees</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                    <span>Scan QR code to pay instantly</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <CheckCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                    <span>Blockchain-secured transactions</span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Powered by</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">Binance Pay</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 pb-6">
+                <button
+                  onClick={() => router.push('/dashboard/billing/plans')}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-yellow-600 transition-all hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                >
+                  Pay with Crypto
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Info Banner */}
+          <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Choose Your Preferred Payment Method</h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  Select either card payment for automatic renewals or cryptocurrency for lower fees and blockchain security. 
+                  You can switch between methods anytime when upgrading your plan.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Trial Warning */}
         {subscription?.status === 'trialing' && subscription?.trial_end && (
