@@ -88,7 +88,7 @@ def get_user_business_id(current_user: UserModel, db: Session) -> int | None:
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit(get_rate_limit("public_strict"))  # 10/minute - Prevent brute force
+@limiter.limit(get_rate_limit("public_strict"))  # 100/minute
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -99,7 +99,7 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="No account found with this email. Please sign up first!",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(data={"sub": user.email, "user_id": user.id, "role": user.role})

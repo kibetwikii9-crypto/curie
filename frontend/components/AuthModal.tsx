@@ -35,6 +35,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
   });
   const [signUpErrors, setSignUpErrors] = useState<Record<string, string>>({});
   const [signUpTerms, setSignUpTerms] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
@@ -142,11 +144,10 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
       router.push('/dashboard');
     } catch (err: any) {
       // Check if it's an account not found error
-      if (err.message === 'ACCOUNT_NOT_FOUND') {
-        setSignInErrors({ 
-          submit: "Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!" 
-        });
-        // Auto-switch to signup after 2 seconds
+      if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {
+        setShowToast(true);
+        setToastMessage("Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!");
+        // Auto-switch to signup after showing toast
         setTimeout(() => {
           setActiveTab('signup');
           setSignInErrors({});
@@ -258,9 +259,18 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 overflow-y-auto"
-      role="dialog"
+    <>
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type="info"
+          onClose={() => setShowToast(false)}
+          duration={3000}
+        />
+      )}
+      <div 
+        className="fixed inset-0 z-50 overflow-y-auto"
+        role="dialog"
       aria-modal="true"
       aria-labelledby="auth-modal-title"
     >
@@ -659,6 +669,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
         </div>
       </div>
     </div>
+    </>
   );
 }
 
