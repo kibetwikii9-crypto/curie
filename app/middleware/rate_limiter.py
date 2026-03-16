@@ -36,9 +36,9 @@ def get_limiter():
 
 # Rate limit tiers (requests per minute unless specified)
 RATE_LIMITS = {
-    # Public endpoints (no auth) - Most restrictive
-    "public_strict": "10/minute",  # Login, signup
-    "public_moderate": "30/minute",  # Health checks, webhooks
+    # Public endpoints (no auth) - Allow more requests for multiple users
+    "public_strict": "100/minute",  # Login, signup - increased from 10
+    "public_moderate": "200/minute",  # Health checks, webhooks
     
     # Authenticated endpoints
     "auth_read": "100/minute",  # GET requests (dashboard data)
