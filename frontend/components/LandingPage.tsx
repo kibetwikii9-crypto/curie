@@ -1,55 +1,17 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import { MessageSquare, Zap, Globe, Shield, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import AuthModal from './AuthModal';
-import dynamic from 'next/dynamic';
-
-// Dynamically import 3D background for better performance
-const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
-  ssr: false,
-  loading: () => null,
-});
-
-// Hook for intersection observer animations
-function useIntersectionObserver(options = {}) {
-  const [isIntersecting, setIsIntersecting] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsIntersecting(true);
-        }
-      },
-      { threshold: 0.1, ...options }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current);
-      }
-    };
-  }, []);
-
-  return [ref, isIntersecting] as const;
-}
 
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [featuresRef, featuresVisible] = useIntersectionObserver();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -57,21 +19,10 @@ export default function LandingPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-      setPrefersReducedMotion(mediaQuery.matches);
-      
-      const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, []);
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#007FFF]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
       </div>
     );
   }
@@ -81,14 +32,9 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
-      {/* 3D Animated Background */}
-      <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
-        <AnimatedBackground3D />
-      </Suspense>
-
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 relative overflow-hidden">
       {/* Navigation */}
-      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6">
+      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6 bg-white/80 backdrop-blur-sm shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
@@ -96,18 +42,10 @@ export default function LandingPage() {
               alt="Automify"
               width={200}
               height={66}
-              className="h-14 w-auto dark:hidden"
+              className="h-14 w-auto"
               priority
             />
-            <Image
-              src="/logo-white-no-tagline.png"
-              alt="Automify"
-              width={200}
-              height={66}
-              className="h-14 w-auto hidden dark:block"
-              priority
-            />
-            <span className="text-2xl font-bold text-[#007FFF]">
+            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
               Automify
             </span>
           </div>
@@ -117,7 +55,7 @@ export default function LandingPage() {
                 setAuthModalTab('signin');
                 setShowAuthModal(true);
               }}
-              className="px-4 py-2 text-sm font-medium text-gray-200 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 transition-colors"
             >
               Sign In
             </button>
@@ -126,7 +64,7 @@ export default function LandingPage() {
                 setAuthModalTab('signup');
                 setShowAuthModal(true);
               }}
-              className="px-6 py-2 text-sm font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-colors shadow-lg shadow-[#007FFF]/20"
+              className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg shadow-purple-500/30"
             >
               Sign Up
             </button>
@@ -139,68 +77,53 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up">
-              Multi-Channel AI Business Assistant
-              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                That Works Everywhere
-              </span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6 leading-tight">
+              AI That Replies to Your Customers and Turns Conversations Into Sales
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-              Connect with customers across WhatsApp, Telegram, Instagram, and more. 
-              Powered by AI that understands context and delivers personalized experiences.
+            <p className="text-xl sm:text-2xl text-gray-800 font-medium mb-10 leading-relaxed">
+              Automify AI answers customer messages, captures leads, and books sales automatically — 24/7.
             </p>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
                   setShowAuthModal(true);
                 }}
-                className="group px-8 py-4 text-lg font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/40 hover:scale-105 flex items-center gap-2"
+                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
               >
-                Get Started Free
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button
-                onClick={() => {
-                  setAuthModalTab('signin');
-                  setShowAuthModal(true);
-                }}
-                className="px-8 py-4 text-lg font-semibold text-white bg-white/10 backdrop-blur-sm border-2 border-white/20 hover:border-[#007FFF] hover:bg-white/20 rounded-lg transition-all hover:scale-105"
-              >
-                Sign In
+                Start Automating Conversations
               </button>
             </div>
+            <p className="text-sm text-gray-600 mb-16">Setup in 5 minutes • No coding required • Free trial</p>
 
-            {/* Optional Visual Element */}
-            <div className="relative mt-16 animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
-              <div className="relative mx-auto max-w-3xl">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/30 to-[#D4AF37]/30 rounded-2xl blur-3xl animate-pulse-slow" />
-                <div className="relative bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl hover:border-[#007FFF]/50 transition-all duration-500">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="flex flex-col items-center text-center group">
-                      <div className="w-16 h-16 rounded-full bg-[#007FFF]/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                        <MessageSquare className="h-8 w-8 text-[#007FFF] group-hover:animate-bounce" />
-                      </div>
-                      <h3 className="font-semibold text-white mb-2">Multi-Channel</h3>
-                      <p className="text-sm text-gray-300">Connect everywhere your customers are</p>
+            {/* Chat Demo */}
+            <div className="relative mt-16">
+              <div className="bg-white rounded-2xl p-6 shadow-lg max-w-md mx-auto border border-gray-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-sm">C</div>
+                  <div>
+                    <div className="font-semibold text-gray-900">Customer</div>
+                    <div className="text-xs text-gray-500">Just now</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] text-sm">
+                      Do you have pricing?
                     </div>
-                    <div className="flex flex-col items-center text-center group">
-                      <div className="w-16 h-16 rounded-full bg-yellow-400/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                        <Zap className="h-8 w-8 text-yellow-400 group-hover:animate-bounce" />
-                      </div>
-                      <h3 className="font-semibold text-white mb-2">AI-Powered</h3>
-                      <p className="text-sm text-gray-300">Intelligent responses that understand context</p>
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
+                      Yes! Here are our plans.
                     </div>
-                    <div className="flex flex-col items-center text-center group">
-                      <div className="w-16 h-16 rounded-full bg-gray-400/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                        <Shield className="h-8 w-8 text-gray-300 group-hover:animate-bounce" />
-                      </div>
-                      <h3 className="font-semibold text-white mb-2">Enterprise-Grade</h3>
-                      <p className="text-sm text-gray-300">Secure, scalable, and reliable</p>
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
+                      Would you like to start a free trial?
                     </div>
                   </div>
                 </div>
@@ -210,90 +133,224 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats & Social Proof Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
+      {/* Integrations Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-white">
         <div className="max-w-7xl mx-auto">
-          {/* Trust Badges */}
-          <div className="text-center mb-12">
-            <p className="text-sm text-gray-400 mb-6 uppercase tracking-wide">Trusted by businesses worldwide</p>
-            <div className="flex flex-wrap justify-center items-center gap-8 mb-12 opacity-60">
-              <div className="text-2xl font-bold text-white">🏢 Enterprise</div>
-              <div className="text-2xl font-bold text-white">🚀 Startups</div>
-              <div className="text-2xl font-bold text-white">🛍️ E-commerce</div>
-              <div className="text-2xl font-bold text-white">💼 SaaS</div>
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Manage All Your Customer Conversations in One Place
+            </h2>
+            <p className="text-xl text-gray-700 max-w-2xl mx-auto">
+              Automify connects WhatsApp, Instagram, Telegram, and email so you can manage every customer interaction from a single dashboard.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            {[
+              { name: 'WhatsApp', logo: '/channels/whatsapp.png', desc: 'Automate replies and capture leads instantly.' },
+              { name: 'Instagram', logo: '/channels/intagram.png', desc: 'Turn DMs and comments into customers.' },
+              { name: 'Facebook', logo: '/channels/messenger.png', desc: 'Respond to Messenger inquiries automatically.' },
+              { name: 'Telegram', logo: '/channels/telegram.png', desc: 'Build powerful automation bots.' },
+              { name: 'Email', logo: '/channels/gmail.png', desc: 'Manage support and customer conversations.' },
+            ].map((platform) => (
+              <button
+                key={platform.name}
+                onClick={() => {
+                  setAuthModalTab('signin');
+                  setShowAuthModal(true);
+                }}
+                className="p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-200 hover:border-purple-400 cursor-pointer transform hover:-translate-y-1"
+              >
+                <div className="w-16 h-16 mx-auto mb-4 relative">
+                  <Image
+                    src={platform.logo}
+                    alt={platform.name}
+                    width={64}
+                    height={64}
+                    className="object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg text-center mb-2">{platform.name}</h3>
+                <p className="text-sm text-gray-600 text-center">{platform.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Problem Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Stop Losing Customers to Slow Replies
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 font-bold text-xl">❌</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Customers expect instant replies</h3>
+                <p className="text-gray-700">Slow responses lead to lost leads and frustrated customers.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 font-bold text-xl">✅</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Automify responds instantly</h3>
+                <p className="text-gray-700">AI automatically replies to messages across WhatsApp, Instagram, Email, websites and Telegram.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 font-bold text-xl">❌</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Too many messages to manage</h3>
+                <p className="text-gray-700">Switching between apps wastes time and causes missed conversations.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 font-bold text-xl">✅</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">One unified inbox</h3>
+                <p className="text-gray-700">Manage all your customer conversations from a single dashboard.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 font-bold text-xl">❌</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Leads get lost in conversations</h3>
+                <p className="text-gray-700">Businesses often miss opportunities because messages are not tracked.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 font-bold text-xl">✅</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Automated lead capture</h3>
+                <p className="text-gray-700">Automify collects customer details and organizes leads automatically.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 font-bold text-xl">❌</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Customer support is expensive</h3>
+                <p className="text-gray-700">Hiring support teams increases operational costs.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 font-bold text-xl">✅</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-powered support</h3>
+                <p className="text-gray-700">Automify answers common questions and reduces support workload.</p>
+              </div>
             </div>
           </div>
+          <div className="text-center mt-12">
+            <button
+              onClick={() => {
+                setAuthModalTab('signup');
+                setShowAuthModal(true);
+              }}
+              className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
+            >
+              Create Your AI Assistant
+            </button>
+          </div>
+        </div>
+      </section>
 
-          {/* Key Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
+      {/* Stats Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16 bg-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Powering Thousands of Automated Conversations
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: '10K+', label: 'Messages Handled Daily', icon: '💬' },
-              { value: '99.9%', label: 'Uptime Guarantee', icon: '⚡' },
-              { value: '15+', label: 'Platform Integrations', icon: '🔗' },
-              { value: '<2s', label: 'Response Time', icon: '⏱️' },
+              { value: '10K+', label: 'Conversations Automated Daily', icon: '💬', desc: 'Businesses rely on Automify to handle customer messages.' },
+              { value: '99.9%', label: 'Platform Uptime', icon: '⚡', desc: 'Reliable infrastructure that keeps your automation running.' },
+              { value: '5+', label: 'Messaging Integrations', icon: '🔗', desc: 'Connect the platforms your customers already use.' },
+              { value: '<2s', label: 'Instant AI Responses', icon: '🤖', desc: 'Reply to customers in under 2 seconds.' },
             ].map((stat, idx) => (
-              <div
-                key={idx}
-                className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-[#007FFF]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#007FFF]/10 text-center group"
-              >
-                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                  {stat.icon}
-                </div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-[#007FFF] to-[#D4AF37] bg-clip-text text-transparent mb-2">
-                  {stat.value}
-                </div>
-                <div className="text-sm text-gray-400">{stat.label}</div>
+              <div key={idx} className="text-center">
+                <div className="text-4xl mb-2">{stat.icon}</div>
+                <div className="text-3xl font-bold text-purple-600 mb-1">{stat.value}</div>
+                <div className="text-sm font-semibold text-gray-900 mb-2">{stat.label}</div>
+                <div className="text-xs text-gray-600">{stat.desc}</div>
               </div>
             ))}
           </div>
+        </div>
+      </section>
 
-          {/* Live Demo Preview */}
-          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-md rounded-3xl p-8 border border-white/10 hover:border-[#007FFF]/30 transition-all duration-500 shadow-2xl">
+      {/* Demo Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-3xl p-8 shadow-lg">
             <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-white mb-3">See It In Action</h3>
-              <p className="text-gray-300">Watch how our AI handles real customer conversations</p>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">See How Automify Handles Customer Conversations</h3>
+              <p className="text-gray-700">Automify AI responds instantly to customer questions across WhatsApp and Instagram.</p>
             </div>
             
             <div className="grid md:grid-cols-2 gap-6">
               {/* Chat Preview 1 */}
-              <div className="bg-black/40 rounded-2xl p-6 border border-[#007FFF]/20">
-                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+              <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold">
                     WA
                   </div>
                   <div>
-                    <div className="font-semibold text-white">WhatsApp</div>
-                    <div className="text-xs text-green-400 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                    <div className="font-semibold text-gray-900">WhatsApp</div>
+                    <div className="text-xs text-green-600 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                       Live
                     </div>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-end">
-                    <div className="bg-[#007FFF] text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
+                    <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
                       What are your pricing plans?
                     </div>
                   </div>
                   <div className="flex justify-start">
-                    <div className="bg-white/10 text-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[85%] text-sm">
-                      We have 3 plans: Starter ($29/mo), Professional ($99/mo), and Enterprise (custom). 
-                      Each includes multi-channel support and AI responses. Would you like details on a specific plan? 🚀
+                    <div className="bg-gray-200 text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[85%] text-sm">
+                      We offer Starter, Professional, and Enterprise plans. Would you like help choosing the right one? 🚀
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Chat Preview 2 */}
-              <div className="bg-black/40 rounded-2xl p-6 border border-purple-500/20">
-                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+              <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-600 flex items-center justify-center text-white font-bold">
                     IG
                   </div>
                   <div>
-                    <div className="font-semibold text-white">Instagram</div>
-                    <div className="text-xs text-purple-400 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                    <div className="font-semibold text-gray-900">Instagram</div>
+                    <div className="text-xs text-purple-600 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
                       Live
                     </div>
                   </div>
@@ -305,9 +362,8 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div className="flex justify-start">
-                    <div className="bg-white/10 text-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[85%] text-sm">
-                      Yes! We integrate with Shopify, WooCommerce, and major e-commerce platforms. 
-                      You can sync products, track orders, and handle customer inquiries automatically. 🛍️
+                    <div className="bg-gray-200 text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[85%] text-sm">
+                      Yes! Automify integrates with Shopify and other e-commerce platforms to automate customer support. 🛍️
                     </div>
                   </div>
                 </div>
@@ -321,26 +377,26 @@ export default function LandingPage() {
                   setAuthModalTab('signup');
                   setShowAuthModal(true);
                 }}
-                className="group inline-flex items-center gap-2 px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-[#007FFF] to-[#0066CC] hover:from-[#0066CC] hover:to-[#007FFF] rounded-xl transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/50 hover:scale-105"
+                className="inline-flex items-center gap-2 px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-xl transition-all shadow-lg hover:scale-105"
               >
-                Try It Free Now
-                <Sparkles className="h-5 w-5 group-hover:rotate-12 transition-transform" />
+                Start Your Free Trial
+                <Sparkles className="h-5 w-5" />
               </button>
-              <p className="text-sm text-gray-400 mt-3">No credit card required • 14-day free trial</p>
+              <p className="text-sm text-gray-600 mt-3">Setup in 5 minutes • No credit card required</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Learn More Section */}
-      <section ref={featuresRef} className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
+      {/* Features Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-white">
         <div className="max-w-7xl mx-auto">
-          <div className={`text-center mb-12 transition-all duration-700 ${featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Everything You Need to Scale
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Powerful Tools to Automate Customer Conversations
             </h2>
-            <p className="text-lg text-gray-200 max-w-2xl mx-auto">
-              Powerful features designed to help you engage customers, automate workflows, and grow your business.
+            <p className="text-lg text-gray-700 max-w-2xl mx-auto">
+              Automify combines AI, automation, and analytics to help you manage messages and convert more customers.
             </p>
           </div>
 
@@ -348,76 +404,71 @@ export default function LandingPage() {
             {[
               {
                 icon: Globe,
-                title: 'Omnichannel Support',
-                description: 'Manage conversations from WhatsApp, Telegram, Instagram, Facebook, and more from one unified dashboard.',
-                color: 'text-[#007FFF]',
-                bgColor: 'bg-[#007FFF]/10',
+                title: 'Omnichannel Messaging',
+                description: 'Manage WhatsApp, Instagram, Telegram, and more from one unified inbox.',
               },
               {
                 icon: Sparkles,
-                title: 'AI-Powered Responses',
-                description: 'Leverage advanced AI to understand context, provide accurate answers, and maintain natural conversations.',
-                color: 'text-yellow-600 dark:text-yellow-400',
-                bgColor: 'bg-yellow-400/10',
+                title: 'Smart AI Replies',
+                description: 'Automify understands customer questions and responds instantly.',
               },
               {
                 icon: Zap,
-                title: 'Automation & Rules',
-                description: 'Create custom automation rules, handle common queries automatically, and escalate when needed.',
-                color: 'text-[#007FFF]',
-                bgColor: 'bg-[#007FFF]/10',
+                title: 'Workflow Automation',
+                description: 'Create rules that automate replies and qualify leads.',
               },
               {
                 icon: Shield,
-                title: 'Security & Compliance',
-                description: 'Enterprise-grade security with role-based access control, audit logs, and data encryption.',
-                color: 'text-gray-600 dark:text-gray-400',
-                bgColor: 'bg-gray-400/10',
+                title: 'Enterprise Security',
+                description: 'Protect conversations with secure infrastructure.',
               },
               {
                 icon: MessageSquare,
-                title: 'Knowledge Base',
-                description: 'Build and maintain a comprehensive knowledge base that your AI can reference for accurate responses.',
-                color: 'text-[#007FFF]',
-                bgColor: 'bg-[#007FFF]/10',
+                title: 'AI Knowledge Training',
+                description: 'Upload documents and FAQs to train your AI assistant.',
               },
               {
                 icon: Zap,
-                title: 'Analytics & Insights',
-                description: 'Track performance, understand customer behavior, and make data-driven decisions with detailed analytics.',
-                color: 'text-yellow-600 dark:text-yellow-400',
-                bgColor: 'bg-yellow-400/10',
+                title: 'Conversation Analytics',
+                description: 'Track performance and customer behavior.',
               },
             ].map((feature, idx) => {
               const Icon = feature.icon;
               return (
                 <div
                   key={idx}
-                  className={`bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all duration-700 hover:shadow-lg hover:scale-105 hover:-translate-y-2 ${
-                    featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-                  }`}
-                  style={{ 
-                    transitionDelay: featuresVisible ? `${idx * 100}ms` : '0ms'
-                  }}
+                  className="bg-gray-50 rounded-xl p-6 border border-gray-200 hover:border-purple-400 hover:bg-white transition-all duration-300 hover:shadow-lg hover:scale-105 hover:-translate-y-2"
                 >
-                  <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110`}>
-                    <Icon className={`h-6 w-6 ${feature.color}`} />
+                  <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center mb-4">
+                    <Icon className="h-6 w-6 text-purple-600" />
                   </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-300">
+                  <p className="text-gray-700">
                     {feature.description}
                   </p>
                 </div>
               );
             })}
           </div>
+          <div className="text-center mt-12">
+            <p className="text-lg text-gray-700 mb-4">Ready to automate your customer conversations?</p>
+            <button
+              onClick={() => {
+                setAuthModalTab('signup');
+                setShowAuthModal(true);
+              }}
+              className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
+            >
+              Start Your Free Trial
+            </button>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="relative z-40 px-4 sm:px-6 lg:px-8 py-12 bg-black/50 backdrop-blur-sm border-t border-white/10">
+      <footer className="relative z-40 px-4 sm:px-6 lg:px-8 py-12 bg-gray-900 text-white">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
@@ -431,74 +482,51 @@ export default function LandingPage() {
                   priority
                 />
               </div>
-              <p className="text-gray-400 text-sm">
-                Multi-channel AI Business Assistant platform for modern businesses.
+              <p className="text-gray-400 text-sm mb-4">
+                Automate customer conversations across WhatsApp, Instagram, Telegram, and more — all from one intelligent platform.
               </p>
+              <p className="text-sm text-gray-500">Start automating today</p>
+              <button
+                onClick={() => {
+                  setAuthModalTab('signup');
+                  setShowAuthModal(true);
+                }}
+                className="mt-3 px-6 py-2 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+              >
+                Start Free Trial
+              </button>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-sm">
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Features
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Pricing
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Integrations
-                  </a>
-                </li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Features</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Integrations</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Templates</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">API</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm">
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    About
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Contact
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Blog
-                  </a>
-                </li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Privacy Policy
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Terms of Service
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Cookie Policy
-                  </a>
-                </li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Cookie Policy</a></li>
               </ul>
             </div>
           </div>
           <div className="pt-8 border-t border-gray-800 text-center">
             <p className="text-gray-400 text-sm">
-              © {new Date().getFullYear()} Automify. All rights reserved.
+              © {new Date().getFullYear()} Automify AI. All rights reserved. Powered by Tekmify Global Solutions Ltd
             </p>
           </div>
         </div>
@@ -513,4 +541,3 @@ export default function LandingPage() {
     </div>
   );
 }
-
