@@ -76,20 +76,8 @@ export default function LandingPage() {
       <section className="relative z-40 px-4 sm:px-6 lg:px-8 pt-20 pb-32">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left Side - Image */}
-            <div className="order-2 lg:order-1">
-              <Image
-                src="/hero-conv.png"
-                alt="Automify AI Conversations"
-                width={600}
-                height={500}
-                className="w-full h-auto rounded-2xl shadow-2xl"
-                priority
-              />
-            </div>
-
-            {/* Right Side - Text */}
-            <div className="order-1 lg:order-2">
+            {/* Left Side - Text */}
+            <div className="order-1">
               {/* Headline */}
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6 leading-tight">
                 AI That Replies to Your Customers and Turns Conversations Into Sales
@@ -113,6 +101,24 @@ export default function LandingPage() {
                 </button>
               </div>
               <p className="text-sm text-gray-600">Setup in 5 minutes • No coding required • Free trial</p>
+            </div>
+
+            {/* Right Side - Image */}
+            <div className="order-2">
+              <div className="relative w-full h-auto">
+                <Image
+                  src="/hero-conv.png"
+                  alt="Automify AI Conversations"
+                  width={600}
+                  height={500}
+                  className="w-full h-auto rounded-2xl shadow-2xl"
+                  priority
+                  onError={(e) => {
+                    console.log('Image load error');
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
