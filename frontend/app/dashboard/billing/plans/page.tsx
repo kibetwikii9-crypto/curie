@@ -42,11 +42,19 @@ export default function BillingPlansPage() {
   });
 
   const handleSelectPlan = (plan: any) => {
+    console.log('🎯 Plan selected:', plan.name, plan.id);
+    console.log('💳 Payment method:', selectedPaymentMethod);
+    console.log('📅 Billing cycle:', isAnnual ? 'annual' : 'monthly');
+    
     if (plan.name === 'enterprise') {
       window.location.href = 'mailto:sales@automify.ai?subject=Enterprise Plan Inquiry';
       return;
     }
-    router.push(`/dashboard/billing/checkout?plan_id=${plan.id}&billing_cycle=${isAnnual ? 'annual' : 'monthly'}&payment_method=${selectedPaymentMethod}`);
+    
+    const checkoutUrl = `/dashboard/billing/checkout?plan_id=${plan.id}&billing_cycle=${isAnnual ? 'annual' : 'monthly'}&payment_method=${selectedPaymentMethod}`;
+    console.log('🚀 Navigating to:', checkoutUrl);
+    
+    router.push(checkoutUrl);
   };
 
   const currentPlanId = subscriptionData?.subscription?.plan?.id;
