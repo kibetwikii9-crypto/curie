@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { MessageSquare, Zap, Globe, Shield, ArrowRight, Sparkles } from 'lucide-react';
@@ -14,17 +14,59 @@ const AnimatedBackground3D = dynamic(() => import('./AnimatedBackground3D'), {
   loading: () => null,
 });
 
+// Hook for intersection observer animations
+function useIntersectionObserver(options = {}) {
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsIntersecting(true);
+        }
+      },
+      { threshold: 0.1, ...options }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => {
+      if (ref.current) {
+        observer.unobserve(ref.current);
+      }
+    };
+  }, []);
+
+  return [ref, isIntersecting] as const;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [featuresRef, featuresVisible] = useIntersectionObserver();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.push('/dashboard');
     }
   }, [isAuthenticated, isLoading, router]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      setPrefersReducedMotion(mediaQuery.matches);
+      
+      const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, []);
 
   if (isLoading) {
     return (
@@ -39,14 +81,14 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black relative overflow-hidden">
       {/* 3D Animated Background */}
-      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-r from-purple-100 to-blue-100 flex items-center justify-center">Loading...</div>}>
+      <Suspense fallback={<div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center text-white">Loading 3D Scene...</div>}>
         <AnimatedBackground3D />
       </Suspense>
 
       {/* Navigation */}
-      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6 bg-white/80 backdrop-blur-sm shadow-sm">
+      <nav className="relative z-50 px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
@@ -54,10 +96,18 @@ export default function LandingPage() {
               alt="Automify"
               width={200}
               height={66}
-              className="h-14 w-auto"
+              className="h-14 w-auto dark:hidden"
               priority
             />
-            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
+            <Image
+              src="/logo-white-no-tagline.png"
+              alt="Automify"
+              width={200}
+              height={66}
+              className="h-14 w-auto hidden dark:block"
+              priority
+            />
+            <span className="text-2xl font-bold text-[#007FFF]">
               Automify
             </span>
           </div>
@@ -67,7 +117,7 @@ export default function LandingPage() {
                 setAuthModalTab('signin');
                 setShowAuthModal(true);
               }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-purple-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-200 hover:text-white transition-colors"
             >
               Sign In
             </button>
@@ -76,7 +126,7 @@ export default function LandingPage() {
                 setAuthModalTab('signup');
                 setShowAuthModal(true);
               }}
-              className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg shadow-purple-500/30"
+              className="px-6 py-2 text-sm font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-colors shadow-lg shadow-[#007FFF]/20"
             >
               Sign Up
             </button>
@@ -89,35 +139,44 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up">
               Multi-Channel AI Business Assistant
-              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent">
+              <span className="block mt-2 bg-gradient-to-r from-[#007FFF] via-[#0088FF] to-[#D4AF37] bg-clip-text text-transparent animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
                 That Works Everywhere
               </span>
             </h1>
             
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-800 font-medium mb-10 leading-relaxed">
+            <p className="text-xl sm:text-2xl text-gray-200 mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
               Connect with customers across WhatsApp, Telegram, Instagram, and more. 
               Powered by AI that understands context and delivers personalized experiences.
             </p>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+            {/* CTAs */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
                   setShowAuthModal(true);
                 }}
-                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
+                className="group px-8 py-4 text-lg font-semibold text-white bg-[#007FFF] hover:bg-[#0066CC] rounded-lg transition-all shadow-lg shadow-[#007FFF]/30 hover:shadow-xl hover:shadow-[#007FFF]/40 hover:scale-105 flex items-center gap-2"
               >
                 Get Started Free
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <button
+                onClick={() => {
+                  setAuthModalTab('signin');
+                  setShowAuthModal(true);
+                }}
+                className="px-8 py-4 text-lg font-semibold text-white bg-white/10 backdrop-blur-sm border-2 border-white/20 hover:border-[#007FFF] hover:bg-white/20 rounded-lg transition-all hover:scale-105"
+              >
+                Sign In
               </button>
             </div>
-            <p className="text-sm text-gray-600 mb-16">No credit card required • Setup in 5 minutes</p>
 
             {/* Optional Visual Element */}
-            <div className="relative mt-16">
+            <div className="relative mt-16 animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
               <div className="relative mx-auto max-w-3xl">
                 <div className="absolute inset-0 bg-gradient-to-r from-[#007FFF]/30 to-[#D4AF37]/30 rounded-2xl blur-3xl animate-pulse-slow" />
                 <div className="relative bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl hover:border-[#007FFF]/50 transition-all duration-500">
@@ -151,77 +210,44 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Integrations Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-white/80 backdrop-blur-sm">
+      {/* Stats & Social Proof Section */}
+      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Connect Your Channels in Minutes
-            </h2>
-            <p className="text-xl text-gray-700 max-w-2xl mx-auto">
-              One platform to manage all your customer conversations
-            </p>
+          {/* Trust Badges */}
+          <div className="text-center mb-12">
+            <p className="text-sm text-gray-400 mb-6 uppercase tracking-wide">Trusted by businesses worldwide</p>
+            <div className="flex flex-wrap justify-center items-center gap-8 mb-12 opacity-60">
+              <div className="text-2xl font-bold text-white">🏢 Enterprise</div>
+              <div className="text-2xl font-bold text-white">🚀 Startups</div>
+              <div className="text-2xl font-bold text-white">🛍️ E-commerce</div>
+              <div className="text-2xl font-bold text-white">💼 SaaS</div>
+            </div>
           </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            {[
-              { name: 'WhatsApp', logo: '/channels/whatsapp.png', desc: 'Business API' },
-              { name: 'Instagram', logo: '/channels/intagram.png', desc: 'Direct Messages' },
-              { name: 'Facebook', logo: '/channels/messenger.png', desc: 'Messenger' },
-              { name: 'Telegram', logo: '/channels/telegram.png', desc: 'Bot API' },
-              { name: 'Email', logo: '/channels/gmail.png', desc: 'Gmail & More' },
-            ].map((platform) => (
-              <button
-                key={platform.name}
-                onClick={() => {
-                  setAuthModalTab('signin');
-                  setShowAuthModal(true);
-                }}
-                className="p-8 bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-200 hover:border-purple-400 cursor-pointer transform hover:-translate-y-1"
-              >
-                <div className="w-16 h-16 mx-auto mb-4 relative">
-                  <Image
-                    src={platform.logo}
-                    alt={platform.name}
-                    width={64}
-                    height={64}
-                    className="object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                </div>
-                <h3 className="font-bold text-gray-900 text-lg text-center mb-1">{platform.name}</h3>
-                <p className="text-sm text-gray-600 text-center">{platform.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Stats Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16 bg-gradient-to-br from-purple-50 to-blue-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          {/* Key Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
             {[
-              { value: '10K+', label: 'Messages Daily', icon: '💬' },
-              { value: '99.9%', label: 'Uptime', icon: '⚡' },
-              { value: '5+', label: 'Integrations', icon: '🔗' },
+              { value: '10K+', label: 'Messages Handled Daily', icon: '💬' },
+              { value: '99.9%', label: 'Uptime Guarantee', icon: '⚡' },
+              { value: '15+', label: 'Platform Integrations', icon: '🔗' },
               { value: '<2s', label: 'Response Time', icon: '⏱️' },
             ].map((stat, idx) => (
-              <div key={idx} className="text-center">
-                <div className="text-4xl mb-2">{stat.icon}</div>
-                <div className="text-3xl font-bold text-purple-600 mb-1">{stat.value}</div>
-                <div className="text-sm text-gray-700">{stat.label}</div>
+              <div
+                key={idx}
+                className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-[#007FFF]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#007FFF]/10 text-center group"
+              >
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
+                  {stat.icon}
+                </div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-[#007FFF] to-[#D4AF37] bg-clip-text text-transparent mb-2">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-gray-400">{stat.label}</div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
 
-      {/* Demo Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-16">
-        <div className="max-w-7xl mx-auto">
+          {/* Live Demo Preview */}
           <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-md rounded-3xl p-8 border border-white/10 hover:border-[#007FFF]/30 transition-all duration-500 shadow-2xl">
             <div className="text-center mb-8">
               <h3 className="text-2xl font-bold text-white mb-3">See It In Action</h3>
@@ -307,9 +333,9 @@ export default function LandingPage() {
       </section>
 
       {/* Learn More Section */}
-      <section className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
+      <section ref={featuresRef} className="relative z-40 px-4 sm:px-6 lg:px-8 py-20 bg-black/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
+          <div className={`text-center mb-12 transition-all duration-700 ${featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
               Everything You Need to Scale
             </h2>
@@ -367,7 +393,12 @@ export default function LandingPage() {
               return (
                 <div
                   key={idx}
-                  className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all duration-300 hover:shadow-lg hover:scale-105 hover:-translate-y-2"
+                  className={`bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#007FFF] hover:bg-white/10 transition-all duration-700 hover:shadow-lg hover:scale-105 hover:-translate-y-2 ${
+                    featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+                  }`}
+                  style={{ 
+                    transitionDelay: featuresVisible ? `${idx * 100}ms` : '0ms'
+                  }}
                 >
                   <div className={`w-12 h-12 rounded-lg ${feature.bgColor} flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110`}>
                     <Icon className={`h-6 w-6 ${feature.color}`} />
