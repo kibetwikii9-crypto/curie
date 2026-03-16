@@ -152,7 +152,11 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
         setTimeout(() => {
           setActiveTab('signup');
           setSignInErrors({});
+          // Pre-fill the email in signup form for convenience
+          setSignUpData(prev => ({ ...prev, email: signInData.email }));
         }, 3000);
+        // Don't close modal or redirect - keep user on the page
+        return;
       } else {
         const errorMessage = err.message || err.response?.data?.detail || 'Login failed. Please check your credentials and try again.';
         setSignInErrors({ submit: errorMessage });

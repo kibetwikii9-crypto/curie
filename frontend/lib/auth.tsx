@@ -83,11 +83,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error('[Auth] Login error:', error);
       
-      // Check if it's a 404 or user not found error
-      if (error.response?.status === 404 || 
-          error.response?.data?.detail?.toLowerCase().includes('not found') ||
-          error.response?.data?.detail?.toLowerCase().includes('incorrect email')) {
-        throw new Error('ACCOUNT_NOT_FOUND');
+      // Check if it's a user not found error (401 or 404 with specific message)
+      if (error.response?.status === 401 || error.response?.status === 404) {
+        const detail = error.response?.data?.detail || '';
+        if (detail.toLowerCase().includes('no account found') ||
+            detail.toLowerCase().includes('please sign up') ||
+            detail.toLowerCase().includes('not found') ||
+            detail.toLowerCase().includes('incorrect email')) {
+          throw new Error('ACCOUNT_NOT_FOUND');
+        }
       }
       
       // Provide more detailed error messages
