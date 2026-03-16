@@ -141,11 +141,14 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
 
     try {
       await login(signInData.email, signInData.password);
+      console.log('[AuthModal] Login successful, closing modal and redirecting');
       onClose();
       router.push('/dashboard');
     } catch (err: any) {
+      console.log('[AuthModal] Login error caught:', err.message);
       // Check if it's an account not found error
       if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {
+        console.log('[AuthModal] Account not found error detected, showing toast');
         setShowToast(true);
         setToastMessage("Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!");
         // Auto-switch to signup after showing toast
@@ -156,8 +159,10 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
           setSignUpData(prev => ({ ...prev, email: signInData.email }));
         }, 3000);
         // Don't close modal or redirect - keep user on the page
+        console.log('[AuthModal] Returning early, not closing modal or redirecting');
         return;
       } else {
+        console.log('[AuthModal] Other error, setting error message');
         const errorMessage = err.message || err.response?.data?.detail || 'Login failed. Please check your credentials and try again.';
         setSignInErrors({ submit: errorMessage });
       }
