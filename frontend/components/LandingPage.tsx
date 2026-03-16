@@ -75,59 +75,44 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="relative z-40 px-4 sm:px-6 lg:px-8 pt-20 pb-32">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-4xl mx-auto">
-            {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6 leading-tight">
-              AI That Replies to Your Customers and Turns Conversations Into Sales
-            </h1>
-            
-            {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-gray-800 font-medium mb-10 leading-relaxed">
-              Automify AI answers customer messages, captures leads, and books sales automatically — 24/7.
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-              <button
-                onClick={() => {
-                  setAuthModalTab('signup');
-                  setShowAuthModal(true);
-                }}
-                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
-              >
-                Start Automating Conversations
-              </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left Side - Image */}
+            <div className="order-2 lg:order-1">
+              <Image
+                src="/hero-conv.png"
+                alt="Automify AI Conversations"
+                width={600}
+                height={500}
+                className="w-full h-auto rounded-2xl shadow-2xl"
+                priority
+              />
             </div>
-            <p className="text-sm text-gray-600 mb-16">Setup in 5 minutes • No coding required • Free trial</p>
 
-            {/* Chat Demo */}
-            <div className="relative mt-16">
-              <div className="bg-white rounded-2xl p-6 shadow-lg max-w-md mx-auto border border-gray-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-sm">C</div>
-                  <div>
-                    <div className="font-semibold text-gray-900">Customer</div>
-                    <div className="text-xs text-gray-500">Just now</div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] text-sm">
-                      Do you have pricing?
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
-                      Yes! Here are our plans.
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] text-sm">
-                      Would you like to start a free trial?
-                    </div>
-                  </div>
-                </div>
+            {/* Right Side - Text */}
+            <div className="order-1 lg:order-2">
+              {/* Headline */}
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6 leading-tight">
+                AI That Replies to Your Customers and Turns Conversations Into Sales
+              </h1>
+              
+              {/* Subheadline */}
+              <p className="text-xl sm:text-2xl text-gray-800 font-medium mb-10 leading-relaxed">
+                Automify AI answers customer messages, captures leads, and books sales automatically — 24/7.
+              </p>
+
+              {/* CTA Button */}
+              <div className="flex flex-col sm:flex-row items-start gap-4 mb-6">
+                <button
+                  onClick={() => {
+                    setAuthModalTab('signup');
+                    setShowAuthModal(true);
+                  }}
+                  className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
+                >
+                  Start Automating Conversations
+                </button>
               </div>
+              <p className="text-sm text-gray-600">Setup in 5 minutes • No coding required • Free trial</p>
             </div>
           </div>
         </div>
