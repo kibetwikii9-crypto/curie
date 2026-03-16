@@ -18,6 +18,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
   const { login } = useAuth();
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
   const [isLoading, setIsLoading] = useState(false);
+  const [preventClose, setPreventClose] = useState(false); // Prevent closing during account not found flow
   
   // Sign In state
   const [signInData, setSignInData] = useState({
@@ -149,6 +150,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
       // Check if it's an account not found error
       if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {
         console.log('[AuthModal] Account not found error detected, showing toast');
+        setPreventClose(true); // Prevent modal from closing
         setShowToast(true);
         setToastMessage("Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!");
         // Auto-switch to signup after showing toast
@@ -157,6 +159,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
           setSignInErrors({});
           // Pre-fill the email in signup form for convenience
           setSignUpData(prev => ({ ...prev, email: signInData.email }));
+          setPreventClose(false); // Allow closing after switching to signup
         }, 3000);
         // Don't close modal or redirect - keep user on the page
         console.log('[AuthModal] Returning early, not closing modal or redirecting');
@@ -288,8 +291,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm backdrop-enter"
         onClick={(e) => {
-          // Only close if not loading and no errors are showing
-          if (!isLoading && !signInErrors.submit && !signUpErrors.submit) {
+          // Only close if not loading, no errors showing, and not prevented
+          if (!isLoading && !signInErrors.submit && !signUpErrors.submit && !preventClose) {
             onClose();
           }
         }}
@@ -306,12 +309,12 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
           {/* Close Button */}
           <button
             onClick={() => {
-              // Only allow closing if not loading
-              if (!isLoading) {
+              // Only allow closing if not loading and not prevented
+              if (!isLoading && !preventClose) {
                 onClose();
               }
             }}
-            disabled={isLoading}
+            disabled={isLoading || preventClose}
             className="absolute top-4 right-4 z-10 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-[#007FFF] rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Close modal"
           >
