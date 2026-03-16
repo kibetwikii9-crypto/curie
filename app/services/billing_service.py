@@ -138,6 +138,11 @@ class BillingService:
             
             return result
             
+        except Exception as e:
+            logger.error(f"Failed to subscribe to plan: {e}")
+            db.rollback()
+            raise
+    
     async def create_subscription(
         self,
         business_id: int,
@@ -214,11 +219,6 @@ class BillingService:
             raise
         finally:
             db.close()
-            
-        except Exception as e:
-            logger.error(f"Failed to subscribe to plan: {e}")
-            db.rollback()
-            raise
     
     async def upgrade_subscription(
         self,
