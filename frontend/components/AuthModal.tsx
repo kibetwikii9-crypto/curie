@@ -141,8 +141,20 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
       onClose();
       router.push('/dashboard');
     } catch (err: any) {
-      const errorMessage = err.message || err.response?.data?.detail || 'Login failed. Please check your credentials and try again.';
-      setSignInErrors({ submit: errorMessage });
+      // Check if it's an account not found error
+      if (err.message === 'ACCOUNT_NOT_FOUND') {
+        setSignInErrors({ 
+          submit: "Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!" 
+        });
+        // Auto-switch to signup after 2 seconds
+        setTimeout(() => {
+          setActiveTab('signup');
+          setSignInErrors({});
+        }, 3000);
+      } else {
+        const errorMessage = err.message || err.response?.data?.detail || 'Login failed. Please check your credentials and try again.';
+        setSignInErrors({ submit: errorMessage });
+      }
     } finally {
       setIsLoading(false);
     }

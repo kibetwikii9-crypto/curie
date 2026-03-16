@@ -83,6 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error('[Auth] Login error:', error);
       
+      // Check if it's a 404 or user not found error
+      if (error.response?.status === 404 || 
+          error.response?.data?.detail?.toLowerCase().includes('not found') ||
+          error.response?.data?.detail?.toLowerCase().includes('incorrect email')) {
+        throw new Error('ACCOUNT_NOT_FOUND');
+      }
+      
       // Provide more detailed error messages
       if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
         throw new Error('Cannot connect to server. Please check if the backend is running and the API URL is correct.');
