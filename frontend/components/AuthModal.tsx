@@ -73,13 +73,13 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isLoading && !preventClose) {
         onClose();
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, isLoading, preventClose, onClose]);
 
   // Validation helpers
   const validateEmail = (email: string): boolean => {
