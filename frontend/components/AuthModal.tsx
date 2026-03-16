@@ -150,11 +150,13 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
       // Check if it's an account not found error
       if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {
         console.log('[AuthModal] Account not found error detected, showing toast');
+        console.log('[AuthModal] Setting preventClose to TRUE');
         setPreventClose(true); // Prevent modal from closing
         setShowToast(true);
         setToastMessage("Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!");
         // Auto-switch to signup after showing toast
         setTimeout(() => {
+          console.log('[AuthModal] Switching to signup tab and setting preventClose to FALSE');
           setActiveTab('signup');
           setSignInErrors({});
           // Pre-fill the email in signup form for convenience
@@ -393,7 +395,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
                   </p>
                 </div>
 
-                <form onSubmit={handleSignInSubmit} className="space-y-4" noValidate>
+                <form onSubmit={handleSignInSubmit} action="javascript:void(0);" className="space-y-4" noValidate>
                   {signInErrors.submit && (
                     <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium flex items-start gap-2">
                       <span className="flex-shrink-0 mt-0.5">⚠️</span>
@@ -507,7 +509,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
                   </p>
                 </div>
 
-                <form onSubmit={handleSignUpSubmit} className="space-y-4" noValidate>
+                <form onSubmit={handleSignUpSubmit} action="javascript:void(0);" className="space-y-4" noValidate>
                   {signUpErrors.submit && (
                     <div className={`px-4 py-3 rounded-lg text-sm font-medium flex items-start gap-2 ${
                       signUpErrors.submit.includes('successfully')
