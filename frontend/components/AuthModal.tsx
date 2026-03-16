@@ -18,7 +18,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
   const { login } = useAuth();
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
   const [isLoading, setIsLoading] = useState(false);
-  const [preventClose, setPreventClose] = useState(false); // Prevent closing during account not found flow
+  // Prevent modal from closing during "account not found" flow (shows toast then switches to signup)
+  const [preventClose, setPreventClose] = useState(false);
   
   // Sign In state
   const [signInData, setSignInData] = useState({
@@ -141,21 +142,16 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
 
     try {
       await login(signInData.email, signInData.password);
-      console.log('[AuthModal] Login successful, closing modal and redirecting');
       onClose();
       router.push('/dashboard');
     } catch (err: any) {
-      console.log('[AuthModal] Login error caught:', err.message);
       // Check if it's an account not found error
       if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {
-        console.log('[AuthModal] Account not found error detected, showing toast');
-        console.log('[AuthModal] Setting preventClose to TRUE');
-        setPreventClose(true); // Prevent modal from closing
+        setPreventClose(true); // Prevent modal from closing during the toast period
         setShowToast(true);
         setToastMessage("Welcome! 👋 It looks like you don't have an account yet. Please sign up first to get started with Automify AI!");
         // Auto-switch to signup after showing toast
         setTimeout(() => {
-          console.log('[AuthModal] Switching to signup tab and setting preventClose to FALSE');
           setActiveTab('signup');
           setSignInErrors({});
           // Pre-fill the email in signup form for convenience
@@ -163,10 +159,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
           setPreventClose(false); // Allow closing after switching to signup
         }, 3000);
         // Don't close modal or redirect - keep user on the page
-        console.log('[AuthModal] Returning early, not closing modal or redirecting');
         return;
       } else {
-        console.log('[AuthModal] Other error, setting error message');
         const errorMessage = err.message || err.response?.data?.detail || 'Login failed. Please check your credentials and try again.';
         setSignInErrors({ submit: errorMessage });
       }

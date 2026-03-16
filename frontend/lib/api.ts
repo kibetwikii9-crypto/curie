@@ -26,7 +26,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 errors
+// Handle 401 errors - but not for login/register endpoints
+// Those need to be handled by the component to show proper error messages
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -38,7 +39,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthEndpoint) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token');
-        // Don't redirect to /login since it doesn't exist, just reload the page
+        // Redirect to home page (not /login since that route doesn't exist)
         // The auth state will be cleared and user will see landing page
         window.location.href = '/';
       }
