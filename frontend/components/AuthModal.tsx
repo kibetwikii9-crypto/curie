@@ -117,8 +117,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
     }
   };
 
-  const handleSignInSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignInSubmit = async () => {
     const errors: Record<string, string> = {};
 
     // Validation
@@ -395,7 +394,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
                   </p>
                 </div>
 
-                <form onSubmit={handleSignInSubmit} action="javascript:void(0);" className="space-y-4" noValidate>
+                <div className="space-y-4">
                   {signInErrors.submit && (
                     <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium flex items-start gap-2">
                       <span className="flex-shrink-0 mt-0.5">⚠️</span>
@@ -416,6 +415,11 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
                       required
                       value={signInData.email}
                       onChange={handleSignInChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !isLoading) {
+                          handleSignInSubmit();
+                        }
+                      }}
                       className={`w-full px-4 py-2.5 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
                         signInErrors.email
                           ? 'border-red-300 dark:border-red-700'
@@ -444,6 +448,11 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
                       required
                       value={signInData.password}
                       onChange={handleSignInChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !isLoading) {
+                          handleSignInSubmit();
+                        }
+                      }}
                       className={`w-full px-4 py-2.5 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
                         signInErrors.password
                           ? 'border-red-300 dark:border-red-700'
@@ -487,13 +496,14 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
                   </div>
 
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleSignInSubmit}
                     disabled={isLoading}
                     className="w-full py-3 px-4 bg-[#007FFF] hover:bg-[#0066CC] text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#007FFF]/20 hover:shadow-xl hover:shadow-[#007FFF]/30 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:ring-offset-2"
                   >
                     {isLoading ? 'Signing in...' : 'Sign In'}
                   </button>
-                </form>
+                </div>
               </div>
             )}
 
