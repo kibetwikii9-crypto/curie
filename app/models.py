@@ -237,6 +237,27 @@ class AdAsset(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class AdTemplate(Base):
+    """
+    Custom ad template model for saving reusable templates.
+    """
+    __tablename__ = "ad_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)  # Template name
+    description = Column(Text, nullable=True)  # Template description
+    category = Column(String, nullable=False)  # headline, description, cta, video
+    objective = Column(String, nullable=False)  # promotion, announcement, offer, engagement
+    platform = Column(String, nullable=True)  # instagram, facebook, whatsapp, etc. (None = all)
+    template_content = Column(Text, nullable=False)  # JSON string with {headline, description, cta, etc}
+    char_limit = Column(Integer, nullable=True)  # Optional character limit for this template
+    is_public = Column(Boolean, default=False, nullable=False)  # Share with team or keep private
+    usage_count = Column(Integer, default=0, nullable=False)  # Track how many times used
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 # ========== USERS & ROLES MODELS ==========
 
 class Role(Base):
@@ -1111,6 +1132,10 @@ Index('idx_integrations_business_channel', ChannelIntegration.business_id, Chann
 
 # Ad Assets - for ad studio
 Index('idx_adassets_business_status', AdAsset.business_id, AdAsset.status)
+
+# Ad Templates - for custom template management
+Index('idx_adtemplates_business_category', AdTemplate.business_id, AdTemplate.category)
+Index('idx_adtemplates_business_objective', AdTemplate.business_id, AdTemplate.objective)
 
 # Audit logs - for security reviews
 Index('idx_audit_business_action', AuditLog.business_id, AuditLog.action)

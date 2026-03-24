@@ -9,7 +9,7 @@ from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule
+from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, AdTemplate, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule
 from app.routes.auth import get_current_user, get_user_business_id
 from app.middleware.rate_limiter import limiter, get_rate_limit
 
@@ -3394,7 +3394,228 @@ async def get_usage_insights(
     }
 
 
+# ========== CUSTOM TEMPLATE MANAGEMENT ==========
+
+@router.get("/ads/templates")
+async def get_custom_templates(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all custom templates for the business."""
+    business_id = get_user_business_id(current_user, db)
+    
+    templates = db.query(AdTemplate).filter(
+        AdTemplate.business_id == business_id
+    ).order_by(AdTemplate.created_at.desc()).all()
+    
+    result = []
+    for template in templates:
+        import json
+        try:
+            content = json.loads(template.template_content)
+        except:
+            content = {}
+        
+        result.append({
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "category": template.category,
+            "objective": template.objective,
+            "platform": template.platform,
+            "char_limit": template.char_limit,
+            "usage_count": template.usage_count,
+            "is_public": template.is_public,
+            "content": content,
+            "created_at": template.created_at.isoformat(),
+            "updated_at": template.updated_at.isoformat(),
+        })
+    
+    return {
+        "templates": result,
+        "total": len(result),
+    }
+
+
+@router.post("/ads/templates")
+async def create_custom_template(
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new custom template."""
+    business_id = get_user_business_id(current_user, db)
+    
+    import json
+    
+    template = AdTemplate(
+        business_id=business_id,
+        name=request.get("name", "Untitled Template"),
+        description=request.get("description", ""),
+        category=request.get("category", "headline"),
+        objective=request.get("objective", "promotion"),
+        platform=request.get("platform"),
+        template_content=json.dumps(request.get("content", {})),
+        char_limit=request.get("char_limit"),
+        is_public=request.get("is_public", False),
+    )
+    
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    
+    return {
+        "id": template.id,
+        "name": template.name,
+        "message": "Template created successfully",
+    }
+
+
+@router.put("/ads/templates/{template_id}")
+async def update_custom_template(
+    template_id: int,
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a custom template."""
+    business_id = get_user_business_id(current_user, db)
+    
+    template = db.query(AdTemplate).filter(
+        AdTemplate.id == template_id,
+        AdTemplate.business_id == business_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    import json
+    
+    # Update fields
+    if "name" in request:
+        template.name = request["name"]
+    if "description" in request:
+        template.description = request["description"]
+    if "category" in request:
+        template.category = request["category"]
+    if "objective" in request:
+        template.objective = request["objective"]
+    if "platform" in request:
+        template.platform = request["platform"]
+    if "char_limit" in request:
+        template.char_limit = request["char_limit"]
+    if "is_public" in request:
+        template.is_public = request["is_public"]
+    if "content" in request:
+        template.template_content = json.dumps(request["content"])
+    
+    template.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(template)
+    
+    return {
+        "id": template.id,
+        "message": "Template updated successfully",
+    }
+
+
+@router.delete("/ads/templates/{template_id}")
+async def delete_custom_template(
+    template_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a custom template."""
+    business_id = get_user_business_id(current_user, db)
+    
+    template = db.query(AdTemplate).filter(
+        AdTemplate.id == template_id,
+        AdTemplate.business_id == business_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    db.delete(template)
+    db.commit()
+    
+    return {
+        "message": "Template deleted successfully",
+    }
+
+
+@router.get("/ads/templates/category/{category}")
+async def get_templates_by_category(
+    category: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all templates by category."""
+    business_id = get_user_business_id(current_user, db)
+    
+    templates = db.query(AdTemplate).filter(
+        AdTemplate.business_id == business_id,
+        AdTemplate.category == category
+    ).all()
+    
+    result = []
+    for template in templates:
+        import json
+        try:
+            content = json.loads(template.template_content)
+        except:
+            content = {}
+        
+        result.append({
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "objective": template.objective,
+            "platform": template.platform,
+            "char_limit": template.char_limit,
+            "content": content,
+        })
+    
+    return {
+        "templates": result,
+    }
+
+
+@router.post("/ads/templates/{template_id}/use")
+async def use_custom_template(
+    template_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Track template usage and return template content."""
+    business_id = get_user_business_id(current_user, db)
+    
+    template = db.query(AdTemplate).filter(
+        AdTemplate.id == template_id,
+        AdTemplate.business_id == business_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Increment usage count
+    template.usage_count += 1
+    db.commit()
+    
+    import json
+    try:
+        content = json.loads(template.template_content)
+    except:
+        content = {}
+    
+    return {
+        "name": template.name,
+        "content": content,
+    }
+
+
 @router.post("/ads/assets")
+
 async def create_ad_asset(
     request: dict,
     current_user: UserModel = Depends(get_current_user),

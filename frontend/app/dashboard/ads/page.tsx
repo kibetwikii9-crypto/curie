@@ -90,6 +90,10 @@ export default function AdStudioPage() {
   const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
   const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState('');
+  const [saveTemplateDescription, setSaveTemplateDescription] = useState('');
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
 
   // Copy composer state
   const [copyObjective, setCopyObjective] = useState('promotion');
@@ -144,6 +148,14 @@ export default function AdStudioPage() {
     queryKey: ['ads-templates'],
     queryFn: async () => {
       const response = await api.get('/api/dashboard/ads/copy-templates');
+      return response.data;
+    },
+  });
+
+  const { data: customTemplatesData, refetch: refetchCustomTemplates } = useQuery<{ templates: any; total: number }>({
+    queryKey: ['ads-custom-templates'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ads/templates');
       return response.data;
     },
   });
@@ -259,6 +271,28 @@ export default function AdStudioPage() {
       queryClient.invalidateQueries({ queryKey: ['ads-assets'] });
       queryClient.invalidateQueries({ queryKey: ['ads-campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['ads-insights'] });
+    },
+  });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await api.post('/api/dashboard/ads/templates', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchCustomTemplates();
+      setShowSaveTemplateModal(false);
+      setSaveTemplateName('');
+      setSaveTemplateDescription('');
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/api/dashboard/ads/templates/${id}`);
+    },
+    onSuccess: () => {
+      refetchCustomTemplates();
     },
   });
 
@@ -820,57 +854,121 @@ export default function AdStudioPage() {
       {activeSection === 'copy' && (
         <div className="space-y-4">
           {/* Template Gallery */}
-          {templatesData && !showCopyComposer && (
+          {(templatesData || customTemplatesData) && !showCopyComposer && (
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="px-6 py-5">
-                <div className="flex items-center gap-2 mb-6">
-                  <Sparkles className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Choose Your Template
-                  </h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(templatesData.templates).map(([key, template]: [string, any]) => (
-                    <div
-                      key={key}
-                      className="group relative p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg border-2 border-purple-200 dark:border-purple-800 hover:border-purple-400 dark:hover:border-purple-600 hover:shadow-xl transition-all transform hover:-translate-y-1 cursor-pointer"
-                      onClick={() => {
-                        setSelectedTemplate(key);
-                        setShowCopyComposer(true);
-                        // Auto-fill with template
-                        if (template.sample) {
-                          setCopyHeadline(template.sample.headline || '');
-                          setCopyDescription(template.sample.description || '');
-                          setCopyCta(template.sample.cta || '');
-                        }
-                      }}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      {customTemplatesData && customTemplatesData.total > 0 ? 'Your Saved Templates' : 'Choose Your Template'}
+                    </h3>
+                  </div>
+                  {customTemplatesData && customTemplatesData.total > 0 && (
+                    <button
+                      onClick={() => setShowTemplateManager(true)}
+                      className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
                     >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                          <FileText className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                        </div>
-                        <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-pulse" />
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                        {template.name}
-                      </h4>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        {template.description}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded-full capitalize">
-                          {template.objective}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {template.char_limit} chars
-                        </span>
-                      </div>
-                      <button className="mt-4 w-full py-2 text-sm font-medium text-white bg-primary-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                        Use Template →
-                      </button>
-                    </div>
-                  ))}
+                      Manage → 
+                    </button>
+                  )}
                 </div>
+
+                {/* Custom Templates */}
+                {customTemplatesData && customTemplatesData.total > 0 && (
+                  <div>
+                    <div className="mb-6">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Your Templates</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {customTemplatesData.templates.map((template: any) => (
+                          <div
+                            key={template.id}
+                            className="group relative p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/10 dark:to-cyan-900/10 rounded-lg border-2 border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-xl transition-all transform hover:-translate-y-1 cursor-pointer"
+                            onClick={() => {
+                              setShowCopyComposer(true);
+                              setCopyHeadline(template.content.headline || '');
+                              setCopyDescription(template.content.description || '');
+                              setCopyCta(template.content.cta || '');
+                              setCopyObjective(template.objective);
+                              setCopyPlatform(template.platform || 'instagram');
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                                <Star className="h-6 w-6 text-blue-600" />
+                              </div>
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">
+                                {template.usage_count} uses
+                              </span>
+                            </div>
+                            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                              {template.name}
+                            </h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
+                              {template.description || 'No description'}
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded-full capitalize">
+                                {template.objective}
+                              </span>
+                              {template.platform && (
+                                <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full capitalize">
+                                  {template.platform}
+                                </span>
+                              )}
+                            </div>
+                            <button className="mt-4 w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                              Use Template →
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Default Templates */}
+                {templatesData && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Suggested Templates</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Default templates to get you started</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Object.entries(templatesData.templates.headline?.promotion || {}).slice(0, 3).map(([key, headline]: [string, any]) => (
+                        <div
+                          key={`default-${key}`}
+                          className="group relative p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg border-2 border-purple-200 dark:border-purple-800 hover:border-purple-400 dark:hover:border-purple-600 hover:shadow-xl transition-all transform hover:-translate-y-1 cursor-pointer"
+                          onClick={() => {
+                            setShowCopyComposer(true);
+                            setCopyHeadline(headline as string);
+                            setCopyDescription('');
+                            setCopyCta('');
+                          }}
+                        >
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                              <FileText className="h-6 w-6 text-gray-600 dark:text-gray-400" />
+                            </div>
+                            <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-pulse" />
+                          </div>
+                          <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                            {headline}
+                          </h4>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Promotional headline template
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded-full">
+                              promotion
+                            </span>
+                          </div>
+                          <button className="mt-4 w-full py-2 text-sm font-medium text-white bg-primary-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                            Use Template →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-6 text-center">
                   <button
@@ -1070,6 +1168,13 @@ export default function AdStudioPage() {
                         Cancel
                       </button>
                       <button
+                        onClick={() => setShowSaveTemplateModal(true)}
+                        title="Save current copy as reusable template"
+                        className="px-4 py-3 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 transition-colors"
+                      >
+                        <Star className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={handleSaveCopy}
                         disabled={createAssetMutation.isPending}
                         className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 shadow-md disabled:opacity-50 transition-all"
@@ -1129,6 +1234,86 @@ export default function AdStudioPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Save as Template Modal */}
+      {showSaveTemplateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowSaveTemplateModal(false)} />
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Star className="h-6 w-6 text-purple-600" />
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Save as Template</h3>
+                <button
+                  onClick={() => setShowSaveTemplateModal(false)}
+                  className="ml-auto text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  value={saveTemplateName}
+                  onChange={(e) => setSaveTemplateName(e.target.value)}
+                  placeholder="e.g., Summer Promotion"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={saveTemplateDescription}
+                  onChange={(e) => setSaveTemplateDescription(e.target.value)}
+                  placeholder="Describe when to use this template..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowSaveTemplateModal(false)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!saveTemplateName.trim()) {
+                      alert('Please enter a template name');
+                      return;
+                    }
+                    saveTemplateMutation.mutate({
+                      name: saveTemplateName,
+                      description: saveTemplateDescription,
+                      category: 'headline',
+                      objective: copyObjective,
+                      platform: copyPlatform,
+                      content: {
+                        headline: copyHeadline,
+                        description: copyDescription,
+                        cta: copyCta,
+                      },
+                    });
+                  }}
+                  disabled={saveTemplateMutation.isPending || !saveTemplateName.trim()}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {saveTemplateMutation.isPending ? 'Saving...' : 'Save Template'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
