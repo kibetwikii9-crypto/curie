@@ -109,10 +109,15 @@ export default function AdStudioPage() {
   const [videoObjective, setVideoObjective] = useState('');
   const [videoPlatform, setVideoPlatform] = useState('');
   const [videoTemplate, setVideoTemplate] = useState('');
+  const [selectedVideoTemplateConfig, setSelectedVideoTemplateConfig] = useState<any>(null);
+  const [videoTemplateMode, setVideoTemplateMode] = useState<'default' | 'custom'>('default');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [videoHeadline, setVideoHeadline] = useState('');
   const [videoText, setVideoText] = useState('');
   const [videoCta, setVideoCta] = useState('');
+  const [showSaveVideoTemplateModal, setShowSaveVideoTemplateModal] = useState(false);
+  const [saveVideoTemplateName, setSaveVideoTemplateName] = useState('');
+  const [saveVideoTemplateDescription, setSaveVideoTemplateDescription] = useState('');
 
   // Asset library state
   const [assetTypeFilter, setAssetTypeFilter] = useState<string>('all');
@@ -199,6 +204,14 @@ export default function AdStudioPage() {
     queryKey: ['ads-video-templates'],
     queryFn: async () => {
       const response = await api.get('/api/dashboard/ads/video-templates');
+      return response.data;
+    },
+  });
+
+  const { data: customVideoTemplatesData, refetch: refetchCustomVideoTemplates } = useQuery<{ templates: any[]; total: number }>({
+    queryKey: ['ads-video-templates-custom'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ads/video-templates/custom');
       return response.data;
     },
   });
@@ -368,6 +381,28 @@ export default function AdStudioPage() {
     },
   });
 
+  const createVideoTemplateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await api.post('/api/dashboard/ads/video-templates', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchCustomVideoTemplates();
+      setShowSaveVideoTemplateModal(false);
+      setSaveVideoTemplateName('');
+      setSaveVideoTemplateDescription('');
+    },
+  });
+
+  const deleteVideoTemplateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/api/dashboard/ads/video-templates/${id}`);
+    },
+    onSuccess: () => {
+      refetchCustomVideoTemplates();
+    },
+  });
+
   // New mutations for enhanced features
   const uploadBrandAssetMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -452,6 +487,7 @@ export default function AdStudioPage() {
       content: JSON.stringify({
         objective: videoObjective,
         template: videoTemplate,
+        template_config: selectedVideoTemplateConfig,
         headline: videoHeadline,
         text: videoText,
         cta: videoCta,
@@ -1427,6 +1463,81 @@ export default function AdStudioPage() {
         </div>
       )}
 
+      {/* Save Video Template Modal */}
+      {showSaveVideoTemplateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowSaveVideoTemplateModal(false)} />
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Film className="h-6 w-6 text-red-600" />
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Save video template</h3>
+                <button
+                  onClick={() => setShowSaveVideoTemplateModal(false)}
+                  className="ml-auto text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Template Name *</label>
+                <input
+                  type="text"
+                  value={saveVideoTemplateName}
+                  onChange={(e) => setSaveVideoTemplateName(e.target.value)}
+                  placeholder="e.g., Product Launch"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <textarea
+                  value={saveVideoTemplateDescription}
+                  onChange={(e) => setSaveVideoTemplateDescription(e.target.value)}
+                  placeholder="Describe the template use case"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowSaveVideoTemplateModal(false)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!saveVideoTemplateName.trim()) {
+                      alert('Please enter a template name');
+                      return;
+                    }
+                    createVideoTemplateMutation.mutate({
+                      name: saveVideoTemplateName,
+                      description: saveVideoTemplateDescription,
+                      video_type: videoTemplate || 'static_image_text',
+                      platform: videoPlatform || 'instagram',
+                      config: selectedVideoTemplateConfig || {
+                        headline: videoHeadline,
+                        text: videoText,
+                        cta: videoCta,
+                      },
+                    });
+                  }}
+                  disabled={!saveVideoTemplateName.trim() || createVideoTemplateMutation.isPending}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {createVideoTemplateMutation.isPending ? 'Saving...' : 'Save Template'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Enhanced Video Builder with Steps */}
       {activeSection === 'video' && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
@@ -1570,30 +1681,113 @@ export default function AdStudioPage() {
                   )}
 
                   {/* Step 3: Template */}
-                  {videoStep === 3 && videoTemplatesData && (
+                  {videoStep === 3 && (
                     <div className="space-y-4">
-                      <h4 className="text-lg font-medium text-gray-900 dark:text-white">
-                        Pick a template
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        {Object.entries(videoTemplatesData.templates).map(([key, template]: [string, any]) => (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-lg font-medium text-gray-900 dark:text-white">Pick a template</h4>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Choose a built-in template, use your saved template, or upload one from JSON.</p>
+                        </div>
+                        <div className="flex gap-2">
                           <button
-                            key={key}
-                            onClick={() => {
-                              setVideoTemplate(key);
-                              nextVideoStep();
-                            }}
-                            className="group p-6 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all text-left"
+                            onClick={() => setVideoTemplateMode((prev) => (prev === 'default' ? 'custom' : 'default'))}
+                            className="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600"
                           >
-                            <Film className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
-                            <div className="font-semibold text-gray-900 dark:text-white mb-1">
-                              {template.name}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {template.description} • {template.duration}s
-                            </div>
+                            {videoTemplateMode === 'default' ? 'Switch to Custom' : 'Switch to Default'}
                           </button>
-                        ))}
+                          <label className="px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800">
+                            Upload JSON
+                            <input
+                              type="file"
+                              accept="application/json"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const text = await file.text();
+                                  const parsed = JSON.parse(text);
+                                  await createVideoTemplateMutation.mutateAsync({
+                                    name: parsed.name || 'Imported Video Template',
+                                    description: parsed.description || '',
+                                    video_type: parsed.video_type || 'static_image_text',
+                                    platform: parsed.platform || videoPlatform || 'instagram',
+                                    config: parsed.config || parsed.template_config || {},
+                                    thumbnail_url: parsed.thumbnail_url || null,
+                                  });
+                                  setVideoTemplateMode('custom');
+                                } catch (err) {
+                                  alert('Invalid JSON template file');
+                                }
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {videoTemplateMode === 'custom' && customVideoTemplatesData && (
+                        <div>
+                          <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Your saved video templates</h5>
+                          {customVideoTemplatesData.total === 0 ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">No custom templates found. Save a template at the end of the wizard.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {customVideoTemplatesData.templates.map((template: any) => (
+                                <div
+                                  key={template.id}
+                                  className="group p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-lg transition-all"
+                                >
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div>
+                                      <div className="text-md font-semibold text-gray-900 dark:text-white">{template.name}</div>
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">{template.description || 'No description'}</div>
+                                    </div>
+                                    <button
+                                      onClick={() => deleteVideoTemplateMutation.mutate(template.id)}
+                                      className="text-red-500 text-xs hover:text-red-700"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setVideoTemplate(`custom:${template.id}`);
+                                      setSelectedVideoTemplateConfig(template.config || template.template_config || {});
+                                      nextVideoStep();
+                                    }}
+                                    className="mt-3 w-full px-2 py-2 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+                                  >
+                                    Use This Template
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {videoTemplateMode === 'default' && videoTemplatesData && (
+                        <div className="grid grid-cols-2 gap-4">
+                          {Object.entries(videoTemplatesData.templates).map(([key, template]: [string, any]) => (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                setVideoTemplate(key);
+                                setSelectedVideoTemplateConfig(template);
+                                nextVideoStep();
+                              }}
+                              className="group p-6 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all text-left"
+                            >
+                              <Film className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
+                              <div className="font-semibold text-gray-900 dark:text-white mb-1">{template.name}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{template.description} • {template.duration}s</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Tip: If you already have a template, you can upload it as JSON using the button above (must include name/video_type/platform/config). Saved templates are available under Custom mode.
                       </div>
                     </div>
                   )}
@@ -1778,14 +1972,23 @@ export default function AdStudioPage() {
                         <ChevronRight className="h-4 w-4 ml-2" />
                       </button>
                     ) : (
-                      <button
-                        onClick={handleSaveVideo}
-                        disabled={createAssetMutation.isPending}
-                        className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-all"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        {createAssetMutation.isPending ? 'Saving...' : 'Save as Draft'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowSaveVideoTemplateModal(true)}
+                          className="inline-flex items-center px-4 py-3 text-sm font-medium rounded-lg text-white bg-purple-600 hover:bg-purple-700"
+                        >
+                          <Star className="h-4 w-4 mr-2" />
+                          Save as Video Template
+                        </button>
+                        <button
+                          onClick={handleSaveVideo}
+                          disabled={createAssetMutation.isPending}
+                          className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-all"
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          {createAssetMutation.isPending ? 'Saving...' : 'Save as Draft'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
