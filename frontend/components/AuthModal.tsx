@@ -11,9 +11,10 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: 'signin' | 'signup';
+  isFromFreeTrial?: boolean;
 }
 
-export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFromFreeTrial = false }: AuthModalProps) {
   const router = useRouter();
   const { login } = useAuth();
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
@@ -143,7 +144,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin' }: Au
     try {
       await login(signInData.email, signInData.password);
       onClose();
-      router.push('/dashboard');
+      router.push(isFromFreeTrial ? '/dashboard/integrations' : '/dashboard');
     } catch (err: any) {
       // Check if it's an account not found error
       if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {

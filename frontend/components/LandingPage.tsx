@@ -12,6 +12,7 @@ export default function LandingPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [isFromFreeTrial, setIsFromFreeTrial] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -94,6 +95,7 @@ export default function LandingPage() {
                 <button
                   onClick={() => {
                     setAuthModalTab('signup');
+                    setIsFromFreeTrial(true);
                     setShowAuthModal(true);
                   }}
                   className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
@@ -372,6 +374,7 @@ export default function LandingPage() {
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
+                  setIsFromFreeTrial(true);
                   setShowAuthModal(true);
                 }}
                 className="inline-flex items-center gap-2 px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-xl transition-all shadow-lg hover:scale-105"
@@ -454,6 +457,7 @@ export default function LandingPage() {
             <button
               onClick={() => {
                 setAuthModalTab('signup');
+                setIsFromFreeTrial(true);
                 setShowAuthModal(true);
               }}
               className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
@@ -486,6 +490,7 @@ export default function LandingPage() {
               <button
                 onClick={() => {
                   setAuthModalTab('signup');
+                  setIsFromFreeTrial(true);
                   setShowAuthModal(true);
                 }}
                 className="mt-3 px-6 py-2 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
@@ -532,8 +537,12 @@ export default function LandingPage() {
       {/* Auth Modal */}
       <AuthModal 
         isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)}
+        onClose={() => {
+          setShowAuthModal(false);
+          setIsFromFreeTrial(false); // Reset when modal closes
+        }}
         initialTab={authModalTab}
+        isFromFreeTrial={isFromFreeTrial}
       />
     </div>
   );
