@@ -9,7 +9,7 @@ from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, AdTemplate, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule
+from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, AdTemplate, BrandAsset, VideoTemplate, AdPublication, AssetAnalytics, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule
 from app.routes.auth import get_current_user, get_user_business_id
 from app.middleware.rate_limiter import limiter, get_rate_limit
 
@@ -3611,6 +3611,615 @@ async def use_custom_template(
     return {
         "name": template.name,
         "content": content,
+    }
+
+
+# ========== BRAND ASSETS MANAGEMENT ==========
+
+@router.get("/ads/brand-assets/list")
+async def get_brand_assets(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all brand assets for the business."""
+    business_id = get_user_business_id(current_user, db)
+    
+    assets = db.query(BrandAsset).filter(
+        BrandAsset.business_id == business_id
+    ).all()
+    
+    result = {"logos": [], "colors": [], "fonts": [], "guides": []}
+    for asset in assets:
+        import json
+        try:
+            content = json.loads(asset.content)
+        except:
+            content = {}
+        
+        item = {
+            "id": asset.id,
+            "name": asset.name,
+            "description": asset.description,
+            "content": content,
+            "file_url": asset.file_url,
+            "is_primary": asset.is_primary,
+            "created_at": asset.created_at.isoformat(),
+        }
+        
+        if asset.asset_type == "logo":
+            result["logos"].append(item)
+        elif asset.asset_type == "color":
+            result["colors"].append(item)
+        elif asset.asset_type == "font":
+            result["fonts"].append(item)
+        elif asset.asset_type == "style_guide":
+            result["guides"].append(item)
+    
+    return result
+
+
+@router.post("/ads/brand-assets")
+async def create_brand_asset(
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new brand asset."""
+    business_id = get_user_business_id(current_user, db)
+    
+    import json
+    
+    asset = BrandAsset(
+        business_id=business_id,
+        asset_type=request.get("asset_type"),
+        name=request.get("name"),
+        description=request.get("description", ""),
+        content=json.dumps(request.get("content", {})),
+        file_url=request.get("file_url"),
+        is_primary=request.get("is_primary", False),
+    )
+    
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    
+    return {"id": asset.id, "message": "Brand asset created"}
+
+
+@router.put("/ads/brand-assets/{asset_id}")
+async def update_brand_asset(
+    asset_id: int,
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a brand asset."""
+    business_id = get_user_business_id(current_user, db)
+    
+    asset = db.query(BrandAsset).filter(
+        BrandAsset.id == asset_id,
+        BrandAsset.business_id == business_id
+    ).first()
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    import json
+    if "content" in request:
+        asset.content = json.dumps(request["content"])
+    if "name" in request:
+        asset.name = request["name"]
+    if "description" in request:
+        asset.description = request["description"]
+    if "is_primary" in request:
+        asset.is_primary = request["is_primary"]
+    
+    db.commit()
+    return {"message": "Brand asset updated"}
+
+
+@router.delete("/ads/brand-assets/{asset_id}")
+async def delete_brand_asset(
+    asset_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a brand asset."""
+    business_id = get_user_business_id(current_user, db)
+    
+    asset = db.query(BrandAsset).filter(
+        BrandAsset.id == asset_id,
+        BrandAsset.business_id == business_id
+    ).first()
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    db.delete(asset)
+    db.commit()
+    return {"message": "Brand asset deleted"}
+
+
+# ========== VIDEO TEMPLATES ==========
+
+@router.get("/ads/video-templates/custom")
+async def get_custom_video_templates(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get custom video templates for the business."""
+    business_id = get_user_business_id(current_user, db)
+    
+    templates = db.query(VideoTemplate).filter(
+        VideoTemplate.business_id == business_id
+    ).order_by(VideoTemplate.created_at.desc()).all()
+    
+    import json
+    result = []
+    for template in templates:
+        try:
+            config = json.loads(template.template_config)
+        except:
+            config = {}
+        
+        result.append({
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "video_type": template.video_type,
+            "platform": template.platform,
+            "config": config,
+            "thumbnail_url": template.thumbnail_url,
+            "usage_count": template.usage_count,
+            "created_at": template.created_at.isoformat(),
+        })
+    
+    return {"templates": result, "total": len(result)}
+
+
+@router.post("/ads/video-templates")
+async def create_video_template(
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a custom video template."""
+    business_id = get_user_business_id(current_user, db)
+    
+    import json
+    
+    template = VideoTemplate(
+        business_id=business_id,
+        name=request.get("name", "Untitled"),
+        description=request.get("description", ""),
+        video_type=request.get("video_type"),
+        platform=request.get("platform"),
+        template_config=json.dumps(request.get("config", {})),
+        thumbnail_url=request.get("thumbnail_url"),
+    )
+    
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    
+    return {"id": template.id, "message": "Video template created"}
+
+
+@router.delete("/ads/video-templates/{template_id}")
+async def delete_video_template(
+    template_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a video template."""
+    business_id = get_user_business_id(current_user, db)
+    
+    template = db.query(VideoTemplate).filter(
+        VideoTemplate.id == template_id,
+        VideoTemplate.business_id == business_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    db.delete(template)
+    db.commit()
+    return {"message": "Video template deleted"}
+
+
+# ========== ASSET PUBLISHING & ANALYTICS ==========
+
+@router.post("/ads/assets/{asset_id}/publish")
+async def publish_ad_asset(
+    asset_id: int,
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Publish an ad asset to a platform."""
+    business_id = get_user_business_id(current_user, db)
+    
+    asset = db.query(AdAsset).filter(
+        AdAsset.id == asset_id,
+        AdAsset.business_id == business_id
+    ).first()
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    platform = request.get("platform", "instagram")
+    scheduled_for = request.get("scheduled_for")
+    
+    publication = AdPublication(
+        business_id=business_id,
+        asset_id=asset_id,
+        platform=platform,
+        status="scheduled" if scheduled_for else "published",
+        scheduled_for=datetime.fromisoformat(scheduled_for) if scheduled_for else None,
+        published_at=datetime.utcnow() if not scheduled_for else None,
+    )
+    
+    db.add(publication)
+    db.commit()
+    db.refresh(publication)
+    
+    return {
+        "publication_id": publication.id,
+        "status": publication.status,
+        "platform": platform,
+    }
+
+
+@router.get("/ads/publications")
+async def get_ad_publications(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all published assets."""
+    business_id = get_user_business_id(current_user, db)
+    
+    publications = db.query(AdPublication).filter(
+        AdPublication.business_id == business_id
+    ).order_by(AdPublication.published_at.desc()).all()
+    
+    import json
+    result = []
+    for pub in publications:
+        try:
+            metrics = json.loads(pub.engagement_metrics) if pub.engagement_metrics else {}
+        except:
+            metrics = {}
+        
+        result.append({
+            "id": pub.id,
+            "asset_id": pub.asset_id,
+            "platform": pub.platform,
+            "status": pub.status,
+            "published_at": pub.published_at.isoformat() if pub.published_at else None,
+            "scheduled_for": pub.scheduled_for.isoformat() if pub.scheduled_for else None,
+            "engagement_metrics": metrics,
+            "platform_url": pub.platform_url,
+        })
+    
+    return {"publications": result, "total": len(result)}
+
+
+@router.get("/ads/analytics/{asset_id}")
+async def get_asset_analytics(
+    asset_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get analytics for a specific asset."""
+    business_id = get_user_business_id(current_user, db)
+    
+    analytics = db.query(AssetAnalytics).filter(
+        AssetAnalytics.business_id == business_id,
+        AssetAnalytics.asset_id == asset_id
+    ).order_by(AssetAnalytics.date.desc()).all()
+    
+    result = []
+    for analytic in analytics:
+        result.append({
+            "id": analytic.id,
+            "platform": analytic.platform,
+            "views": analytic.views,
+            "clicks": analytic.clicks,
+            "conversions": analytic.conversions,
+            "engagement_rate": analytic.engagement_rate,
+            "ctr": analytic.ctr,
+            "conversion_rate": analytic.conversion_rate,
+            "spend": analytic.spend,
+            "revenue": analytic.revenue,
+            "roi": analytic.roi,
+            "date": analytic.date.isoformat(),
+        })
+    
+    return {"analytics": result}
+
+
+@router.post("/ads/analytics/{asset_id}/update")
+async def update_asset_analytics(
+    asset_id: int,
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update analytics for an asset from platform."""
+    business_id = get_user_business_id(current_user, db)
+    
+    analytics = AssetAnalytics(
+        business_id=business_id,
+        asset_id=asset_id,
+        platform=request.get("platform"),
+        views=request.get("views", 0),
+        clicks=request.get("clicks", 0),
+        conversions=request.get("conversions", 0),
+        engagement_rate=request.get("engagement_rate", 0.0),
+        ctr=request.get("ctr", 0.0),
+        conversion_rate=request.get("conversion_rate", 0.0),
+        spend=request.get("spend", 0.0),
+        revenue=request.get("revenue", 0.0),
+        roi=request.get("roi", 0.0),
+    )
+    
+    db.add(analytics)
+    db.commit()
+    
+    return {"message": "Analytics updated"}
+
+
+@router.get("/ads/dashboard-metrics")
+async def get_dashboard_metrics(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get comprehensive dashboard metrics."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Get metrics
+    total_assets = db.query(func.count(AdAsset.id)).filter(
+        AdAsset.business_id == business_id
+    ).scalar() or 0
+    
+    published = db.query(func.count(AdPublication.id)).filter(
+        AdPublication.business_id == business_id
+    ).scalar() or 0
+    
+    total_analytics = db.query(
+        func.sum(AssetAnalytics.views),
+        func.sum(AssetAnalytics.clicks),
+        func.sum(AssetAnalytics.conversions),
+        func.sum(AssetAnalytics.spend),
+        func.sum(AssetAnalytics.revenue),
+    ).filter(
+        AssetAnalytics.business_id == business_id
+    ).first()
+    
+    views, clicks, conversions, spend, revenue = total_analytics
+    
+    return {
+        "total_assets": total_assets,
+        "published_count": published,
+        "total_views": views or 0,
+        "total_clicks": clicks or 0,
+        "total_conversions": conversions or 0,
+        "total_spend": spend or 0.0,
+        "total_revenue": revenue or 0.0,
+        "roi": ((revenue or 0) - (spend or 0)) / (spend or 1) * 100,
+    }
+
+
+# ========== AI INTELLIGENCE INTEGRATION ==========
+
+@router.get("/ads/smart-copy-insights")
+async def get_smart_copy_insights(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get AI-powered copy suggestions based on conversation patterns."""
+    business_id = get_user_business_id(current_user, db)
+    
+    # Get top conversation intents
+    top_intents = db.query(
+        ConversationTag.name,
+        func.count(ConversationTagRelation.id).label("count")
+    ).join(
+        ConversationTagRelation,
+        ConversationTag.id == ConversationTagRelation.tag_id
+    ).filter(
+        ConversationTagRelation.conversation_id.in_(
+            db.query(Conversation.id).filter(
+                Conversation.business_id == business_id
+            )
+        )
+    ).group_by(ConversationTag.name).order_by(
+        func.count(ConversationTagRelation.id).desc()
+    ).limit(10).all()
+    
+    # Get top unresolved questions
+    unresolved_messages = db.query(
+        Message.message_text,
+        func.count(Message.id).label("count")
+    ).filter(
+        Message.conversation_id.in_(
+            db.query(Conversation.id).filter(
+                Conversation.business_id == business_id
+            )
+        ),
+        Message.is_query == True,
+        Message.message_text.isnot(None)
+    ).group_by(
+        Message.message_text
+    ).order_by(
+        func.count(Message.id).desc()
+    ).limit(10).all()
+    
+    # Get customer pain points from conversations
+    pain_points = []
+    pain_related_intents = ["complaint", "issue", "problem", "error", "not working", "broken"]
+    for intent, count in top_intents:
+        if any(pain in intent.lower() for pain in pain_related_intents):
+            pain_points.append({"point": intent, "frequency": count})
+    
+    # Suggested copy themes
+    suggested_themes = {
+        "pain_point_solutions": [
+            f"Solve {pp['point'].lower()} - {pp['frequency']} customers mention it"
+            for pp in pain_points[:5]
+        ],
+        "benefit_highlights": [
+            f"Emphasize benefit for {intent.lower()} (popular with {count} conversations)"
+            for intent, count in top_intents[:5]
+        ],
+        "common_questions": [
+            question for question, _ in unresolved_messages[:5]
+        ],
+    }
+    
+    return {
+        "top_intents": [{"intent": intent, "frequency": count} for intent, count in top_intents],
+        "unresolved_questions": [question for question, _ in unresolved_messages],
+        "pain_points": pain_points,
+        "suggested_copy_themes": suggested_themes,
+    }
+
+
+@router.post("/ads/generate-smart-copy")
+async def generate_smart_copy(
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate ad copy using AI Intelligence + conversation context."""
+    business_id = get_user_business_id(current_user, db)
+    
+    objective = request.get("objective", "awareness")
+    platforms = request.get("platforms", ["instagram", "facebook"])
+    tone = request.get("tone", "friendly")
+    length = request.get("length", "short")
+    focus_intent = request.get("focus_intent")
+    
+    # Build context from top conversations
+    top_intents = db.query(
+        ConversationTag.name,
+        func.count(ConversationTagRelation.id).label("count")
+    ).join(
+        ConversationTagRelation,
+        ConversationTag.id == ConversationTagRelation.tag_id
+    ).filter(
+        ConversationTagRelation.conversation_id.in_(
+            db.query(Conversation.id).filter(
+                Conversation.business_id == business_id
+            )
+        )
+    ).group_by(ConversationTag.name).order_by(
+        func.count(ConversationTagRelation.id).desc()
+    ).limit(5).all()
+    
+    # Get brand assets to personalize copy
+    brand_assets = db.query(BrandAsset).filter(
+        BrandAsset.business_id == business_id,
+        BrandAsset.asset_type == "style_guide"
+    ).first()
+    
+    import json
+    brand_style = {}
+    if brand_assets:
+        try:
+            brand_style = json.loads(brand_assets.content)
+        except:
+            brand_style = {}
+    
+    # Simple copy generation (in production, call LLM)
+    copy_variations = []
+    
+    # Variation 1: Solution-focused
+    if objective == "consideration":
+        copy_variations.append({
+            "text": f"Solve real problems for your business. Loved by teams everywhere.",
+            "platform": "instagram",
+            "objective": "consideration"
+        })
+    
+    # Variation 2: Benefit-focused
+    if objective == "awareness":
+        top_intent = top_intents[0][0] if top_intents else "business"
+        copy_variations.append({
+            "text": f"Discover how we're helping {top_intent} leaders get ahead. Join thousands today.",
+            "platform": "facebook",
+            "objective": "awareness"
+        })
+    
+    # Variation 3: Action-focused
+    copy_variations.append({
+        "text": "Ready to transform how you work? Try free for 14 days - no credit card needed.",
+        "platform": "instagram",
+        "objective": "conversion"
+    })
+    
+    return {
+        "copy_variations": copy_variations,
+        "context": {
+            "top_intents": [intent for intent, _ in top_intents],
+            "tone": tone,
+            "platforms": platforms,
+        }
+    }
+
+
+@router.get("/ads/conversation-insights/{days}")
+async def get_conversation_insights(
+    days: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get conversation insights to inform ad strategy."""
+    business_id = get_user_business_id(current_user, db)
+    
+    from datetime import timedelta
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Get conversation volume trend
+    conversation_trend = db.query(
+        func.date(Conversation.created_at).label("date"),
+        func.count(Conversation.id).label("count")
+    ).filter(
+        Conversation.business_id == business_id,
+        Conversation.created_at >= start_date
+    ).group_by(
+        func.date(Conversation.created_at)
+    ).order_by("date").all()
+    
+    # Get channel distribution
+    channel_dist = db.query(
+        Conversation.channel,
+        func.count(Conversation.id).label("count")
+    ).filter(
+        Conversation.business_id == business_id,
+        Conversation.created_at >= start_date
+    ).group_by(
+        Conversation.channel
+    ).all()
+    
+    # Get sentiment indicators (if available)
+    avg_response_time = db.query(
+        func.avg(Message.created_at).label("avg_response")
+    ).filter(
+        Message.conversation_id.in_(
+            db.query(Conversation.id).filter(
+                Conversation.business_id == business_id,
+                Conversation.created_at >= start_date
+            )
+        ),
+        Message.is_from_bot == False
+    ).scalar()
+    
+    return {
+        "trend": [{"date": str(d), "conversations": c} for d, c in conversation_trend],
+        "channels": [{"channel": ch, "count": c} for ch, c in channel_dist],
+        "total_conversations": sum(c for _, c in conversation_trend),
+        "most_active_channel": max((ch for ch, _ in channel_dist), default="unknown") if channel_dist else "unknown",
     }
 
 

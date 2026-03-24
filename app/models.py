@@ -258,6 +258,87 @@ class AdTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class BrandAsset(Base):
+    """
+    Brand assets model for storing logos, colors, fonts, and brand guidelines.
+    """
+    __tablename__ = "brand_assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    asset_type = Column(String, nullable=False)  # logo, color, font, style_guide
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)  # JSON string with asset data
+    file_url = Column(String, nullable=True)  # For uploaded files (logo, style guide PDF)
+    is_primary = Column(Boolean, default=False, nullable=False)  # Primary brand asset
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class VideoTemplate(Base):
+    """
+    Custom video template model for saving reusable video templates.
+    """
+    __tablename__ = "video_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    video_type = Column(String, nullable=False)  # static_image_text, image_slideshow, short_clip_overlay
+    platform = Column(String, nullable=True)  # instagram, tiktok, youtube, etc.
+    template_config = Column(Text, nullable=False)  # JSON with duration, scenes, transitions
+    thumbnail_url = Column(String, nullable=True)
+    is_public = Column(Boolean, default=False, nullable=False)
+    usage_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AdPublication(Base):
+    """
+    Track published ad assets across platforms.
+    """
+    __tablename__ = "ad_publications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("ad_assets.id"), nullable=False, index=True)
+    platform = Column(String, nullable=False)  # instagram, facebook, whatsapp, etc.
+    platform_post_id = Column(String, nullable=True)  # ID from the platform
+    status = Column(String, default="published", nullable=False)  # published, scheduled, failed
+    published_at = Column(DateTime, nullable=True)
+    scheduled_for = Column(DateTime, nullable=True)
+    engagement_metrics = Column(Text, nullable=True)  # JSON: likes, comments, shares, impressions
+    platform_url = Column(String, nullable=True)  # Direct link to post on platform
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AssetAnalytics(Base):
+    """
+    Analytics data for created assets.
+    """
+    __tablename__ = "asset_analytics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("ad_assets.id"), nullable=False, index=True)
+    platform = Column(String, nullable=False)
+    views = Column(Integer, default=0)
+    clicks = Column(Integer, default=0)
+    conversions = Column(Integer, default=0)
+    engagement_rate = Column(Float, default=0.0)
+    ctr = Column(Float, default=0.0)  # Click-through rate
+    conversion_rate = Column(Float, default=0.0)
+    spend = Column(Float, default=0.0)  # Ad spend in currency
+    revenue = Column(Float, default=0.0)  # Revenue generated
+    roi = Column(Float, default=0.0)  # Return on investment
+    date = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 # ========== USERS & ROLES MODELS ==========
 
 class Role(Base):
@@ -1136,6 +1217,20 @@ Index('idx_adassets_business_status', AdAsset.business_id, AdAsset.status)
 # Ad Templates - for custom template management
 Index('idx_adtemplates_business_category', AdTemplate.business_id, AdTemplate.category)
 Index('idx_adtemplates_business_objective', AdTemplate.business_id, AdTemplate.objective)
+
+# Brand Assets - for brand management
+Index('idx_brandassets_business_type', BrandAsset.business_id, BrandAsset.asset_type)
+
+# Video Templates - for video template management
+Index('idx_videotemplates_business_type', VideoTemplate.business_id, VideoTemplate.video_type)
+
+# Ad Publications - for tracking published content
+Index('idx_adpublications_business_asset', AdPublication.business_id, AdPublication.asset_id)
+Index('idx_adpublications_platform_status', AdPublication.platform, AdPublication.status)
+
+# Asset Analytics - for performance tracking
+Index('idx_assetanalytics_business_asset', AssetAnalytics.business_id, AssetAnalytics.asset_id)
+Index('idx_assetanalytics_date', AssetAnalytics.date)
 
 # Audit logs - for security reviews
 Index('idx_audit_business_action', AuditLog.business_id, AuditLog.action)

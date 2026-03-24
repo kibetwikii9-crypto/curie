@@ -80,7 +80,7 @@ interface AdAsset {
 
 export default function AdStudioPage() {
   const [activeSection, setActiveSection] = useState<
-    'workspace' | 'copy' | 'video' | 'brand' | 'insights' | 'library'
+    'workspace' | 'copy' | 'video' | 'brand' | 'insights' | 'library' | 'publish' | 'analytics' | 'smart-copy'
   >('workspace');
   const [showCopyComposer, setShowCopyComposer] = useState(false);
   const [showVideoBuilder, setShowVideoBuilder] = useState(false);
@@ -119,6 +119,21 @@ export default function AdStudioPage() {
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Brand asset state
+  const [showBrandAssetUpload, setShowBrandAssetUpload] = useState(false);
+  const [brandAssetType, setBrandAssetType] = useState<'logo' | 'color' | 'font' | 'style_guide'>('logo');
+  const [brandAssetName, setBrandAssetName] = useState('');
+  const [brandAssetFile, setBrandAssetFile] = useState<File | null>(null);
+
+  // Publishing state
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [publishAssetId, setPublishAssetId] = useState<number | null>(null);
+  const [publishPlatform, setPublishPlatform] = useState('instagram');
+  const [scheduled_time, setScheduledTime] = useState('');
+
+  // Smart copy insights state  
+  const [selectedInsightTheme, setSelectedInsightTheme] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -217,6 +232,63 @@ export default function AdStudioPage() {
     refetchInterval: 30000,
   });
 
+  // New queries for enhanced features
+  const { data: brandAssetsData, refetch: refetchBrandAssets } = useQuery<{
+    logos: any[];
+    colors: any[];
+    fonts: any[];
+    guides: any[];
+  }>({
+    queryKey: ['brand-assets'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ads/brand-assets/list');
+      return response.data;
+    },
+  });
+
+  const { data: smartInsightsData } = useQuery<{
+    top_intents: any[];
+    unresolved_questions: string[];
+    pain_points: any[];
+    suggested_copy_themes: any;
+  }>({
+    queryKey: ['ads-smart-insights'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ads/smart-copy-insights');
+      return response.data;
+    },
+  });
+
+  const { data: dashboardMetricsData } = useQuery<{
+    total_assets: number;
+    published_count: number;
+    total_views: number;
+    total_clicks: number;
+    total_conversions: number;
+    total_spend: number;
+    total_revenue: number;
+    roi: number;
+  }>({
+    queryKey: ['ads-dashboard-metrics'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ads/dashboard-metrics');
+      return response.data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const { data: publicationsData, refetch: refetchPublications } = useQuery<{
+    publications: any[];
+    total: number;
+  }>({
+    queryKey: ['ads-publications'],
+    queryFn: async () => {
+      const response = await api.get('/api/dashboard/ads/publications');
+      return response.data;
+    },
+    refetchInterval: 30000,
+  });
+
   const generateCopyMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await api.post('/api/dashboard/ads/generate-copy', data);
@@ -293,6 +365,42 @@ export default function AdStudioPage() {
     },
     onSuccess: () => {
       refetchCustomTemplates();
+    },
+  });
+
+  // New mutations for enhanced features
+  const uploadBrandAssetMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const response = await api.post('/api/dashboard/ads/brand-assets', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchBrandAssets();
+      setShowBrandAssetUpload(false);
+      setBrandAssetName('');
+      setBrandAssetFile(null);
+    },
+  });
+
+  const publishAssetMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await api.post(`/api/dashboard/ads/assets/${data.asset_id}/publish`, {
+        platform: data.platform,
+        scheduled_for: data.scheduled_for,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchPublications();
+      setShowPublishModal(false);
+      setPublishAssetId(null);
+    },
+  });
+
+  const generateSmartCopyMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await api.post('/api/dashboard/ads/generate-smart-copy', data);
+      return response.data;
     },
   });
 
@@ -479,14 +587,16 @@ export default function AdStudioPage() {
       </div>
 
       {/* Creative Section Navigation with Icons */}
-      <div className="flex space-x-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+      <div className="flex space-x-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-x-auto">
         {[
           { id: 'workspace', label: 'Campaigns', icon: Layers, color: 'text-purple-600' },
           { id: 'library', label: 'Asset Library', icon: Grid3x3, color: 'text-blue-600' },
           { id: 'copy', label: 'Ad Copy', icon: FileText, color: 'text-green-600' },
           { id: 'video', label: 'Video Builder', icon: Film, color: 'text-red-600' },
+          { id: 'smart-copy', label: 'AI Insights', icon: Sparkles, color: 'text-cyan-600' },
           { id: 'brand', label: 'Brand Kit', icon: Palette, color: 'text-pink-600' },
-          { id: 'insights', label: 'Analytics', icon: BarChart3, color: 'text-orange-600' },
+          { id: 'publish', label: 'Publish', icon: Send, color: 'text-indigo-600' },
+          { id: 'analytics', label: 'Analytics', icon: BarChart3, color: 'text-orange-600' },
         ].map((section) => (
           <button
             key={section.id}
@@ -1687,89 +1797,541 @@ export default function AdStudioPage() {
 
       {/* Brand Kit with Color Picker */}
       {activeSection === 'brand' && (
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="px-6 py-5">
-            <div className="flex items-center gap-2 mb-6">
-              <Palette className="h-6 w-6 text-pink-600 dark:text-pink-400" />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Brand Kit</h3>
-            </div>
-            {brandData && (
-              <div className="space-y-6">
-                {/* Colors */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-                    Brand Colors
-                  </h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    {Object.entries(brandData.colors).map(([name, color]: [string, any]) => (
-                      <div key={name} className="group">
-                        <div
-                          className="w-full h-32 rounded-lg mb-3 border-4 border-white dark:border-gray-900 shadow-md group-hover:scale-105 transition-transform"
-                          style={{ backgroundColor: color }}
-                        />
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
-                          {name}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{color}</p>
-                      </div>
-                    ))}
-                  </div>
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="px-6 py-5">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-6 w-6 text-pink-600 dark:text-pink-400" />
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Brand Kit & Assets</h3>
                 </div>
-
-                {/* Fonts */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Typography</h4>
-                  <div className="space-y-3">
-                    <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Heading Font</span>
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">
-                          {brandData.fonts.heading}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Body Font</span>
-                        <span className="text-base text-gray-900 dark:text-white">
-                          {brandData.fonts.body}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Logo Upload */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Logos</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 hover:border-purple-400 dark:hover:border-purple-600 transition-colors">
-                      <ImageIcon className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Primary Logo
-                      </p>
-                      <button className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700">
-                        Upload
-                      </button>
-                    </div>
-                    <div className="p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 hover:border-purple-400 dark:hover:border-purple-600 transition-colors">
-                      <ImageIcon className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Secondary Logo
-                      </p>
-                      <button className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700">
-                        Upload
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  onClick={() => setShowBrandAssetUpload(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Add Asset
+                </button>
               </div>
-            )}
+
+              {/* Brand Asset Upload Modal */}
+              {showBrandAssetUpload && (
+                <div className="mb-6 p-4 bg-pink-50 dark:bg-pink-900/10 border border-pink-200 dark:border-pink-800 rounded-lg">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Asset Type
+                      </label>
+                      <select
+                        value={brandAssetType}
+                        onChange={(e) => setBrandAssetType(e.target.value as any)}
+                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
+                      >
+                        <option value="logo">Logo</option>
+                        <option value="color">Brand Color</option>
+                        <option value="font">Typography</option>
+                        <option value="style_guide">Style Guide</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Asset Name
+                      </label>
+                      <input
+                        type="text"
+                        value={brandAssetName}
+                        onChange={(e) => setBrandAssetName(e.target.value)}
+                        placeholder="e.g., Primary Logo, Brand Blue"
+                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Upload File
+                      </label>
+                      <input
+                        type="file"
+                        onChange={(e) => setBrandAssetFile(e.target.files?.[0] || null)}
+                        className="block w-full text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowBrandAssetUpload(false)}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!brandAssetName || !brandAssetFile) {
+                            alert('Please fill in all fields');
+                            return;
+                          }
+                          const formData = new FormData();
+                          formData.append('name', brandAssetName);
+                          formData.append('asset_type', brandAssetType);
+                          formData.append('file_url', 'https://example.com/assets/' + brandAssetFile.name);
+                          uploadBrandAssetMutation.mutate(formData);
+                        }}
+                        className="flex-1 px-3 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-md text-sm font-medium"
+                      >
+                        Upload
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {brandAssetsData ? (
+                <div className="space-y-6">
+                  {/* Logos */}
+                  {brandAssetsData.logos.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4" /> Logos
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {brandAssetsData.logos.map((logo) => (
+                          <div key={logo.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">{logo.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{logo.description}</p>
+                            {logo.is_primary && <span className="mt-2 inline-block text-xs px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded">Primary</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Colors */}
+                  {brandAssetsData.colors.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <Palette className="h-4 w-4" /> Brand Colors
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {brandAssetsData.colors.map((color) => (
+                          <div key={color.id} className="group">
+                            <div
+                              className="w-full h-24 rounded-lg mb-2 border shadow-sm group-hover:scale-105 transition-transform"
+                              style={{ backgroundColor: color.content.hex || '#ccc' }}
+                            />
+                            <p className="text-xs font-medium text-gray-900 dark:text-white">{color.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fonts */}
+                  {brandAssetsData.fonts.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <Type className="h-4 w-4" /> Typography
+                      </h4>
+                      <div className="space-y-3">
+                        {brandAssetsData.fonts.map((font) => (
+                          <div key={font.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-700 dark:text-gray-300">{font.name}</span>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">{font.content.family}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Palette className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm text-gray-600 dark:text-gray-400">No brand assets added yet</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Enhanced Insights with Charts */}
+      {/* Smart Copy Insights Section */}
+      {activeSection === 'smart-copy' && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="px-6 py-5">
+              <div className="flex items-center gap-2 mb-6">
+                <Sparkles className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI-Powered Insights</h3>
+              </div>
+
+              {smartInsightsData ? (
+                <div className="space-y-6">
+                  {/* Top Intents */}
+                  <div className="p-4 bg-cyan-50 dark:bg-cyan-900/10 rounded-lg border border-cyan-200 dark:border-cyan-800">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Top Customer Intents</h4>
+                    <div className="space-y-2">
+                      {smartInsightsData.top_intents.slice(0, 5).map((intent, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded">
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{intent.intent}</span>
+                          <span className="text-xs px-2 py-1 bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400 rounded-full">{intent.frequency} mentions</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pain Points */}
+                  {smartInsightsData.pain_points.length > 0 && (
+                    <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-200 dark:border-red-800">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Customer Pain Points</h4>
+                      <div className="space-y-2">
+                        {smartInsightsData.pain_points.slice(0, 5).map((pain, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{pain.point}</span>
+                            <span className="text-xs px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 rounded-full">{pain.frequency} instances</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Suggested Copy Themes */}
+                  {smartInsightsData.suggested_copy_themes && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {Object.entries(smartInsightsData.suggested_copy_themes).map(([theme, suggestions]: [string, any]) => (
+                        <div key={theme} className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-3 capitalize">{theme.replace(/_/g, ' ')}</h5>
+                          <ul className="space-y-2">
+                            {suggestions.slice(0, 3).map((suggestion: string, idx: number) => (
+                              <li key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                                <span className="text-purple-600 dark:text-purple-400">•</span>
+                                <span>{suggestion}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <button
+                            onClick={() => {
+                              setShowCopyComposer(true);
+                              setActiveSection('copy');
+                              setSelectedInsightTheme(suggestions[0]);
+                            }}
+                            className="mt-3 w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-md"
+                          >
+                            Use Insight →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Sparkles className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Analyzing your conversations...</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publishing Manager */}
+      {activeSection === 'publish' && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="px-6 py-5">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Send className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Publishing Manager</h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPublishModal(true);
+                    setPublishAssetId(assetsData?.assets[0]?.id || null);
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Publish Asset
+                </button>
+              </div>
+
+              {/* Publish Modal */}
+              {showPublishModal && (
+                <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-200 dark:border-indigo-800 rounded-lg">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Select Asset
+                      </label>
+                      <select
+                        value={publishAssetId || ''}
+                        onChange={(e) => setPublishAssetId(parseInt(e.target.value))}
+                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
+                      >
+                        <option value="">Choose an asset...</option>
+                        {assetsData?.assets.map((asset) => (
+                          <option key={asset.id} value={asset.id}>
+                            {asset.title} ({asset.asset_type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Platform
+                      </label>
+                      <select
+                        value={publishPlatform}
+                        onChange={(e) => setPublishPlatform(e.target.value)}
+                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
+                      >
+                        <option value="instagram">Instagram</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="twitter">Twitter/X</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="linkedin">LinkedIn</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Schedule For (Optional)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={scheduled_time}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowPublishModal(false)}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!publishAssetId) {
+                            alert('Please select an asset');
+                            return;
+                          }
+                          publishAssetMutation.mutate({
+                            asset_id: publishAssetId,
+                            platform: publishPlatform,
+                            scheduled_for: scheduled_time || null,
+                          });
+                        }}
+                        className="flex-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium"
+                      >
+                        {scheduled_time ? 'Schedule' : 'Publish Now'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {publicationsData && publicationsData.publications.length > 0 ? (
+                <div className="space-y-3">
+                  {publicationsData.publications.map((pub) => (
+                    <div key={pub.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded">
+                            <Send className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{pub.platform}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {pub.published_at ? new Date(pub.published_at).toLocaleDateString() : 'Scheduled'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                          pub.status === 'published'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        }`}>
+                          {pub.status}
+                        </span>
+                      </div>
+                      {pub.engagement_metrics && (
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                          <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                            <p className="text-gray-500 dark:text-gray-400">Views</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{pub.engagement_metrics.views || 0}</p>
+                          </div>
+                          <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                            <p className="text-gray-500 dark:text-gray-400">Engagement</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{pub.engagement_metrics.engagement_rate || 0}%</p>
+                          </div>
+                          <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                            <p className="text-gray-500 dark:text-gray-400">Clicks</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{pub.engagement_metrics.clicks || 0}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Send className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm text-gray-600 dark:text-gray-400">No published assets yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Analytics Dashboard */}
+      {activeSection === 'analytics' && (
+        <div className="space-y-4">
+          {/* Key Metrics */}
+          {dashboardMetricsData && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Total Assets</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{dashboardMetricsData.total_assets}</p>
+                  </div>
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <ImageIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Published</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{dashboardMetricsData.published_count}</p>
+                  </div>
+                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Total Views</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{(dashboardMetricsData.total_views || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <Eye className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">ROI</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{dashboardMetricsData.roi.toFixed(1)}%</p>
+                  </div>
+                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Performance Details */}
+          {dashboardMetricsData && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Engagement Metrics</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Clicks</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{dashboardMetricsData.total_clicks}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Conversions</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{dashboardMetricsData.total_conversions}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Conversion Rate</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {dashboardMetricsData.total_views > 0 
+                        ? ((dashboardMetricsData.total_conversions / dashboardMetricsData.total_views) * 100).toFixed(2)
+                        : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Financial Metrics</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Total Spend</span>
+                    <span className="font-medium text-gray-900 dark:text-white">${dashboardMetricsData.total_spend.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Total Revenue</span>
+                    <span className="font-medium text-gray-900 dark:text-white">${dashboardMetricsData.total_revenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/10 rounded border border-green-200 dark:border-green-800">
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Profit</span>
+                    <span className="font-bold text-green-600 dark:text-green-400">
+                      ${(dashboardMetricsData.total_revenue - dashboardMetricsData.total_spend).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Usage Insights */}
+          {insightsData && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Assets by Type</h4>
+                <div className="space-y-2">
+                  {insightsData.assets_by_type.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{item.type}</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Assets by Platform</h4>
+                <div className="space-y-2">
+                  {insightsData.assets_by_platform.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{item.platform}</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Assets by Status</h4>
+                <div className="space-y-2">
+                  {insightsData.assets_by_status.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{item.status}</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Original Insights Section - Kept for backwards compatibility */}
       {activeSection === 'insights' && insightsData && (
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
