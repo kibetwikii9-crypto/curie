@@ -239,6 +239,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
 
       // Show success message and switch to sign in tab
       setSignUpErrors({ submit: 'Account created successfully! Please sign in with your credentials.' });
+      setIsFromFreeTrial(true);
       
       // Pre-fill email in sign-in form
       setSignInData({ email: signUpData.email, password: '' });

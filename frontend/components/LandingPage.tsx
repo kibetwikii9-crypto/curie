@@ -16,7 +16,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.push('/dashboard');
+      router.push('/dashboard/integrations');
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -54,6 +54,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => {
+                setIsFromFreeTrial(true);
                 setAuthModalTab('signin');
                 setShowAuthModal(true);
               }}
@@ -63,6 +64,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => {
+                setIsFromFreeTrial(true);
                 setAuthModalTab('signup');
                 setShowAuthModal(true);
               }}
@@ -94,8 +96,8 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row items-start gap-4 mb-6">
                 <button
                   onClick={() => {
-                    setAuthModalTab('signup');
                     setIsFromFreeTrial(true);
+                    setAuthModalTab('signup');
                     setShowAuthModal(true);
                   }}
                   className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all shadow-lg hover:scale-105"
@@ -154,6 +156,7 @@ export default function LandingPage() {
               <button
                 key={platform.name}
                 onClick={() => {
+                  setIsFromFreeTrial(true);
                   setAuthModalTab('signin');
                   setShowAuthModal(true);
                 }}
@@ -265,6 +268,7 @@ export default function LandingPage() {
           <div className="text-center mt-12">
             <button
               onClick={() => {
+                setIsFromFreeTrial(true);
                 setAuthModalTab('signup');
                 setShowAuthModal(true);
               }}
