@@ -19,6 +19,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
   const { login } = useAuth();
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFromFreeTrialState, setIsFromFreeTrialState] = useState(isFromFreeTrial);
   // Prevent modal from closing during "account not found" flow (shows toast then switches to signup)
   const [preventClose, setPreventClose] = useState(false);
   
@@ -144,7 +145,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
     try {
       await login(signInData.email, signInData.password);
       onClose();
-      router.push(isFromFreeTrial ? '/dashboard/integrations' : '/dashboard');
+      router.push(isFromFreeTrialState ? '/dashboard/integrations' : '/dashboard');
     } catch (err: any) {
       // Check if it's an account not found error
       if (err.message === 'ACCOUNT_NOT_FOUND' || err.message?.includes('No account found')) {
@@ -239,7 +240,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
 
       // Show success message and switch to sign in tab
       setSignUpErrors({ submit: 'Account created successfully! Please sign in with your credentials.' });
-      setIsFromFreeTrial(true);
+      setIsFromFreeTrialState(true);
       
       // Pre-fill email in sign-in form
       setSignInData({ email: signUpData.email, password: '' });
