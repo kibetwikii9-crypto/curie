@@ -1814,7 +1814,7 @@ export default function AdStudioPage() {
                           <h4 className="text-lg font-medium text-gray-900 dark:text-white">Pick a template</h4>
                           <p className="text-sm text-gray-500 dark:text-gray-400">Use your saved template, or upload one from JSON.</p>
                         </div>
-                        <label className="px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800 disabled:opacity-50">
+                        <label className={`px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800 ${isLoadingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           {isLoadingTemplate ? 'Loading...' : 'Upload JSON'}
                           <input
                             type="file"
@@ -1872,7 +1872,7 @@ export default function AdStudioPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">No custom templates found. Save a template at the end of the wizard.</p>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {customVideoTemplatesData.templates.map((template: any) => (
+                              {customVideoTemplatesData?.templates?.map((template: any) => (
                                 <div
                                   key={template.id}
                                   className="group p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-lg transition-all"
@@ -2109,7 +2109,7 @@ export default function AdStudioPage() {
                       <h4 className="text-lg font-medium text-gray-900 dark:text-white">
                         Preview & finalize
                       </h4>
-                      
+
                       {/* Video Preview Area */}
                       <div className="p-8 bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg border-2 border-dashed border-gray-600">
                         {uploadedFiles.length > 0 ? (
@@ -2972,7 +2972,7 @@ export default function AdStudioPage() {
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
     </>
