@@ -1239,49 +1239,6 @@ export default function AdStudioPage() {
                   </div>
                 )}
 
-                {/* Default Templates */}
-                {templatesData && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Suggested Templates</h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Default templates to get you started</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {Object.entries(templatesData.templates.headline?.promotion || {}).slice(0, 3).map(([key, headline]: [string, any]) => (
-                        <div
-                          key={`default-${key}`}
-                          className="group relative p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg border-2 border-purple-200 dark:border-purple-800 hover:border-purple-400 dark:hover:border-purple-600 hover:shadow-xl transition-all transform hover:-translate-y-1 cursor-pointer"
-                          onClick={() => {
-                            setShowCopyComposer(true);
-                            setCopyHeadline(headline as string);
-                            setCopyDescription('');
-                            setCopyCta('');
-                          }}
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                              <FileText className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                            </div>
-                            <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-pulse" />
-                          </div>
-                          <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">
-                            {headline}
-                          </h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                            Promotional headline template
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded-full">
-                              promotion
-                            </span>
-                          </div>
-                          <button className="mt-4 w-full py-2 text-sm font-medium text-white bg-primary-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                            Use Template →
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <div className="mt-6 text-center">
                   <button
                     onClick={() => setShowCopyComposer(true)}
