@@ -742,9 +742,7 @@ export default function AdStudioPage() {
   });
 
   return (
-    <div>Test Compile</div>
-  );
-}
+    <>
       {/* Enhanced Hero Header with Gradient */}
       <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-lg p-1 shadow-md">
         <div className="bg-white dark:bg-gray-900 rounded-lg p-6">
@@ -1866,10 +1864,11 @@ export default function AdStudioPage() {
                         </div>
                       </div>
 
-                      {videoTemplateMode === 'custom' && customVideoTemplatesData && (
+                      {/* Custom video templates section */}
+                      <div>
                         <div>
                           <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Your saved video templates</h5>
-                          {customVideoTemplatesData.total === 0 ? (
+                          {customVideoTemplatesData?.total === 0 ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400">No custom templates found. Save a template at the end of the wizard.</p>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1942,8 +1941,6 @@ export default function AdStudioPage() {
                             </div>
                           )}
                         </div>
-                      )}
-                      )}
 
                       {templatePreview && (
                         <div className="mt-4 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
@@ -2975,4 +2972,9 @@ export default function AdStudioPage() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      )}
+    </>
+  );
 }
