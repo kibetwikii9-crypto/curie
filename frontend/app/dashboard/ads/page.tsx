@@ -143,11 +143,31 @@ export default function AdStudioPage() {
   // Video export state
   const [selectedExportFormat, setSelectedExportFormat] = useState<string>('MP4');
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
+  const [fullscreenVideoIndex, setFullscreenVideoIndex] = useState<number | null>(null);
+  const videoRefs = uploadedFiles.map(() => ({ current: null as HTMLVideoElement | null }));
   
   // File upload constants
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   const MAX_TOTAL_SIZE = 500 * 1024 * 1024; // 500MB
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm'];
+
+  // Platform to export format mapping
+  const PLATFORM_FORMATS: Record<string, string> = {
+    instagram: 'Vertical (9:16)',
+    facebook: 'Square (1:1)',
+    whatsapp_status: 'Vertical (9:16)',
+    tiktok: 'Vertical (9:16)',
+    youtube: 'Story (4:5)',
+    linkedin: 'Square (1:1)',
+  };
+
+  // Format dimensions for proper aspect ratio
+  const FORMAT_RATIOS: Record<string, { w: number; h: number }> = {
+    'MP4': { w: 16, h: 9 },
+    'Square (1:1)': { w: 1, h: 1 },
+    'Vertical (9:16)': { w: 9, h: 16 },
+    'Story (4:5)': { w: 4, h: 5 },
+  };
 
   const queryClient = useQueryClient();
 
@@ -1809,6 +1829,9 @@ export default function AdStudioPage() {
                             key={platform.id}
                             onClick={() => {
                               setVideoPlatform(platform.id);
+                              // Auto-set export format based on platform
+                              const autoFormat = PLATFORM_FORMATS[platform.id] || 'MP4';
+                              setSelectedExportFormat(autoFormat);
                               nextVideoStep();
                             }}
                             className={`group p-6 bg-gradient-to-br ${platform.color} rounded-lg text-white shadow-md hover:shadow-2xl transition-all transform hover:scale-105`}
@@ -2072,7 +2095,7 @@ export default function AdStudioPage() {
                           </div>
                         </div>
                       )}
-                      {brandData && (
+                          {brandData && (
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg">
                           <div className="flex items-center gap-2 text-sm text-blue-900 dark:text-blue-400">
                             <Sparkles className="h-4 w-4" />
@@ -2080,6 +2103,13 @@ export default function AdStudioPage() {
                           </div>
                         </div>
                       )}
+
+                      <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200 dark:border-green-700">
+                        <h5 className="text-sm font-semibold text-green-700 dark:text-green-300">Upload your media</h5>
+                        <p className="text-xs text-green-700 dark:text-green-200 mt-1">
+                          Upload your own images or video clips here. These will be used as the source materials for your final video preview and export.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -2099,26 +2129,106 @@ export default function AdStudioPage() {
                               {uploadedFiles.map((file, index) => {
                                 const fileUrl = URL.createObjectURL(file);
                                 const isVideo = file.type.startsWith('video/');
+                                const isFullscreen = fullscreenVideoIndex === index;
                                 
                                 return (
-                                  <div key={index} className="relative rounded-lg overflow-hidden shadow-lg">
-                                    {isVideo ? (
-                                      <video
-                                        src={fileUrl}
-                                        controls
-                                        className="w-full h-auto max-h-96 object-cover bg-black"
-                                      />
-                                    ) : (
-                                      <img
-                                        src={fileUrl}
-                                        alt={file.name}
-                                        className="w-full h-auto max-h-96 object-cover"
-                                      />
+                                  <div key={index}>
+                                    {/* Fullscreen Modal */}
+                                    {isFullscreen && isVideo && (
+                                      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+                                        <video
+                                          ref={(el) => { if (el) videoRefs[index].current = el; }}
+                                          src={fileUrl}
+                                          controls
+                                          autoPlay
+                                          style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            maxWidth: '100vw',
+                                            maxHeight: '100vh',
+                                            objectFit: 'contain',
+                                          }}
+                                          controlsList="nodownload"
+                                        />
+                                        <button
+                                          onClick={() => setFullscreenVideoIndex(null)}
+                                          className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white p-2 rounded-lg z-50"
+                                        >
+                                          <X className="h-6 w-6" />
+                                        </button>
+                                      </div>
                                     )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-                                      <div className="text-white">
-                                        <p className="font-bold text-lg">{videoHeadline || 'Your Headline'}</p>
-                                        <p className="text-sm text-gray-200">{videoText || 'Your supporting text'}</p>
+
+                                    {/* Regular Preview */}
+                                    <div className="relative rounded-lg overflow-hidden shadow-lg bg-black">
+                                      {/* Aspect ratio container based on export format */}
+                                      <div 
+                                        style={{
+                                          aspectRatio: `${FORMAT_RATIOS[selectedExportFormat]?.w || 16} / ${FORMAT_RATIOS[selectedExportFormat]?.h || 9}`,
+                                          width: '100%',
+                                          maxWidth: '600px',
+                                          margin: '0 auto',
+                                          backgroundColor: '#000',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          position: 'relative',
+                                        }}
+                                      >
+                                        {isVideo ? (
+                                          <>
+                                            <video
+                                              ref={(el) => { if (el) videoRefs[index].current = el; }}
+                                              src={fileUrl}
+                                              controls
+                                              controlsList="nodownload"
+                                              style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'contain',
+                                              }}
+                                            />
+                                            {/* Play Button Overlay */}
+                                            <button
+                                              onClick={() => {
+                                                if (videoRefs[index].current) {
+                                                  videoRefs[index].current.play();
+                                                }
+                                              }}
+                                              className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-all opacity-0 hover:opacity-100 group/video"
+                                            >
+                                              <div className="bg-primary-600 hover:bg-primary-700 rounded-full p-6 shadow-lg transform hover:scale-110 transition-transform">
+                                                <Play className="h-8 w-8 text-white fill-white" />
+                                              </div>
+                                            </button>
+                                            {/* Fullscreen Button */}
+                                            <button
+                                              onClick={() => setFullscreenVideoIndex(index)}
+                                              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-lg z-10 transition-all"
+                                              title="Fullscreen"
+                                            >
+                                              <Maximize2 className="h-5 w-5" />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <img
+                                            src={fileUrl}
+                                            alt={file.name}
+                                            style={{
+                                              width: '100%',
+                                              height: '100%',
+                                              objectFit: 'contain',
+                                            }}
+                                          />
+                                        )}
+                                      </div>
+                                      
+                                      {/* Text overlay */}
+                                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4 pointer-events-none">
+                                        <div className="text-white">
+                                          <p className="font-bold text-lg">{videoHeadline || 'Your Headline'}</p>
+                                          <p className="text-sm text-gray-200">{videoText || 'Your supporting text'}</p>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -2172,13 +2282,18 @@ export default function AdStudioPage() {
 
                       {/* Video Info & Format Selection */}
                       <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          <span className="font-medium">Template:</span> {videoTemplate || 'None selected'} • <span className="font-medium">Platform:</span> {videoPlatform || 'None'} • <span className="font-medium">Files:</span> {uploadedFiles.length}
-                        </p>
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            <span className="font-medium">Template:</span> {videoTemplate || 'None selected'} • <span className="font-medium">Platform:</span> {videoPlatform || 'None'} • <span className="font-medium">Files:</span> {uploadedFiles.length}
+                          </p>
+                          <p className="text-xs text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                            ✓ Format auto-selected for {videoPlatform || 'your platform'}: <span className="font-semibold">{selectedExportFormat}</span>
+                          </p>
+                        </div>
                         
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Export Format
+                            Export Format (Change if needed)
                           </label>
                           <div className="flex gap-2 flex-wrap">
                             {['MP4', 'Square (1:1)', 'Vertical (9:16)', 'Story (4:5)'].map((format) => (
@@ -2195,6 +2310,9 @@ export default function AdStudioPage() {
                               </button>
                             ))}
                           </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            Your media will be resized and fit to the selected format without distortion.
+                          </p>
                         </div>
                       </div>
                     </div>
