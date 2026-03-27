@@ -742,7 +742,9 @@ export default function AdStudioPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div>Test Compile</div>
+  );
+}
       {/* Enhanced Hero Header with Gradient */}
       <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-lg p-1 shadow-md">
         <div className="bg-white dark:bg-gray-900 rounded-lg p-6">
@@ -2972,9 +2974,4 @@ export default function AdStudioPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
