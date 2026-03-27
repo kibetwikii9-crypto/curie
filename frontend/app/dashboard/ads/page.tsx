@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth';
 import {
   Plus,
   Video,
@@ -94,6 +95,8 @@ export default function AdStudioPage() {
   const [saveTemplateName, setSaveTemplateName] = useState('');
   const [saveTemplateDescription, setSaveTemplateDescription] = useState('');
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const { user } = useAuth();
+  const canDeleteTemplates = user?.role === 'admin' || user?.role === 'business_owner';
 
   // Copy composer state
   const [copyObjective, setCopyObjective] = useState('promotion');
@@ -118,6 +121,7 @@ export default function AdStudioPage() {
   const [showSaveVideoTemplateModal, setShowSaveVideoTemplateModal] = useState(false);
   const [saveVideoTemplateName, setSaveVideoTemplateName] = useState('');
   const [saveVideoTemplateDescription, setSaveVideoTemplateDescription] = useState('');
+  const [templatePreview, setTemplatePreview] = useState<{ name: string; preview_url?: string } | null>(null);
 
   // Asset library state
   const [assetTypeFilter, setAssetTypeFilter] = useState<string>('all');
@@ -540,7 +544,8 @@ export default function AdStudioPage() {
     if (!videoPlatform) missingFields.push('Platform');
     if (!videoObjective) missingFields.push('Objective');
     if (!videoTemplate) missingFields.push('Template');
-    if (uploadedFiles.length === 0) missingFields.push('At least one asset');
+    const hasTemplate = !!videoTemplate;
+    if (!hasTemplate && uploadedFiles.length === 0) missingFields.push('At least one asset (or select a template)');
 
     if (missingFields.length > 0) {
       alert(`Missing required fields: ${missingFields.join(', ')}`);
@@ -1926,28 +1931,44 @@ export default function AdStudioPage() {
                                       <div className="text-md font-semibold text-gray-900 dark:text-white">{template.name}</div>
                                       <div className="text-xs text-gray-500 dark:text-gray-400">{template.description || 'No description'}</div>
                                     </div>
+                                    {canDeleteTemplates ? (
+                                      <button
+                                        onClick={() => {
+                                          if (confirm('Are you sure you want to delete this template? This cannot be undone.')) {
+                                            deleteVideoTemplateMutation.mutate(template.id);
+                                          }
+                                        }}
+                                        className="text-red-500 text-xs hover:text-red-700"
+                                      >
+                                        Delete
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">Delete unavailable</span>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-2 mt-3">
                                     <button
-                                      onClick={() => deleteVideoTemplateMutation.mutate(template.id)}
-                                      className="text-red-500 text-xs hover:text-red-700"
+                                      onClick={() => {
+                                        const config = template.config || template.template_config || {};
+                                        if (!isValidTemplateConfig(config)) {
+                                          alert('Invalid template configuration. Please try another template.');
+                                          return;
+                                        }
+                                        setVideoTemplate(`custom:${template.id}`);
+                                        setSelectedVideoTemplateConfig(config);
+                                        nextVideoStep();
+                                      }}
+                                      className="flex-1 px-2 py-2 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
                                     >
-                                      Delete
+                                      Use This Template
+                                    </button>
+                                    <button
+                                      onClick={() => setTemplatePreview({ name: template.name, preview_url: template.preview_url })}
+                                      className="flex-1 px-2 py-2 text-xs font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    >
+                                      Preview Template
                                     </button>
                                   </div>
-                                  <button
-                                    onClick={() => {
-                                      const config = template.config || template.template_config || {};
-                                      if (!isValidTemplateConfig(config)) {
-                                        alert('Invalid template configuration. Please try another template.');
-                                        return;
-                                      }
-                                      setVideoTemplate(`custom:${template.id}`);
-                                      setSelectedVideoTemplateConfig(config);
-                                      nextVideoStep();
-                                    }}
-                                    className="mt-3 w-full px-2 py-2 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-                                  >
-                                    Use This Template
-                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -1974,6 +1995,28 @@ export default function AdStudioPage() {
                               <Film className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
                               <div className="font-semibold text-gray-900 dark:text-white mb-1">{template.name}</div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">{template.description} • {template.duration}s</div>
+                              <div className="flex gap-2 mt-3">
+                                <button
+                                  onClick={() => {
+                                    if (!isValidTemplateConfig(template)) {
+                                      alert('Invalid template configuration. Please try another template.');
+                                      return;
+                                    }
+                                    setVideoTemplate(key);
+                                    setSelectedVideoTemplateConfig(template);
+                                    nextVideoStep();
+                                  }}
+                                  className="flex-1 px-2 py-2 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+                                >
+                                  Use Template
+                                </button>
+                                <button
+                                  onClick={() => setTemplatePreview({ name: template.name, preview_url: template.preview_url })}
+                                  className="flex-1 px-2 py-2 text-xs font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                  Preview Template
+                                </button>
+                              </div>
                             </button>
                           ))}
                         </div>

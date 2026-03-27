@@ -3575,6 +3575,9 @@ async def delete_custom_template(
     db: Session = Depends(get_db),
 ):
     """Delete a custom template."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to delete templates")
+
     business_id = get_user_business_id(current_user, db)
     
     template = db.query(AdTemplate).filter(
@@ -3919,6 +3922,9 @@ async def delete_video_template(
     db: Session = Depends(get_db),
 ):
     """Delete a video template."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to delete templates")
+
     business_id = get_user_business_id(current_user, db)
     
     template = db.query(VideoTemplate).filter(
