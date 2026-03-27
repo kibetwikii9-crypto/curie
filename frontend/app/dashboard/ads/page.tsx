@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus,
   Video,
@@ -139,6 +139,15 @@ export default function AdStudioPage() {
 
   // Smart copy insights state  
   const [selectedInsightTheme, setSelectedInsightTheme] = useState<string | null>(null);
+  
+  // Video export state
+  const [selectedExportFormat, setSelectedExportFormat] = useState<string>('MP4');
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
+  
+  // File upload constants
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const MAX_TOTAL_SIZE = 500 * 1024 * 1024; // 500MB
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm'];
 
   const queryClient = useQueryClient();
 
@@ -319,6 +328,11 @@ export default function AdStudioPage() {
       }
       setAiGenerating(false);
     },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to generate copy';
+      alert(`Error: ${message}`);
+      setAiGenerating(false);
+    },
   });
 
   const createAssetMutation = useMutation({
@@ -327,6 +341,7 @@ export default function AdStudioPage() {
       return response.data;
     },
     onSuccess: () => {
+      alert('Asset saved successfully!');
       queryClient.invalidateQueries({ queryKey: ['ads-campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['ads-assets'] });
       queryClient.invalidateQueries({ queryKey: ['ads-insights'] });
@@ -334,6 +349,10 @@ export default function AdStudioPage() {
       setShowVideoBuilder(false);
       setVideoStep(1);
       resetForms();
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to save asset';
+      alert(`Error: ${message}`);
     },
   });
 
@@ -387,10 +406,15 @@ export default function AdStudioPage() {
       return response.data;
     },
     onSuccess: () => {
+      alert('Video template created successfully!');
       refetchCustomVideoTemplates();
       setShowSaveVideoTemplateModal(false);
       setSaveVideoTemplateName('');
       setSaveVideoTemplateDescription('');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to create template';
+      alert(`Error: ${message}`);
     },
   });
 
@@ -399,7 +423,12 @@ export default function AdStudioPage() {
       await api.delete(`/api/dashboard/ads/video-templates/${id}`);
     },
     onSuccess: () => {
+      alert('Template deleted successfully!');
       refetchCustomVideoTemplates();
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to delete template';
+      alert(`Error: ${message}`);
     },
   });
 
@@ -440,13 +469,22 @@ export default function AdStudioPage() {
   });
 
   const resetForms = () => {
+    // Copy state
     setCopyHeadline('');
     setCopyDescription('');
     setCopyCta('');
     setCampaignName('');
+    // Video state
     setVideoHeadline('');
     setVideoText('');
     setVideoCta('');
+    setVideoObjective('');
+    setVideoPlatform('');
+    setVideoTemplate('');
+    setSelectedVideoTemplateConfig(null);
+    setUploadedFiles([]);
+    setVideoStep(1);
+    setAiGenerating(false);
   };
 
   const handleGenerateCopy = (type: 'headline' | 'description' | 'cta') => {
@@ -476,8 +514,16 @@ export default function AdStudioPage() {
   };
 
   const handleSaveVideo = () => {
-    if (!videoHeadline || !campaignName) {
-      alert('Please complete all video steps');
+    const missingFields = [];
+    if (!videoHeadline) missingFields.push('Headline');
+    if (!campaignName) missingFields.push('Campaign Name');
+    if (!videoPlatform) missingFields.push('Platform');
+    if (!videoObjective) missingFields.push('Objective');
+    if (!videoTemplate) missingFields.push('Template');
+    if (uploadedFiles.length === 0) missingFields.push('At least one asset');
+
+    if (missingFields.length > 0) {
+      alert(`Missing required fields: ${missingFields.join(', ')}`);
       return;
     }
 
@@ -491,6 +537,7 @@ export default function AdStudioPage() {
         headline: videoHeadline,
         text: videoText,
         cta: videoCta,
+        file_count: uploadedFiles.length,
       }),
       platform: videoPlatform,
       status: 'draft',
@@ -521,14 +568,108 @@ export default function AdStudioPage() {
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      const fileArray = Array.from(files);
-      setUploadedFiles(prev => [...prev, ...fileArray]);
+    if (!files) return;
+
+    const validFiles: File[] = [];
+    let totalSize = uploadedFiles.reduce((sum, f) => sum + f.size, 0);
+
+    Array.from(files).forEach(file => {
+      // Validate size
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`${file.name} exceeds 50MB limit`);
+        return;
+      }
+
+      // Validate type
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        alert(`${file.name} format not supported. Allowed: JPEG, PNG, GIF, MP4, WebM`);
+        return;
+      }
+
+      // Validate total
+      if (totalSize + file.size > MAX_TOTAL_SIZE) {
+        alert('Total upload size exceeds 500MB limit');
+        return;
+      }
+
+      validFiles.push(file);
+      totalSize += file.size;
+    });
+
+    if (validFiles.length > 0) {
+      setUploadedFiles(prev => [...prev, ...validFiles]);
     }
   };
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Cleanup object URLs when component unmounts or uploadedFiles change
+  useEffect(() => {
+    return () => {
+      uploadedFiles.forEach(file => {
+        try {
+          const url = URL.createObjectURL(file);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      });
+    };
+  }, [uploadedFiles]);
+
+  const handleCloseVideoBuilder = () => {
+    const hasChanges = videoHeadline || videoText || videoCta || uploadedFiles.length > 0 || videoObjective || videoPlatform || videoTemplate;
+
+    if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) {
+      return;
+    }
+
+    setShowVideoBuilder(false);
+    setVideoStep(1);
+    resetForms();
+  };
+
+  const canProceedToStep = (targetStep: number): boolean => {
+    // Validate current step before moving to next
+    if (targetStep > videoStep) {
+      switch (videoStep) {
+        case 1:
+          return !!videoObjective;
+        case 2:
+          return !!videoPlatform;
+        case 3:
+          return !!videoTemplate;
+        case 4:
+          return !!videoHeadline && !!campaignName;
+        case 5:
+          return uploadedFiles.length > 0;
+        default:
+          return true;
+      }
+    }
+    return true; // Allow backward navigation
+  };
+
+  const handleStepClick = (targetStep: number) => {
+    if (targetStep < videoStep) {
+      // Allow backward navigation
+      setVideoStep(targetStep);
+    } else if (targetStep === videoStep + 1 && canProceedToStep(videoStep)) {
+      // Allow next if current valid
+      setVideoStep(targetStep);
+    } else if (targetStep === videoStep) {
+      // Same step
+      setVideoStep(targetStep);
+    } else {
+      // Invalid navigation
+      alert('Please complete current step first');
+    }
+  };
+
+  const isValidTemplateConfig = (config: any): boolean => {
+    return config && typeof config === 'object';
   };
 
   const getStatusColor = (status: string) => {
@@ -1551,11 +1692,7 @@ export default function AdStudioPage() {
               </div>
               {showVideoBuilder && (
                 <button
-                  onClick={() => {
-                    setShowVideoBuilder(false);
-                    setVideoStep(1);
-                    resetForms();
-                  }}
+                  onClick={handleCloseVideoBuilder}
                   className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <X className="h-6 w-6" />
@@ -1594,7 +1731,11 @@ export default function AdStudioPage() {
                     { num: 5, label: 'Assets', icon: ImageIcon },
                     { num: 6, label: 'Preview', icon: Eye },
                   ].map((step, idx) => (
-                    <div key={step.num} className="flex items-center flex-1">
+                    <div
+                      key={step.num}
+                      className={`flex items-center flex-1 ${step.num <= videoStep || (step.num === videoStep + 1 && canProceedToStep(videoStep)) ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      onClick={() => handleStepClick(step.num)}
+                    >
                       <div className="flex flex-col items-center">
                         <div
                           className={`flex items-center justify-center w-12 h-12 rounded-full transition-all ${
@@ -1695,19 +1836,29 @@ export default function AdStudioPage() {
                           >
                             {videoTemplateMode === 'default' ? 'Switch to Custom' : 'Switch to Default'}
                           </button>
-                          <label className="px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800">
-                            Upload JSON
+                          <label className="px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800 disabled:opacity-50">
+                            {isLoadingTemplate ? 'Loading...' : 'Upload JSON'}
                             <input
                               type="file"
                               accept="application/json"
+                              disabled={isLoadingTemplate}
                               onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (!file) return;
+                                
                                 try {
+                                  setIsLoadingTemplate(true);
                                   const text = await file.text();
                                   const parsed = JSON.parse(text);
+                                  
+                                  // Validate required fields
+                                  if (!parsed.name) {
+                                    alert('Template must have a "name" field');
+                                    return;
+                                  }
+                                  
                                   await createVideoTemplateMutation.mutateAsync({
-                                    name: parsed.name || 'Imported Video Template',
+                                    name: parsed.name,
                                     description: parsed.description || '',
                                     video_type: parsed.video_type || 'static_image_text',
                                     platform: parsed.platform || videoPlatform || 'instagram',
@@ -1715,8 +1866,18 @@ export default function AdStudioPage() {
                                     thumbnail_url: parsed.thumbnail_url || null,
                                   });
                                   setVideoTemplateMode('custom');
-                                } catch (err) {
-                                  alert('Invalid JSON template file');
+                                } catch (err: any) {
+                                  if (err instanceof SyntaxError) {
+                                    alert('Invalid JSON format. Check for syntax errors.');
+                                  } else if (err.code === 'NotReadableError') {
+                                    alert('Could not read file. Try again.');
+                                  } else if (err.response?.data?.detail) {
+                                    alert(`Error: ${err.response.data.detail}`);
+                                  } else {
+                                    alert(`Error: ${err.message || 'Failed to upload template'}`);
+                                  }
+                                } finally {
+                                  setIsLoadingTemplate(false);
                                 }
                               }}
                               className="hidden"
@@ -1751,8 +1912,13 @@ export default function AdStudioPage() {
                                   </div>
                                   <button
                                     onClick={() => {
+                                      const config = template.config || template.template_config || {};
+                                      if (!isValidTemplateConfig(config)) {
+                                        alert('Invalid template configuration. Please try another template.');
+                                        return;
+                                      }
                                       setVideoTemplate(`custom:${template.id}`);
-                                      setSelectedVideoTemplateConfig(template.config || template.template_config || {});
+                                      setSelectedVideoTemplateConfig(config);
                                       nextVideoStep();
                                     }}
                                     className="mt-3 w-full px-2 py-2 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
@@ -1772,6 +1938,10 @@ export default function AdStudioPage() {
                             <button
                               key={key}
                               onClick={() => {
+                                if (!isValidTemplateConfig(template)) {
+                                  alert('Invalid template configuration. Please try another template.');
+                                  return;
+                                }
                                 setVideoTemplate(key);
                                 setSelectedVideoTemplateConfig(template);
                                 nextVideoStep();
@@ -1919,34 +2089,113 @@ export default function AdStudioPage() {
                       <h4 className="text-lg font-medium text-gray-900 dark:text-white">
                         Preview & finalize
                       </h4>
-                      <div className="p-12 bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg border-2 border-dashed border-gray-600 text-center">
-                        <div className="bg-white dark:bg-gray-700 rounded-lg p-8 max-w-sm mx-auto shadow-2xl">
-                          <Film className="h-16 w-16 text-purple-600 mx-auto mb-4" />
-                          <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                            {videoHeadline || 'Your Headline'}
-                          </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {videoText || 'Your supporting text'}
-                          </p>
-                          {videoCta && (
-                            <button className="mt-4 px-6 py-2 text-sm font-bold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-all">
-                              {videoCta}
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-4">
-                          Template: {videoTemplate} • Platform: {videoPlatform} • Duration: ~10s
-                        </p>
+                      
+                      {/* Video Preview Area */}
+                      <div className="p-8 bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg border-2 border-dashed border-gray-600">
+                        {uploadedFiles.length > 0 ? (
+                          <div className="space-y-4">
+                            {/* Display uploaded media */}
+                            <div className="flex flex-col gap-4">
+                              {uploadedFiles.map((file, index) => {
+                                const fileUrl = URL.createObjectURL(file);
+                                const isVideo = file.type.startsWith('video/');
+                                
+                                return (
+                                  <div key={index} className="relative rounded-lg overflow-hidden shadow-lg">
+                                    {isVideo ? (
+                                      <video
+                                        src={fileUrl}
+                                        controls
+                                        className="w-full h-auto max-h-96 object-cover bg-black"
+                                      />
+                                    ) : (
+                                      <img
+                                        src={fileUrl}
+                                        alt={file.name}
+                                        className="w-full h-auto max-h-96 object-cover"
+                                      />
+                                    )}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                                      <div className="text-white">
+                                        <p className="font-bold text-lg">{videoHeadline || 'Your Headline'}</p>
+                                        <p className="text-sm text-gray-200">{videoText || 'Your supporting text'}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            
+                            {/* Other uploaded files as thumbnail grid */}
+                            {uploadedFiles.length > 1 && (
+                              <div className="grid grid-cols-4 gap-2 pt-4">
+                                {uploadedFiles.map((file, index) => {
+                                  const fileUrl = URL.createObjectURL(file);
+                                  const isVideo = file.type.startsWith('video/');
+                                  
+                                  return (
+                                    <div key={index} className="relative rounded-lg overflow-hidden h-20 bg-black/30">
+                                      {isVideo ? (
+                                        <>
+                                          <video src={fileUrl} className="w-full h-full object-cover" />
+                                          <Video className="absolute inset-0 m-auto h-4 w-4 text-white" />
+                                        </>
+                                      ) : (
+                                        <img src={fileUrl} alt={file.name} className="w-full h-full object-cover" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-16">
+                            <Film className="h-16 w-16 text-purple-400 mx-auto mb-4" />
+                            <p className="text-lg font-bold text-white mb-2">
+                              {videoHeadline || 'Your Headline'}
+                            </p>
+                            <p className="text-sm text-gray-300 mb-6">
+                              {videoText || 'Your supporting text'}
+                            </p>
+                            {videoCta && (
+                              <button className="px-6 py-2 text-sm font-bold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-all">
+                                {videoCta}
+                              </button>
+                            )}
+                            <p className="text-xs text-gray-400 mt-6">
+                              No media uploaded. Go back to Step 5 to add images or videos.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        {['MP4', 'Square (1:1)', 'Vertical (9:16)', 'Story (4:5)'].map((format) => (
-                          <button
-                            key={format}
-                            className="flex-1 px-4 py-2 text-xs font-medium border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-                          >
-                            {format}
-                          </button>
-                        ))}
+
+                      {/* Video Info & Format Selection */}
+                      <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          <span className="font-medium">Template:</span> {videoTemplate || 'None selected'} • <span className="font-medium">Platform:</span> {videoPlatform || 'None'} • <span className="font-medium">Files:</span> {uploadedFiles.length}
+                        </p>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Export Format
+                          </label>
+                          <div className="flex gap-2 flex-wrap">
+                            {['MP4', 'Square (1:1)', 'Vertical (9:16)', 'Story (4:5)'].map((format) => (
+                              <button
+                                key={format}
+                                onClick={() => setSelectedExportFormat(format)}
+                                className={`px-4 py-2 text-xs font-medium border rounded-lg transition-colors ${
+                                  selectedExportFormat === format
+                                    ? 'bg-primary-600 text-white border-primary-600'
+                                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                }`}
+                              >
+                                {format}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2074,7 +2323,8 @@ export default function AdStudioPage() {
                           const formData = new FormData();
                           formData.append('name', brandAssetName);
                           formData.append('asset_type', brandAssetType);
-                          formData.append('file_url', 'https://example.com/assets/' + brandAssetFile.name);
+                          formData.append('description', '');
+                          formData.append('file', brandAssetFile);
                           uploadBrandAssetMutation.mutate(formData);
                         }}
                         className="flex-1 px-3 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-md text-sm font-medium"

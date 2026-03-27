@@ -3,8 +3,10 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Optional
+from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request, Form
+from pydantic import BaseModel, validator
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,53 @@ from app.middleware.rate_limiter import limiter, get_rate_limit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+# ========== ENUMS FOR VALIDATION ==========
+class AssetType(str, Enum):
+    ad_copy = "ad_copy"
+    video = "video"
+    image = "image"
+
+class Platform(str, Enum):
+    instagram = "instagram"
+    facebook = "facebook"
+    whatsapp_status = "whatsapp_status"
+    tiktok = "tiktok"
+    youtube = "youtube"
+    linkedin = "linkedin"
+
+class AssetStatus(str, Enum):
+    draft = "draft"
+    published = "published"
+    archived = "archived"
+
+class BrandAssetType(str, Enum):
+    logo = "logo"
+    color = "color"
+    font = "font"
+    style_guide = "style_guide"
+
+# ========== PYDANTIC MODELS FOR VALIDATION ==========
+class CreateAdAssetRequest(BaseModel):
+    asset_type: AssetType
+    title: str
+    content: str
+    platform: Platform
+    status: AssetStatus = AssetStatus.draft
+    campaign_name: str = "Uncategorized"
+    extra_data: Optional[dict] = None
+    
+    @validator('title')
+    def title_length(cls, v):
+        if not v or len(v) > 500:
+            raise ValueError('Title must be 1-500 characters')
+        return v.strip()
+    
+    @validator('content')
+    def content_length(cls, v):
+        if len(v) > 5000:
+            raise ValueError('Content must be max 5000 characters')
+        return v
 
 
 @router.get("/overview")
@@ -3660,30 +3709,88 @@ async def get_brand_assets(
 
 @router.post("/ads/brand-assets")
 async def create_brand_asset(
-    request: dict,
+    name: str = Form(...),
+    asset_type: BrandAssetType = Form(...),
+    description: str = Form(""),
+    file: Optional[UploadFile] = File(None),
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new brand asset."""
+    """Create a new brand asset with file upload support."""
+    import os
+    import uuid
+    import json
+    
     business_id = get_user_business_id(current_user, db)
     
-    import json
+    if business_id is None:
+        raise HTTPException(status_code=403, detail="Brand assets require a business account")
+    
+    file_url = None
+    
+    # Handle file upload if provided
+    if file:
+        # Validate file type
+        allowed_types = {
+            'logo': ['image/png', 'image/jpeg', 'image/svg+xml'],
+            'color': ['application/json'],
+            'font': ['font/ttf', 'font/woff', 'font/woff2'],
+            'style_guide': ['application/pdf', 'text/plain', 'application/json']
+        }
+        
+        if asset_type in allowed_types:
+            if file.content_type not in allowed_types[asset_type.value]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid file type for {asset_type.value}. Allowed: {', '.join(allowed_types[asset_type.value])}"
+                )
+        
+        # Create uploads directory if it doesn't exist
+        uploads_dir = "uploads/brand-assets"
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(uploads_dir, unique_filename)
+        
+        # Save file
+        try:
+            contents = await file.read()
+            with open(file_path, "wb") as f:
+                f.write(contents)
+            file_url = f"/uploads/brand-assets/{unique_filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+    
+    # Create asset
+    content = {}
+    if asset_type == BrandAssetType.color:
+        content = {"hex": "#000000", "rgb": "rgb(0, 0, 0)"}
+    elif asset_type == BrandAssetType.font:
+        content = {"family": "Arial", "sizes": [12, 14, 16, 18]}
     
     asset = BrandAsset(
         business_id=business_id,
-        asset_type=request.get("asset_type"),
-        name=request.get("name"),
-        description=request.get("description", ""),
-        content=json.dumps(request.get("content", {})),
-        file_url=request.get("file_url"),
-        is_primary=request.get("is_primary", False),
+        asset_type=asset_type,
+        name=name.strip(),
+        description=description.strip(),
+        content=json.dumps(content),
+        file_url=file_url,
+        is_primary=False,
     )
     
     db.add(asset)
     db.commit()
     db.refresh(asset)
     
-    return {"id": asset.id, "message": "Brand asset created"}
+    return {
+        "id": asset.id,
+        "name": asset.name,
+        "asset_type": asset.asset_type,
+        "file_url": asset.file_url,
+        "message": "Brand asset created successfully"
+    }
 
 
 @router.put("/ads/brand-assets/{asset_id}")
@@ -3825,6 +3932,51 @@ async def delete_video_template(
     db.delete(template)
     db.commit()
     return {"message": "Video template deleted"}
+
+
+@router.put("/ads/video-templates/{template_id}")
+async def update_video_template(
+    template_id: int,
+    request: dict,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a video template."""
+    import json
+    
+    business_id = get_user_business_id(current_user, db)
+    
+    template = db.query(VideoTemplate).filter(
+        VideoTemplate.id == template_id,
+        VideoTemplate.business_id == business_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Update fields
+    if "name" in request:
+        name = request["name"].strip()
+        if not name or len(name) > 200:
+            raise HTTPException(status_code=400, detail="Name must be 1-200 characters")
+        template.name = name
+    
+    if "description" in request:
+        template.description = request["description"].strip()
+    
+    if "config" in request:
+        template.template_config = json.dumps(request["config"])
+    
+    if "thumbnail_url" in request:
+        template.thumbnail_url = request["thumbnail_url"]
+    
+    template.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {
+        "id": template.id,
+        "message": "Template updated successfully"
+    }
 
 
 # ========== ASSET PUBLISHING & ANALYTICS ==========
@@ -4224,44 +4376,33 @@ async def get_conversation_insights(
 
 
 @router.post("/ads/assets")
-
 async def create_ad_asset(
-    request: dict,
+    request: CreateAdAssetRequest,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create a new ad asset (copy or video metadata)."""
-    asset_type = request.get("asset_type", "ad_copy")
-    title = request.get("title", "Untitled")
-    content = request.get("content", "")
-    platform = request.get("platform", "instagram")
-    status = request.get("status", "draft")
-    campaign_name = request.get("campaign_name", "Uncategorized")
-    extra_data = request.get("extra_data", {})
-    
-    # Add campaign name to extra_data
     import json
-    if isinstance(extra_data, dict):
-        extra_data["campaign_name"] = campaign_name
-    else:
-        extra_data = {"campaign_name": campaign_name}
     
-    # Get user's business_id (None for admin = can see all)
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403,
             detail="Ad assets require a business account"
         )
     
+    # Build extra_data with campaign name
+    extra_data = request.extra_data or {}
+    extra_data["campaign_name"] = request.campaign_name
+    
     asset = AdAsset(
         business_id=business_id,
-        asset_type=asset_type,
-        title=title,
-        content=content,
-        platform=platform,
-        status=status,
+        asset_type=request.asset_type,
+        title=request.title,
+        content=request.content,
+        platform=request.platform,
+        status=request.status,
         extra_data=json.dumps(extra_data),
     )
     
@@ -4418,7 +4559,7 @@ async def list_ad_assets(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all ad assets with filtering."""
+    """List all ad assets with filtering and pagination."""
     import json
     
     business_id = get_user_business_id(current_user, db)
@@ -4439,44 +4580,45 @@ async def list_ad_assets(
     if status:
         query = query.filter(AdAsset.status == status)
     
-    # Get total count
-    total = query.count()
-    
-    # Apply pagination
-    offset = (page - 1) * limit
-    assets = query.order_by(AdAsset.created_at.desc()).offset(offset).limit(limit).all()
-    
-    # Build response
-    result_assets = []
-    for asset in assets:
+# Apply pagination after campaign filter if provided
+    all_assets = query.order_by(AdAsset.created_at.desc()).all()
+
+    filtered_assets = []
+    for asset in all_assets:
         extra_data = {}
         if asset.extra_data:
             try:
                 extra_data = json.loads(asset.extra_data)
             except:
                 pass
-        
-        # Filter by campaign if specified
-        if campaign_name and extra_data.get("campaign_name") != campaign_name:
+
+        asset_campaign = extra_data.get("campaign_name", "Uncategorized")
+        if campaign_name and asset_campaign != campaign_name:
             continue
-        
-        result_assets.append({
+
+        filtered_assets.append({
             "id": asset.id,
             "title": asset.title,
             "asset_type": asset.asset_type,
             "platform": asset.platform,
             "status": asset.status,
-            "campaign_name": extra_data.get("campaign_name", "Uncategorized"),
+            "campaign_name": asset_campaign,
             "created_at": asset.created_at.isoformat(),
             "updated_at": asset.updated_at.isoformat(),
         })
-    
+
+    total = len(filtered_assets)
+    offset = (page - 1) * limit
+    paged_results = filtered_assets[offset:offset + limit]
+
+    total_pages = (total + limit - 1) // limit
+
     return {
-        "assets": result_assets,
-        "total": len(result_assets),
+        "assets": paged_results,
+        "total": total,
         "page": page,
         "limit": limit,
-        "total_pages": (len(result_assets) + limit - 1) // limit,
+        "total_pages": total_pages,
     }
 
 
