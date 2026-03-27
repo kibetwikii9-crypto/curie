@@ -113,7 +113,7 @@ export default function AdStudioPage() {
   const [videoPlatform, setVideoPlatform] = useState('');
   const [videoTemplate, setVideoTemplate] = useState('');
   const [selectedVideoTemplateConfig, setSelectedVideoTemplateConfig] = useState<any>(null);
-  const [videoTemplateMode, setVideoTemplateMode] = useState<'default' | 'custom'>('default');
+  const [videoTemplateMode, setVideoTemplateMode] = useState<'custom'>('custom');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [videoHeadline, setVideoHeadline] = useState('');
   const [videoText, setVideoText] = useState('');
@@ -1855,22 +1855,15 @@ export default function AdStudioPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="text-lg font-medium text-gray-900 dark:text-white">Pick a template</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Choose a built-in template, use your saved template, or upload one from JSON.</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Use your saved template, or upload one from JSON.</p>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setVideoTemplateMode((prev) => (prev === 'default' ? 'custom' : 'default'))}
-                            className="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600"
-                          >
-                            {videoTemplateMode === 'default' ? 'Switch to Custom' : 'Switch to Default'}
-                          </button>
-                          <label className="px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800 disabled:opacity-50">
-                            {isLoadingTemplate ? 'Loading...' : 'Upload JSON'}
-                            <input
-                              type="file"
-                              accept="application/json"
-                              disabled={isLoadingTemplate}
-                              onChange={async (e) => {
+                        <label className="px-3 py-2 text-xs font-semibold rounded-lg border border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/20 cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800 disabled:opacity-50">
+                          {isLoadingTemplate ? 'Loading...' : 'Upload JSON'}
+                          <input
+                            type="file"
+                            accept="application/json"
+                            disabled={isLoadingTemplate}
+                            onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (!file) return;
                                 
@@ -1991,57 +1984,30 @@ export default function AdStudioPage() {
                         </div>
                       )}
 
-                      {videoTemplateMode === 'default' && videoTemplatesData && (
-                        <div className="grid grid-cols-2 gap-4">
-                          {Object.entries(videoTemplatesData.templates).map(([key, template]: [string, any]) => (
+                      {templatePreview && (
+                        <div className="mt-4 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-semibold text-blue-800 dark:text-blue-200">Preview: {templatePreview.name}</div>
                             <button
-                              key={key}
-                              onClick={() => {
-                                if (!isValidTemplateConfig(template)) {
-                                  alert('Invalid template configuration. Please try another template.');
-                                  return;
-                                }
-                                setVideoTemplate(key);
-                                setSelectedVideoTemplateConfig(template);
-                                nextVideoStep();
-                              }}
-                              className="group p-6 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all text-left"
+                              onClick={() => setTemplatePreview(null)}
+                              className="text-blue-800 dark:text-blue-200 text-xs hover:text-blue-900 dark:hover:text-blue-100"
                             >
-                              {template.thumbnail_url ? (
-                                <img
-                                  src={template.thumbnail_url}
-                                  alt={`${template.name} thumbnail`}
-                                  className="mb-3 w-full h-28 object-cover rounded-md"
-                                />
-                              ) : (
-                                <Film className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
-                              )}
-                              <div className="font-semibold text-gray-900 dark:text-white mb-1">{template.name}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{template.description} • {template.duration}s</div>
-                              <div className="flex gap-2 mt-3">
-                                <button
-                                  onClick={() => {
-                                    if (!isValidTemplateConfig(template)) {
-                                      alert('Invalid template configuration. Please try another template.');
-                                      return;
-                                    }
-                                    setVideoTemplate(key);
-                                    setSelectedVideoTemplateConfig(template);
-                                    nextVideoStep();
-                                  }}
-                                  className="flex-1 px-2 py-2 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-                                >
-                                  Use Template
-                                </button>
-                                <button
-                                  onClick={() => setTemplatePreview({ name: template.name, preview_url: template.preview_url })}
-                                  className="flex-1 px-2 py-2 text-xs font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  Preview Template
-                                </button>
-                              </div>
+                              Close
                             </button>
-                          ))}
+                          </div>
+                          {templatePreview.preview_url?.match(/\.(mp4|webm)$/i) ? (
+                            <video
+                              src={templatePreview.preview_url}
+                              controls
+                              className="w-full h-64 md:h-72 object-contain rounded-md"
+                            />
+                          ) : (
+                            <img
+                              src={templatePreview.preview_url}
+                              alt={`Preview for ${templatePreview.name}`}
+                              className="w-full h-64 md:h-72 object-cover rounded-md"
+                            />
+                          )}
                         </div>
                       )}
 
