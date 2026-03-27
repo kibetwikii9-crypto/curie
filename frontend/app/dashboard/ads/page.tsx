@@ -1926,11 +1926,23 @@ export default function AdStudioPage() {
                                   key={template.id}
                                   className="group p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-lg transition-all"
                                 >
+                                  <div className="mb-3">
+                                    {template.thumbnail_url ? (
+                                      <img
+                                        src={template.thumbnail_url}
+                                        alt={`${template.name} thumbnail`}
+                                        className="w-full h-24 object-cover rounded-lg mb-2"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mb-2">
+                                        <Film className="h-8 w-8 text-purple-500" />
+                                      </div>
+                                    )}
+                                    <div className="text-md font-semibold text-gray-900 dark:text-white">{template.name}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">{template.description || 'No description'}</div>
+                                  </div>
                                   <div className="flex justify-between items-start gap-2">
-                                    <div>
-                                      <div className="text-md font-semibold text-gray-900 dark:text-white">{template.name}</div>
-                                      <div className="text-xs text-gray-500 dark:text-gray-400">{template.description || 'No description'}</div>
-                                    </div>
+                                    <div />
                                     {canDeleteTemplates ? (
                                       <button
                                         onClick={() => {
@@ -1963,7 +1975,10 @@ export default function AdStudioPage() {
                                       Use This Template
                                     </button>
                                     <button
-                                      onClick={() => setTemplatePreview({ name: template.name, preview_url: template.preview_url })}
+                                      onClick={() => setTemplatePreview({
+                                        name: template.name,
+                                        preview_url: template.preview_url || template.thumbnail_url || 'https://via.placeholder.com/640x360?text=No+Preview+Available',
+                                      })}
                                       className="flex-1 px-2 py-2 text-xs font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                                     >
                                       Preview Template
@@ -1992,7 +2007,15 @@ export default function AdStudioPage() {
                               }}
                               className="group p-6 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all text-left"
                             >
-                              <Film className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
+                              {template.thumbnail_url ? (
+                                <img
+                                  src={template.thumbnail_url}
+                                  alt={`${template.name} thumbnail`}
+                                  className="mb-3 w-full h-28 object-cover rounded-md"
+                                />
+                              ) : (
+                                <Film className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
+                              )}
                               <div className="font-semibold text-gray-900 dark:text-white mb-1">{template.name}</div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">{template.description} • {template.duration}s</div>
                               <div className="flex gap-2 mt-3">

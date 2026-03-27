@@ -3330,18 +3330,24 @@ async def get_video_templates(
             "description": "Single image with overlay text",
             "duration": 5,
             "scenes": 1,
+            "thumbnail_url": "https://placehold.co/320x180?text=Static+Image+Text",
+            "preview_url": "https://www.w3schools.com/html/mov_bbb.mp4",
         },
         "image_slideshow": {
             "name": "Image Slideshow",
             "description": "Multiple images with transitions",
             "duration": 15,
             "scenes": 3,
+            "thumbnail_url": "https://placehold.co/320x180?text=Image+Slideshow",
+            "preview_url": "https://www.w3schools.com/html/mov_bbb.mp4",
         },
         "short_clip_overlay": {
             "name": "Short Clip + Overlay Text",
             "description": "Video clip with text overlay",
             "duration": 10,
             "scenes": 1,
+            "thumbnail_url": "https://placehold.co/320x180?text=Short+Clip+Overlay",
+            "preview_url": "https://www.w3schools.com/html/mov_bbb.mp4",
         },
     }
     
