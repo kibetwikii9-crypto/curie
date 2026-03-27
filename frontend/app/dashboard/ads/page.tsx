@@ -1944,11 +1944,12 @@ export default function AdStudioPage() {
                                           }
                                         }}
                                         className="text-red-500 text-xs hover:text-red-700"
+                                        title="Only admin/business_owner can delete templates"
                                       >
                                         Delete
                                       </button>
                                     ) : (
-                                      <span className="text-gray-400 text-xs">Delete unavailable</span>
+                                      <span className="text-gray-400 text-xs" title="Only admin/business_owner can delete templates">Delete unavailable</span>
                                     )}
                                   </div>
                                   <div className="flex gap-2 mt-3">
