@@ -697,48 +697,37 @@ export default function AdStudioPage() {
     return config && typeof config === 'object';
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'published':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
-      case 'draft':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
-      case 'archived':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
+  const STATUS_STYLE_MAP: Record<string, string> = {
+    published: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+    draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+    archived: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'published':
-        return <Send className="h-3 w-3" />;
-      case 'draft':
-        return <Edit className="h-3 w-3" />;
-      case 'archived':
-        return <Archive className="h-3 w-3" />;
-      default:
-        return <Clock className="h-3 w-3" />;
-    }
+  const STATUS_ICON_MAP: Record<string, JSX.Element> = {
+    published: <Send className="h-3 w-3" />,
+    draft: <Edit className="h-3 w-3" />,
+    archived: <Archive className="h-3 w-3" />,
+    default: <Clock className="h-3 w-3" />,
   };
 
-  const getAssetIcon = (type: string) => {
-    switch (type) {
-      case 'video':
-        return <Film className="h-5 w-5" />;
-      case 'image':
-        return <ImageIcon className="h-5 w-5" />;
-      default:
-        return <FileText className="h-5 w-5" />;
-    }
+  const ASSET_ICON_MAP: Record<string, JSX.Element> = {
+    video: <Film className="h-5 w-5" />,
+    image: <ImageIcon className="h-5 w-5" />,
+    default: <FileText className="h-5 w-5" />,
   };
+
+  const getStatusColor = (status: string) => STATUS_STYLE_MAP[status] || STATUS_STYLE_MAP.default;
+  const getStatusIcon = (status: string) => STATUS_ICON_MAP[status] || STATUS_ICON_MAP.default;
+  const getAssetIcon = (type: string) => ASSET_ICON_MAP[type] || ASSET_ICON_MAP.default;
 
   const filteredAssets = assetsData?.assets?.filter((asset) => {
-    if (searchQuery) {
-      return asset.title.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    return true;
+    const searchMatch = !searchQuery || asset.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const typeMatch = assetTypeFilter === 'all' || asset.asset_type === assetTypeFilter;
+    const platformMatch = platformFilter === 'all' || asset.platform === platformFilter;
+    const statusMatch = statusFilter === 'all' || asset.status === statusFilter;
+
+    return searchMatch && typeMatch && platformMatch && statusMatch;
   });
 
   return (
@@ -1973,7 +1962,7 @@ export default function AdStudioPage() {
                         Tip: If you already have a template, you can upload it as JSON using the button above (must include name/video_type/platform/config). Saved templates are available under Custom mode.
                       </div>
                     </div>
-                  )}
+                  )
 
                   {/* Step 4: Content */}
                   {videoStep === 4 && (
