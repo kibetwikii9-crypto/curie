@@ -341,15 +341,25 @@ export default function AdStudioPage() {
       return response.data;
     },
     onSuccess: (data) => {
-      if (data.copy) {
-        if (data.template_type === 'headline') {
-          setCopyHeadline(data.copy);
-        } else if (data.template_type === 'description') {
-          setCopyDescription(data.copy);
-        } else if (data.template_type === 'cta') {
-          setCopyCta(data.copy);
-        }
+      if (!data?.copy) {
+        setAiGenerating(false);
+        return;
       }
+
+      switch (data.template_type) {
+        case 'headline':
+          setCopyHeadline(data.copy);
+          break;
+        case 'description':
+          setCopyDescription(data.copy);
+          break;
+        case 'cta':
+          setCopyCta(data.copy);
+          break;
+        default:
+          break;
+      }
+
       setAiGenerating(false);
     },
     onError: (error: any) => {
@@ -704,14 +714,14 @@ export default function AdStudioPage() {
     default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   };
 
-  const STATUS_ICON_MAP: Record<string, JSX.Element> = {
+  const STATUS_ICON_MAP = {
     published: <Send className="h-3 w-3" />,
     draft: <Edit className="h-3 w-3" />,
     archived: <Archive className="h-3 w-3" />,
     default: <Clock className="h-3 w-3" />,
   };
 
-  const ASSET_ICON_MAP: Record<string, JSX.Element> = {
+  const ASSET_ICON_MAP = {
     video: <Film className="h-5 w-5" />,
     image: <ImageIcon className="h-5 w-5" />,
     default: <FileText className="h-5 w-5" />,
