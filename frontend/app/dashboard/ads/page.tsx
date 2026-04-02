@@ -362,9 +362,14 @@ export default function AdsDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-center py-8">
-                <Video className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Video Editor Coming Soon</h3>
-                <p className="mt-1 text-sm text-gray-500">Advanced video editing tools will be available here.</p>
+                <Video className="mx-auto h-12 w-12 text-blue-500" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">Video Editor is Ready</h3>
+                <p className="mt-1 text-sm text-gray-500">Open the dedicated video editor dashboard to create and edit projects.</p>
+                <div className="mt-6">
+                  <Button onClick={() => router.push('/dashboard/ads/video')}>
+                    Open Video Editor
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
