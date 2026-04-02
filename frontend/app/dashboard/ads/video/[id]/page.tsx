@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Play, Trash2, UploadCloud, Save } from 'lucide-react'
+import { ArrowLeft, Play, Trash2, UploadCloud, Save, Share2 } from 'lucide-react'
 
 type VideoAsset = { id: number; name: string; type: 'video' | 'image' | 'audio'; url: string }
 
@@ -228,6 +228,37 @@ export default function VideoProjectDetailPage() {
     }
   }
 
+  const saveAsTemplate = async () => {
+    const templateName = prompt('Template name:', `${project.title} Template`)
+    if (!templateName) return
+
+    try {
+      const response = await fetch(`/api/ads/video-projects/${project.id}/save-as-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_name: templateName,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: 'Success',
+          description: `Saved as template: "${templateName}". Other users can now use this template.`,
+        })
+      } else {
+        throw new Error('Failed to save template')
+      }
+    } catch (error) {
+      console.error('Error saving template:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to save as template',
+        variant: 'destructive',
+      })
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -331,6 +362,9 @@ export default function VideoProjectDetailPage() {
             </Button>
             <Button onClick={() => setStatus('published')} variant="outline">
               Publish
+            </Button>
+            <Button onClick={saveAsTemplate} variant="outline">
+              <Share2 className="w-4 h-4 mr-2" /> Save as Template
             </Button>
             <Button onClick={() => setStatus('failed')} variant="outline" className="text-red-600 border-red-300 hover:bg-red-50">
               Mark failed

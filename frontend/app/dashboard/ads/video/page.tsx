@@ -72,7 +72,7 @@ export default function VideoDashboard() {
   }
 
   const onCreate = () => {
-    router.push('/dashboard/ads/video/create')
+    router.push('/dashboard/ads/video/templates')
   }
 
   if (loading) {

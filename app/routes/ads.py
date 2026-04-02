@@ -10,7 +10,7 @@ from sqlalchemy import func, and_, or_, desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, Business, User as UserModel
+from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, Business, User as UserModel, VideoTemplate
 from app.routes.auth import get_current_user, get_user_business_id
 
 log = logging.getLogger(__name__)
@@ -96,6 +96,15 @@ class VideoProjectUpdateRequest(BaseModel):
     duration: Optional[str] = None
     scenes: Optional[List[Dict[str, Any]]] = None
     assets: Optional[List[Dict[str, Any]]] = None
+
+class VideoTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    video_type: str
+    duration: Optional[str]
+    scenes: List[Dict[str, Any]]
+    is_public: bool
 
 class ABTestCreateRequest(BaseModel):
     campaign_id: int
@@ -390,6 +399,77 @@ async def complete_campaign(
 
     return {"message": "Campaign completed successfully"}
 
+# ========== VIDEO TEMPLATE ENDPOINTS ==========
+@router.get("/video-templates", response_model=None)
+async def get_video_templates(
+    db: Session = Depends(get_db),
+):
+    """Get all public video templates (global + user's business templates)."""
+    templates = db.query(VideoTemplate).filter(
+        VideoTemplate.is_public == True
+    ).all()
+
+    return {
+        "templates": [
+            {
+                "id": t.id,
+                "name": t.name,
+                "description": t.description,
+                "video_type": t.video_type,
+                "platform": t.platform,
+                "template_config": t.template_config,
+                "thumbnail_url": t.thumbnail_url,
+                "is_public": t.is_public
+            }
+            for t in templates
+        ]
+    }
+
+@router.post("/video-projects/from-template/{template_id}", response_model=None)
+async def create_video_project_from_template(
+    template_id: int,
+    project_name: str = Query(...),
+    db: Session = Depends(get_db),
+    business_id: int = Depends(get_user_business_id)
+):
+    """Create a new video project from a template."""
+    template = db.query(VideoTemplate).filter(
+        VideoTemplate.id == template_id,
+        VideoTemplate.is_public == True
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    import json
+    template_config = json.loads(template.template_config) if isinstance(template.template_config, str) else template.template_config
+
+    project = VideoProject(
+        business_id=business_id,
+        name=project_name,
+        description=template.description,
+        template_id=template_id,
+        status="draft",
+        duration=template_config.get("duration", "00:30"),
+        scenes=json.dumps(template_config.get("scenes", [])),
+        assets="[]"
+    )
+
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+
+    return {
+        "id": project.id,
+        "message": "Video project created from template successfully.",
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "status": project.status,
+            "created_at": project.created_at
+        }
+    }
+
 # ========== VIDEO PROJECT ENDPOINTS ==========
 @router.get("/video-projects", response_model=None)
 async def get_video_projects(
@@ -542,6 +622,62 @@ async def update_video_project(
             "status": project.status,
             "updated_at": project.updated_at
         }
+    }
+
+@router.post("/video-projects/{project_id}/save-as-template", response_model=None)
+async def save_video_project_as_template(
+    project_id: int,
+    template_name: str = Query(...),
+    db: Session = Depends(get_db),
+    business_id: int = Depends(get_user_business_id)
+):
+    """Save an existing video project as a reusable template."""
+    project = db.query(VideoProject).filter(
+        VideoProject.id == project_id,
+        VideoProject.business_id == business_id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Video project not found")
+
+    import json
+    
+    # Create or update template
+    existing_template = db.query(VideoTemplate).filter(
+        VideoTemplate.name == template_name,
+        VideoTemplate.business_id == business_id
+    ).first()
+
+    template_config = {
+        "duration": project.duration,
+        "scenes": json.loads(project.scenes) if isinstance(project.scenes, str) else project.scenes
+    }
+
+    if existing_template:
+        existing_template.template_config = json.dumps(template_config)
+        existing_template.description = project.description
+        existing_template.updated_at = datetime.utcnow()
+        template = existing_template
+    else:
+        template = VideoTemplate(
+            business_id=business_id,
+            name=template_name,
+            description=project.description or f"Template from {project.name}",
+            video_type="custom",
+            platform="custom",
+            template_config=json.dumps(template_config),
+            is_public=True,  # Global/shared template
+            usage_count=0
+        )
+        db.add(template)
+
+    db.commit()
+    db.refresh(template)
+
+    return {
+        "message": "Project saved as template successfully",
+        "template_id": template.id,
+        "template_name": template.name
     }
 
 @router.delete("/video-projects/{project_id}")
