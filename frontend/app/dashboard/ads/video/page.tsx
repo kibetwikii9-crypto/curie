@@ -76,10 +76,15 @@ export default function VideoProjectsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Video Projects</h1>
           <p className="text-gray-600 mt-1">Build, render, and publish ad videos from one place.</p>
         </div>
-        <Button onClick={onCreate}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Video Project
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={() => router.push('/dashboard/ads')}>
+            Back to Ads
+          </Button>
+          <Button onClick={onCreate}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Video Project
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
