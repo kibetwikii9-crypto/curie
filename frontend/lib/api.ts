@@ -1,19 +1,28 @@
 import axios from 'axios';
 
-let API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Fix for Render: if URL is missing protocol, add https://
-if (API_BASE_URL && !API_BASE_URL.startsWith('http://') && !API_BASE_URL.startsWith('https://')) {
-  API_BASE_URL = `https://${API_BASE_URL}`;
-  console.log('[API] Fixed URL to:', API_BASE_URL);
-}
+const normalizedApiBaseUrl = (API_BASE_URL && !API_BASE_URL.startsWith('http://') && !API_BASE_URL.startsWith('https://'))
+  ? `https://${API_BASE_URL}`
+  : API_BASE_URL;
 
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: normalizedApiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+export async function apiFetch(input: RequestInfo, init?: RequestInit) {
+  // `input` may already be absolute URL, otherwise prefix with API_BASE_URL
+  const url = typeof input === 'string' && input.startsWith('/api/')
+    ? `${normalizedApiBaseUrl}${input}`
+    : input;
+
+  return fetch(url, init);
+}
+
 
 // Add token to requests
 api.interceptors.request.use((config) => {

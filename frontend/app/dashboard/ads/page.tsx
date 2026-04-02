@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, Play, Pause, CheckCircle, XCircle, BarChart3, Video, TestTube } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { apiFetch } from '@/lib/api'
 
 interface Campaign {
   id: number
@@ -53,14 +54,14 @@ export default function AdsDashboard() {
       setLoading(true)
 
       // Load campaigns
-      const campaignsResponse = await fetch('/api/ads/campaigns?limit=20')
+      const campaignsResponse = await apiFetch('/api/ads/campaigns?limit=20')
       if (campaignsResponse.ok) {
         const campaignsData = await campaignsResponse.json()
         setCampaigns(campaignsData.campaigns || [])
       }
 
       // Load analytics overview
-      const analyticsResponse = await fetch('/api/ads/analytics/overview')
+      const analyticsResponse = await apiFetch('/api/ads/analytics/overview')
       if (analyticsResponse.ok) {
         const analyticsData = await analyticsResponse.json()
         setStats({

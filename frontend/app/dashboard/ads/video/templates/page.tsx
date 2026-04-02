@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Film, Plus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { apiFetch } from '@/lib/api'
 
 interface VideoTemplate {
   id: number
@@ -31,7 +32,7 @@ export default function TemplatesPage() {
   const loadTemplates = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/ads/video-templates')
+      const response = await apiFetch('/api/ads/video-templates')
       if (response.ok) {
         const data = await response.json()
         setTemplates(data.templates || [])

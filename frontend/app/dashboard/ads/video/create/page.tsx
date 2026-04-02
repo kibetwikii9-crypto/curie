@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
+import { apiFetch } from '@/lib/api'
 import { ArrowLeft, Plus, Save, UploadCloud } from 'lucide-react'
 
 type VideoProject = {
@@ -120,7 +121,7 @@ export default function VideoProjectCreatePage() {
     
     setSaving(true)
     try {
-      const response = await fetch('/api/ads/video-projects', {
+      const response = await apiFetch('/api/ads/video-projects', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

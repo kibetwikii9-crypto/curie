@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,7 +48,7 @@ export default function VideoProjectDetailPage() {
 
   const loadProject = async () => {
     try {
-      const response = await fetch(`/api/ads/video-projects/${params.id}`)
+      const response = await apiFetch(`/api/ads/video-projects/${params.id}`)
       if (response.ok) {
         const data = await response.json()
         const loadedProject: VideoProject = {
@@ -113,7 +114,7 @@ export default function VideoProjectDetailPage() {
     setProject(update)
     
     try {
-      await fetch(`/api/ads/video-projects/${project.id}`, {
+      await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,7 +137,7 @@ export default function VideoProjectDetailPage() {
     setProject(updated)
     
     try {
-      await fetch(`/api/ads/video-projects/${project.id}`, {
+      await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -169,7 +170,7 @@ export default function VideoProjectDetailPage() {
     setPreview(assets[0].url)
     
     try {
-      await fetch(`/api/ads/video-projects/${project.id}`, {
+      await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -192,7 +193,7 @@ export default function VideoProjectDetailPage() {
     setProject(updated)
     
     try {
-      await fetch(`/api/ads/video-projects/${project.id}`, {
+      await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -213,7 +214,7 @@ export default function VideoProjectDetailPage() {
 
   const onDelete = async () => {
     try {
-      const response = await fetch(`/api/ads/video-projects/${project.id}`, {
+      const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'DELETE',
       })
       if (response.ok) {
@@ -326,7 +327,7 @@ export default function VideoProjectDetailPage() {
                     setProject(updated)
                     
                     try {
-                      await fetch(`/api/ads/video-projects/${project.id}`, {
+                      await apiFetch(`/api/ads/video-projects/${project.id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -443,7 +444,7 @@ export default function VideoProjectDetailPage() {
         <Button variant="outline" onClick={async () => {
           setSaving(true)
           try {
-            await fetch(`/api/ads/video-projects/${project.id}`, {
+            await apiFetch(`/api/ads/video-projects/${project.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

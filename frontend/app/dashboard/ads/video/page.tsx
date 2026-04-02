@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { BarChart3, FileVideo, Plus, Play, Film, SlidersHorizontal } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { apiFetch } from '@/lib/api'
 
 interface VideoProject {
   id: number
@@ -33,7 +34,7 @@ export default function VideoDashboard() {
   const loadProjects = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/ads/video-projects')
+      const response = await apiFetch('/api/ads/video-projects')
       if (response.ok) {
         const data = await response.json()
         setProjects(data.projects || [])
