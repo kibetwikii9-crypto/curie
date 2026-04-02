@@ -38,6 +38,8 @@ export default function VideoProjectDetailPage() {
   const { toast } = useToast()
   const [project, setProject] = useState<VideoProject | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
 
   useEffect(() => {
     loadProject()
@@ -384,8 +386,18 @@ export default function VideoProjectDetailPage() {
 
           {preview ? (
             <div className="mt-3">
-              <label className="text-sm font-semibold">Preview</label>
-              <video className="w-full rounded-md" src={preview} controls autoPlay />
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Preview</label>
+                <Button variant="outline" onClick={() => setIsPreviewFullscreen((prev) => !prev)}>
+                  {isPreviewFullscreen ? 'Compact' : 'Fullscreen'}
+                </Button>
+              </div>
+              <video
+                className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'}`}
+                src={preview}
+                controls
+                autoPlay
+              />
             </div>
           ) : (
             <p className="text-sm text-gray-500">Select a video asset to preview.</p>
@@ -395,6 +407,7 @@ export default function VideoProjectDetailPage() {
 
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="outline" onClick={async () => {
+          setSaving(true)
           try {
             await fetch(`/api/ads/video-projects/${project.id}`, {
               method: 'PUT',
@@ -412,9 +425,12 @@ export default function VideoProjectDetailPage() {
           } catch (error) {
             console.error('Error saving project:', error)
             toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+          } finally {
+            setSaving(false)
           }
-        }}>
-          <Save className="w-4 h-4 mr-2" /> Save
+        }} disabled={saving}>
+          <Save className="w-4 h-4 mr-2" />
+          {saving ? 'Saving...' : 'Save'}
         </Button>
       </div>
     </div>

@@ -54,6 +54,8 @@ export default function VideoProjectCreatePage() {
   })
 
   const [previewAssetUrl, setPreviewAssetUrl] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
 
   const updateField = <K extends keyof VideoProject>(key: K, value: VideoProject[K]) => {
     setProject((prev) => ({ ...prev, [key]: value, updated_at: new Date().toISOString().slice(0, 10) }))
@@ -116,6 +118,7 @@ export default function VideoProjectCreatePage() {
 
     const savedProject: VideoProject = { ...project, status: 'draft', duration: getTotalDuration(project.scenes) }
     
+    setSaving(true)
     try {
       const response = await fetch('/api/ads/video-projects', {
         method: 'POST',
@@ -141,6 +144,8 @@ export default function VideoProjectCreatePage() {
     } catch (error) {
       console.error('Error saving project:', error)
       toast({ title: 'Error', description: 'Failed to save video project.', variant: 'destructive' })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -265,8 +270,20 @@ export default function VideoProjectCreatePage() {
 
             {previewAssetUrl && (
               <div className="mt-4">
-                <h4 className="text-sm font-medium">Preview</h4>
-                <video className="w-full rounded-md" src={previewAssetUrl} controls />
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">Preview</h4>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsPreviewFullscreen((prev) => !prev)}
+                  >
+                    {isPreviewFullscreen ? 'Compact' : 'Fullscreen'}
+                  </Button>
+                </div>
+                <video
+                  className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'}`}
+                  src={previewAssetUrl}
+                  controls
+                />
               </div>
             )}
           </CardContent>
@@ -276,8 +293,9 @@ export default function VideoProjectCreatePage() {
           <Button type="button" variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
             Cancel
           </Button>
-          <Button type="submit">
-            <Save className="w-4 h-4 mr-2" /> Save Project
+          <Button type="submit" disabled={saving}>
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? 'Saving...' : 'Save Project'}
           </Button>
         </div>
       </form>
