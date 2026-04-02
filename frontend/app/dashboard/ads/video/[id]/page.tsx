@@ -456,6 +456,8 @@ export default function VideoProjectDetailPage() {
               }),
             })
             toast({ title: 'Saved', description: 'Project updates saved successfully.' })
+            // redirect to project library so saved project is visible immediately
+            router.push('/dashboard/ads/video')
           } catch (error) {
             console.error('Error saving project:', error)
             toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
