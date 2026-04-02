@@ -59,7 +59,7 @@ export default function TemplatesPage() {
     const projectName = `${templates.find(t => t.id === templateId)?.name || 'Project'} - ${new Date().toLocaleDateString()}`
     
     try {
-      const response = await fetch(`/api/ads/video-projects/from-template/${templateId}?project_name=${encodeURIComponent(projectName)}`, {
+      const response = await apiFetch(`/api/ads/video-projects/from-template/${templateId}?project_name=${encodeURIComponent(projectName)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
