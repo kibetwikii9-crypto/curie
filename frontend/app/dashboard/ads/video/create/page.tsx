@@ -136,8 +136,9 @@ export default function VideoProjectCreatePage() {
       })
 
       if (response.ok) {
+        const data = await response.json()
         toast({ title: 'Saved', description: 'Video project created successfully.' })
-        router.push('/dashboard/ads/video')
+        router.push(`/dashboard/ads/video/${data.project?.id}`)
       } else {
         throw new Error('Failed to save project')
       }
