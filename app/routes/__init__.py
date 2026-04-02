@@ -1,12 +1,13 @@
 """Routes package - exports all API routers."""
 from fastapi import APIRouter
 
-from app.routes import auth, dashboard, health, telegram, integrations, diagnostics, users, handoff, notifications, security, sales, onboarding, whatsapp_webhook, settings, billing, webhooks
+from app.routes import auth, dashboard, health, telegram, integrations, diagnostics, users, handoff, notifications, security, sales, onboarding, whatsapp_webhook, settings, billing, webhooks, ads
 
 # Create main router and include all sub-routers
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(telegram.router, prefix="/telegram", tags=["telegram"])
+api_router.include_router(ads.router)
 api_router.include_router(auth.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(integrations.router, prefix="/api/integrations", tags=["integrations"])

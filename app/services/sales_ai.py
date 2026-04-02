@@ -1,10 +1,16 @@
 """AI-powered sales features for smart pricing and product descriptions."""
 import logging
-import openai
 from typing import Optional, Dict, Any
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.warning("OpenAI package not available. AI sales features will be disabled.")
 
 
 class SalesAIService:
@@ -12,7 +18,7 @@ class SalesAIService:
     
     def __init__(self):
         """Initialize with OpenAI API key."""
-        if settings.openai_api_key:
+        if OPENAI_AVAILABLE and settings.openai_api_key:
             openai.api_key = settings.openai_api_key
     
     async def generate_product_description(
@@ -32,8 +38,10 @@ class SalesAIService:
         Returns:
             AI-generated product description
         """
-        if not settings.openai_api_key:
-            return f"High-quality {product_name}. Contact us for more details."
+        if not OPENAI_AVAILABLE or not settings.openai_api_key:
+            features_text = f" with features: {', '.join(key_features)}" if key_features else ""
+            category_text = f" in the {category} category" if category else ""
+            return f"High-quality {product_name}{category_text}{features_text}. Contact us for more details."
         
         try:
             features_text = ""
@@ -91,12 +99,12 @@ Description:"""
         Returns:
             Dictionary with suggested price and reasoning
         """
-        if not settings.openai_api_key:
+        if not OPENAI_AVAILABLE or not settings.openai_api_key:
             return {
                 "suggested_price": 99.99,
                 "min_price": 79.99,
                 "max_price": 129.99,
-                "reasoning": "AI pricing not available. Please set OpenAI API key."
+                "reasoning": "AI pricing not available. OpenAI package not installed or API key not configured."
             }
         
         try:

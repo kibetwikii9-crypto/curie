@@ -42,13 +42,6 @@ const getTotalDuration = (scenes: VideoProject['scenes']) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
-const persistProject = (project: VideoProject) => {
-  if (typeof window === 'undefined') return
-  const existing = JSON.parse(localStorage.getItem('videoProjects') || '[]') as VideoProject[]
-  const filtered = existing.filter((item) => item.id !== project.id)
-  localStorage.setItem('videoProjects', JSON.stringify([...filtered, project]))
-}
-
 export default function VideoProjectCreatePage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -116,11 +109,39 @@ export default function VideoProjectCreatePage() {
       return
     }
 
-    const savedProject: VideoProject = { ...project, status: 'draft', duration: getTotalDuration(project.scenes) }
-    persistProject(savedProject)
+    if (project.assets.length === 0) {
+      toast({ title: 'Validation error', description: 'Upload at least one video file to start', variant: 'destructive' })
+      return
+    }
 
-    toast({ title: 'Saved', description: 'Video project created and saved to local storage.' })
-    router.push('/dashboard/ads/video')
+    const savedProject: VideoProject = { ...project, status: 'draft', duration: getTotalDuration(project.scenes) }
+    
+    try {
+      const response = await fetch('/api/ads/video-projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: savedProject.title,
+          description: savedProject.description,
+          status: savedProject.status,
+          duration: savedProject.duration,
+          scenes: savedProject.scenes,
+          assets: savedProject.assets
+        }),
+      })
+
+      if (response.ok) {
+        toast({ title: 'Saved', description: 'Video project created successfully.' })
+        router.push('/dashboard/ads/video')
+      } else {
+        throw new Error('Failed to save project')
+      }
+    } catch (error) {
+      console.error('Error saving project:', error)
+      toast({ title: 'Error', description: 'Failed to save video project.', variant: 'destructive' })
+    }
   }
 
   return (
@@ -172,40 +193,18 @@ export default function VideoProjectCreatePage() {
         <Card>
           <CardHeader>
             <CardTitle>Scenes</CardTitle>
-            <CardDescription>Sequence and length in seconds</CardDescription>
+            <CardDescription>Auto-managed scenes, keep it simple</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {project.scenes.map((scene) => (
-              <div key={scene.id} className="grid grid-cols-12 gap-2 items-center">
-                <Input
-                  className="col-span-4"
-                  value={scene.name}
-                  onChange={(e) => updateScene(scene.id, 'name', e.target.value)}
-                  aria-label="Scene title"
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  className="col-span-2"
-                  value={scene.duration}
-                  onChange={(e) => updateScene(scene.id, 'duration', Number(e.target.value))}
-                  aria-label="Scene duration"
-                />
-                <Input
-                  className="col-span-5"
-                  value={scene.caption}
-                  onChange={(e) => updateScene(scene.id, 'caption', e.target.value)}
-                  placeholder="Caption"
-                />
-                <Button type="button" variant="outline" className="col-span-1" onClick={() => removeScene(scene.id)}>
-                  Delete
-                </Button>
-              </div>
-            ))}
-
-            <Button type="button" onClick={addScene} variant="outline">
-              <Plus className="w-4 h-4 mr-2" /> Add Scene
-            </Button>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-gray-600">We will create a default scene structure for you. You can fine-tune timing and captions later in the project editor.</p>
+            <div className="rounded-md border border-gray-200 p-3">
+              {project.scenes.map((scene) => (
+                <div key={scene.id} className="flex items-center justify-between text-sm text-gray-700">
+                  <span>{scene.name}</span>
+                  <span>{scene.duration}s</span>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 

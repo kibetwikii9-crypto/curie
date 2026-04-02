@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,63 +10,77 @@ import { useToast } from '@/hooks/use-toast'
 
 interface VideoProject {
   id: number
-  title: string
+  name: string
+  description?: string
   status: 'draft' | 'rendering' | 'published' | 'failed'
   duration: string
+  scenes: Array<any>
+  assets: Array<any>
   created_at: string
   updated_at: string
 }
 
-const initialProjects: VideoProject[] = [
-  {
-    id: 1,
-    title: 'Spring Collection Launch',
-    status: 'draft',
-    duration: '00:30',
-    created_at: '2026-03-22',
-    updated_at: '2026-03-24'
-  },
-  {
-    id: 2,
-    title: 'Customer Testimonial',
-    status: 'rendering',
-    duration: '01:10',
-    created_at: '2026-03-20',
-    updated_at: '2026-03-23'
-  },
-  {
-    id: 3,
-    title: 'New Product Demo',
-    status: 'published',
-    duration: '00:45',
-    created_at: '2026-03-10',
-    updated_at: '2026-03-15'
-  }
-]
-
-const getStatusClass = (status: VideoProject['status']) => {
-  switch (status) {
-    case 'draft':
-      return 'bg-yellow-100 text-yellow-700'
-    case 'rendering':
-      return 'bg-blue-100 text-blue-700'
-    case 'published':
-      return 'bg-green-100 text-green-700'
-    case 'failed':
-      return 'bg-red-100 text-red-700'
-    default:
-      return 'bg-gray-100 text-gray-700'
-  }
-}
-
-export default function VideoProjectsPage() {
+export default function VideoDashboard() {
+  const [projects, setProjects] = useState<VideoProject[]>([])
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { toast } = useToast()
-  const [projects, setProjects] = useState<VideoProject[]>(initialProjects)
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/ads/video-projects')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data.projects || [])
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to load video projects',
+          variant: 'destructive'
+        })
+      }
+    } catch (error) {
+      console.error('Error loading projects:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load video projects',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusClass = (status: VideoProject['status']) => {
+    switch (status) {
+      case 'draft':
+        return 'bg-yellow-100 text-yellow-700'
+      case 'rendering':
+        return 'bg-blue-100 text-blue-700'
+      case 'published':
+        return 'bg-green-100 text-green-700'
+      case 'failed':
+        return 'bg-red-100 text-red-700'
+      default:
+        return 'bg-gray-100 text-gray-700'
+    }
+  }
 
   const onCreate = () => {
-    toast({ title: 'Create Video Project', description: 'Video project flow coming soon.' })
     router.push('/dashboard/ads/video/create')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
@@ -145,8 +159,8 @@ export default function VideoProjectsPage() {
               {projects.map((project) => (
                 <div key={project.id} className="rounded-md border border-gray-200 p-4 flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold">{project.title}</h3>
-                    <p className="text-sm text-gray-500">Duration: {project.duration} • Updated {project.updated_at}</p>
+                    <h3 className="text-lg font-semibold">{project.name}</h3>
+                    <p className="text-sm text-gray-500">Duration: {project.duration} • Updated {new Date(project.updated_at).toLocaleDateString()}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className={getStatusClass(project.status)}>{project.status}</Badge>

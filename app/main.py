@@ -17,6 +17,10 @@ from app.models import (
     ConversationMemory,
     AnalyticsEvent,
     AdAsset,
+    Campaign,
+    VideoProject,
+    ABTest,
+    CampaignPerformance,
 )  # Import all models to register with Base
 
 init_logging(settings.log_level)

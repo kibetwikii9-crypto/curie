@@ -1489,15 +1489,21 @@ async def instagram_oauth_callback(
         ig_username = ig_account.get("username", "Instagram Account")
         page_name = ig_account.get("page_name", "")
         
-        # Step 4: Store integration in database
+        # Step 4: Store credentials as JSON
+        credentials = json.dumps({
+            "access_token": access_token,
+            "ig_account_id": ig_account_id,
+            "ig_username": ig_username
+        })
+        
+        # Step 5: Store integration in database
         integration = ChannelIntegration(
             business_id=business_id,
             channel="instagram",
             channel_name=f"@{ig_username}" if ig_username else page_name,
+            credentials=credentials,
             is_active=True,
-            webhook_url=f"{settings.public_url}/api/integrations/instagram/webhook",
-            access_token=access_token,
-            channel_user_id=ig_account_id
+            webhook_url=f"{settings.public_url}/api/integrations/instagram/webhook"
         )
         
         db.add(integration)
@@ -1901,15 +1907,21 @@ async def messenger_oauth_callback(
         # Step 4: Subscribe page to webhooks
         await meta_service.subscribe_page_webhook(page_id, page_access_token)
         
-        # Step 5: Store integration in database
+        # Step 5: Store credentials as JSON
+        credentials = json.dumps({
+            "access_token": page_access_token,
+            "page_id": page_id,
+            "page_name": page_name
+        })
+        
+        # Step 6: Store integration in database
         integration = ChannelIntegration(
             business_id=business_id,
             channel="messenger",
             channel_name=page_name,
+            credentials=credentials,
             is_active=True,
-            webhook_url=f"{settings.public_url}/api/integrations/messenger/webhook",
-            access_token=page_access_token,  # Store page access token
-            channel_user_id=page_id
+            webhook_url=f"{settings.public_url}/api/integrations/messenger/webhook"
         )
         
         db.add(integration)
@@ -2227,16 +2239,21 @@ async def email_oauth_callback(
         # Step 2: Get user's email address
         user_email = await gmail_service.get_user_email(access_token)
         
-        # Step 3: Store integration in database
+        # Step 3: Store credentials as JSON (following Telegram/WhatsApp pattern)
+        credentials = json.dumps({
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user_email": user_email
+        })
+        
+        # Step 4: Store integration in database
         integration = ChannelIntegration(
             business_id=business_id,
             channel="email",
             channel_name=user_email,
+            credentials=credentials,
             is_active=True,
-            webhook_url=None,  # Gmail uses polling, not webhooks
-            access_token=access_token,
-            refresh_token=refresh_token,
-            channel_user_id=user_email
+            webhook_url=None  # Gmail uses polling, not webhooks
         )
         
         db.add(integration)
@@ -2374,19 +2391,28 @@ async def create_webchat_widget(
         
         if existing:
             # Return existing widget
-            widget_id = existing.channel_user_id
+            try:
+                creds = json.loads(existing.credentials) if existing.credentials else {}
+                widget_id = creds.get("widget_id")
+            except:
+                widget_id = f"widget_{business_id}_{secrets.token_urlsafe(8)}"
         else:
             # Generate unique widget ID
             widget_id = f"widget_{business_id}_{secrets.token_urlsafe(8)}"
+            
+            # Store widget ID as JSON
+            credentials = json.dumps({
+                "widget_id": widget_id
+            })
             
             # Create integration
             integration = ChannelIntegration(
                 business_id=business_id,
                 channel="webchat",
                 channel_name="Website Chat Widget",
+                credentials=credentials,
                 is_active=True,
-                webhook_url=f"{settings.public_url}/api/integrations/webchat/webhook",
-                channel_user_id=widget_id
+                webhook_url=f"{settings.public_url}/api/integrations/webchat/webhook"
             )
             
             db.add(integration)
@@ -2454,7 +2480,12 @@ async def get_webchat_status(
         )
     
     # Generate embed code
-    widget_id = integration.channel_user_id
+    try:
+        creds = json.loads(integration.credentials) if integration.credentials else {}
+        widget_id = creds.get("widget_id")
+    except:
+        widget_id = "unknown"
+    
     frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
     embed_code = f"""<!-- Automify Chat Widget -->
 <script>

@@ -9,6 +9,20 @@ All models are designed for Supabase PostgreSQL.
 from datetime import datetime
 from enum import Enum as PyEnum
 
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Date,
+    JSON,
+)
+
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Float, Index
 from sqlalchemy.orm import relationship
 
@@ -336,6 +350,103 @@ class AssetAnalytics(Base):
     revenue = Column(Float, default=0.0)  # Revenue generated
     roi = Column(Float, default=0.0)  # Return on investment
     date = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ========== CAMPAIGN MANAGEMENT MODELS ==========
+
+class Campaign(Base):
+    """
+    Campaign model for managing ad campaigns across platforms.
+    """
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="draft", nullable=False)  # draft, scheduled, active, paused, completed
+    objective = Column(String, nullable=False)  # awareness, traffic, conversions, engagement, leads
+    platform = Column(String, nullable=False)  # instagram, facebook, whatsapp, etc.
+    budget_total = Column(Float, default=0.0, nullable=False)
+    budget_daily = Column(Float, default=0.0, nullable=False)
+    budget_spent = Column(Float, default=0.0, nullable=False)
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    scheduled_at = Column(DateTime, nullable=True)  # When to start the campaign
+    target_audience = Column(Text, nullable=True)  # JSON with age, gender, interests, location
+    creative_assets = Column(Text, nullable=True)  # JSON array of asset IDs
+    performance_metrics = Column(Text, nullable=True)  # JSON with aggregated metrics
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class VideoProject(Base):
+    """
+    Video project model for tracking video creation and editing.
+    """
+    __tablename__ = "video_projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    template_id = Column(Integer, ForeignKey("video_templates.id"), nullable=True)
+    status = Column(String, default="draft", nullable=False)  # draft, rendering, published, failed
+    duration = Column(String, nullable=True)  # e.g., "00:30"
+    scenes = Column(Text, nullable=True)  # JSON array of scene objects
+    assets = Column(Text, nullable=True)  # JSON array of asset objects
+    edits = Column(Text, nullable=True)  # JSON with user edits
+    output_formats = Column(Text, nullable=True)  # JSON array of export formats
+    render_progress = Column(Float, default=0.0, nullable=False)  # 0-100%
+    output_urls = Column(Text, nullable=True)  # JSON with download URLs
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ABTest(Base):
+    """
+    A/B testing model for campaign optimization.
+    """
+    __tablename__ = "ab_tests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    status = Column(String, default="running", nullable=False)  # running, completed, paused
+    test_type = Column(String, nullable=False)  # creative, audience, budget, timing
+    variants = Column(Text, nullable=False)  # JSON array of test variants
+    winner_variant = Column(String, nullable=True)
+    confidence_level = Column(Float, default=0.0, nullable=False)  # Statistical confidence
+    start_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    end_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class CampaignPerformance(Base):
+    """
+    Daily performance tracking for campaigns.
+    """
+    __tablename__ = "campaign_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    platform = Column(String, nullable=False)
+    date = Column(Date, nullable=False, index=True)
+    impressions = Column(Integer, default=0)
+    clicks = Column(Integer, default=0)
+    conversions = Column(Integer, default=0)
+    spend = Column(Float, default=0.0)
+    revenue = Column(Float, default=0.0)
+    ctr = Column(Float, default=0.0)
+    cpc = Column(Float, default=0.0)
+    cpa = Column(Float, default=0.0)
+    roas = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -1251,4 +1362,25 @@ Index('idx_invoices_stripe', Invoice.stripe_invoice_id)
 Index('idx_payments_business_status', Payment.business_id, Payment.status)
 Index('idx_usage_business_type_period', UsageRecord.business_id, UsageRecord.resource_type, UsageRecord.period_start)
 Index('idx_billing_events_business_type', BillingEvent.business_id, BillingEvent.event_type)
+
+# Campaigns - for campaign management and analytics
+Index('idx_campaigns_business_status', Campaign.business_id, Campaign.status)
+Index('idx_campaigns_business_platform', Campaign.business_id, Campaign.platform)
+Index('idx_campaigns_business_created', Campaign.business_id, Campaign.created_at)
+Index('idx_campaigns_scheduled', Campaign.scheduled_at)
+
+# Video Projects - for video editing and rendering
+Index('idx_videoprojects_business_status', VideoProject.business_id, VideoProject.status)
+Index('idx_videoprojects_campaign', VideoProject.campaign_id)
+Index('idx_videoprojects_business_created', VideoProject.business_id, VideoProject.created_at)
+
+# A/B Tests - for testing and optimization
+Index('idx_abtests_business_status', ABTest.business_id, ABTest.status)
+Index('idx_abtests_campaign', ABTest.campaign_id)
+Index('idx_abtests_business_created', ABTest.business_id, ABTest.created_at)
+
+# Campaign Performance - for analytics and reporting
+Index('idx_campaignperformance_campaign_date', CampaignPerformance.campaign_id, CampaignPerformance.date)
+Index('idx_campaignperformance_business_date', CampaignPerformance.business_id, CampaignPerformance.date)
+Index('idx_campaignperformance_platform_date', CampaignPerformance.platform, CampaignPerformance.date)
 

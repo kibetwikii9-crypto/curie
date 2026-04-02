@@ -27,7 +27,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
-) -> UserModel:
+):
     """Get current authenticated user from JWT token."""
     payload = verify_token(token)
     if payload is None:
@@ -51,7 +51,10 @@ def get_current_user(
     return user
 
 
-def get_user_business_id(current_user: UserModel, db: Session) -> int | None:
+def get_user_business_id(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> int | None:
     """
     Get the business_id for the current user.
     

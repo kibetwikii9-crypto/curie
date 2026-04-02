@@ -32,21 +32,6 @@ const getTotalDuration = (scenes: VideoScene[]) => {
   return `${Math.floor(total / 60).toString().padStart(2, '0')}:${(total % 60).toString().padStart(2, '0')}`
 }
 
-const loadProjects = (): VideoProject[] => {
-  if (typeof window === 'undefined') return []
-  try {
-    const value = localStorage.getItem('videoProjects')
-    return value ? (JSON.parse(value) as VideoProject[]) : []
-  } catch {
-    return []
-  }
-}
-
-const saveProjects = (projects: VideoProject[]) => {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('videoProjects', JSON.stringify(projects))
-}
-
 export default function VideoProjectDetailPage() {
   const params = useParams() as { id: string }
   const router = useRouter()
@@ -55,21 +40,44 @@ export default function VideoProjectDetailPage() {
   const [preview, setPreview] = useState<string | null>(null)
 
   useEffect(() => {
-    const projectId = Number(params.id)
-    const projects = loadProjects()
-    const found = projects.find((item) => item.id === projectId)
+    loadProject()
+  }, [params.id])
 
-    if (!found) {
-      toast({ title: 'Not found', description: 'Video project does not exist', variant: 'destructive' })
+  const loadProject = async () => {
+    try {
+      const response = await fetch(`/api/ads/video-projects/${params.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        const loadedProject: VideoProject = {
+          id: data.id,
+          title: data.name,
+          description: data.description || '',
+          status: data.status,
+          duration: data.duration,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          scenes: data.scenes || [],
+          assets: data.assets || []
+        }
+        setProject(loadedProject)
+        
+        // Set preview to first video asset or first asset
+        const firstVideo = loadedProject.assets.find((asset) => asset.type === 'video')
+        if (firstVideo) {
+          setPreview(firstVideo.url)
+        } else if (loadedProject.assets.length > 0) {
+          setPreview(loadedProject.assets[0].url)
+        }
+      } else {
+        toast({ title: 'Not found', description: 'Video project does not exist', variant: 'destructive' })
+        router.push('/dashboard/ads/video')
+      }
+    } catch (error) {
+      console.error('Error loading project:', error)
+      toast({ title: 'Error', description: 'Failed to load video project', variant: 'destructive' })
       router.push('/dashboard/ads/video')
-      return
     }
-
-    setProject(found)
-    if (found.assets.length > 0) {
-      setPreview(found.assets[0].url)
-    }
-  }, [params.id, router, toast])
+  }
 
   const statusClass = useMemo(() => {
     if (!project) return 'bg-gray-100 text-gray-700'
@@ -95,22 +103,56 @@ export default function VideoProjectDetailPage() {
     )
   }
 
-  const updateScene = (sceneId: number, field: keyof VideoScene, value: string | number) => {
+  const updateScene = async (sceneId: number, field: keyof VideoScene, value: string | number) => {
     const scenes = project.scenes.map((scene) =>
       scene.id === sceneId ? { ...scene, [field]: field === 'duration' ? Number(value) : value } : scene
     )
-    const update = { ...project, scenes, duration: getTotalDuration(scenes), updated_at: new Date().toISOString().slice(0, 10) }
+    const update = { ...project, scenes, duration: getTotalDuration(scenes) }
     setProject(update)
-    saveProjects([...loadProjects().filter((p) => p.id !== project.id), update])
+    
+    try {
+      await fetch(`/api/ads/video-projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: update.title,
+          description: update.description,
+          status: update.status,
+          duration: update.duration,
+          scenes: update.scenes,
+          assets: update.assets
+        }),
+      })
+    } catch (error) {
+      console.error('Error saving project:', error)
+      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+    }
   }
 
-  const updateField = (field: keyof VideoProject, value: string) => {
-    const updated = { ...project, [field]: value, updated_at: new Date().toISOString().slice(0, 10) }
+  const updateField = async (field: keyof VideoProject, value: string) => {
+    const updated = { ...project, [field]: value }
     setProject(updated)
-    saveProjects([...loadProjects().filter((p) => p.id !== project.id), updated])
+    
+    try {
+      await fetch(`/api/ads/video-projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: updated.title,
+          description: updated.description,
+          status: updated.status,
+          duration: updated.duration,
+          scenes: updated.scenes,
+          assets: updated.assets
+        }),
+      })
+    } catch (error) {
+      console.error('Error saving project:', error)
+      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+    }
   }
 
-  const onFileUpload = (files: FileList | null, type: 'video' | 'image' | 'audio') => {
+  const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
     const assets = Array.from(files).map((file, idx) => ({
@@ -120,24 +162,68 @@ export default function VideoProjectDetailPage() {
       url: URL.createObjectURL(file)
     }))
 
-    const updated = { ...project, assets: [...project.assets, ...assets], updated_at: new Date().toISOString().slice(0, 10) }
+    const updated = { ...project, assets: [...project.assets, ...assets] }
     setProject(updated)
     setPreview(assets[0].url)
-    saveProjects([...loadProjects().filter((p) => p.id !== project.id), updated])
+    
+    try {
+      await fetch(`/api/ads/video-projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: updated.title,
+          description: updated.description,
+          status: updated.status,
+          duration: updated.duration,
+          scenes: updated.scenes,
+          assets: updated.assets
+        }),
+      })
+    } catch (error) {
+      console.error('Error saving project:', error)
+      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+    }
   }
 
-  const setStatus = (status: VideoProject['status']) => {
-    const updated = { ...project, status, updated_at: new Date().toISOString().slice(0, 10) }
+  const setStatus = async (status: VideoProject['status']) => {
+    const updated = { ...project, status }
     setProject(updated)
-    saveProjects([...loadProjects().filter((p) => p.id !== project.id), updated])
-    toast({ title: `Status changed to ${status}`, description: 'Project status was updated.' })
+    
+    try {
+      await fetch(`/api/ads/video-projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: updated.title,
+          description: updated.description,
+          status: updated.status,
+          duration: updated.duration,
+          scenes: updated.scenes,
+          assets: updated.assets
+        }),
+      })
+      toast({ title: `Status changed to ${status}`, description: 'Project status was updated.' })
+    } catch (error) {
+      console.error('Error updating status:', error)
+      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+    }
   }
 
-  const onDelete = () => {
-    const remaining = loadProjects().filter((item) => item.id !== project.id)
-    saveProjects(remaining)
-    toast({ title: 'Deleted', description: 'Project removed from your library.' })
-    router.push('/dashboard/ads/video')
+  const onDelete = async () => {
+    try {
+      const response = await fetch(`/api/ads/video-projects/${project.id}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        toast({ title: 'Deleted', description: 'Project removed from your library.' })
+        router.push('/dashboard/ads/video')
+      } else {
+        throw new Error('Failed to delete')
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      toast({ title: 'Error', description: 'Failed to delete project', variant: 'destructive' })
+    }
   }
 
   return (
@@ -201,11 +287,28 @@ export default function VideoProjectDetailPage() {
                     value={scene.caption}
                     onChange={(e) => updateScene(scene.id, 'caption', e.target.value)}
                   />
-                  <Button variant="outline" className="col-span-1" onClick={() => {
+                  <Button variant="outline" className="col-span-1" onClick={async () => {
                     const scenes = project.scenes.filter((s) => s.id !== scene.id)
-                    const updated = { ...project, scenes, duration: getTotalDuration(scenes), updated_at: new Date().toISOString().slice(0, 10) }
+                    const updated = { ...project, scenes, duration: getTotalDuration(scenes) }
                     setProject(updated)
-                    saveProjects([...loadProjects().filter((p) => p.id !== project.id), updated])
+                    
+                    try {
+                      await fetch(`/api/ads/video-projects/${project.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          name: updated.title,
+                          description: updated.description,
+                          status: updated.status,
+                          duration: updated.duration,
+                          scenes: updated.scenes,
+                          assets: updated.assets
+                        }),
+                      })
+                    } catch (error) {
+                      console.error('Error saving project:', error)
+                      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+                    }
                   }}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -267,26 +370,49 @@ export default function VideoProjectDetailPage() {
                 <div key={asset.id} className="flex items-center justify-between rounded border border-gray-200 p-2">
                   <span className="text-sm">{asset.name}</span>
                   <Badge>{asset.type}</Badge>
+                  {asset.type === 'video' && (
+                    <Button variant="ghost" onClick={() => setPreview(asset.url)}>
+                      View
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No assets yet.</p>
+            <p className="text-sm text-gray-500">No assets yet. Upload at least one video file to preview.</p>
           )}
 
-          {preview && (
+          {preview ? (
             <div className="mt-3">
               <label className="text-sm font-semibold">Preview</label>
-              <video className="w-full rounded-md" src={preview} controls />
+              <video className="w-full rounded-md" src={preview} controls autoPlay />
             </div>
+          ) : (
+            <p className="text-sm text-gray-500">Select a video asset to preview.</p>
           )}
         </CardContent>
       </Card>
 
       <div className="flex justify-end gap-2 mt-4">
-        <Button variant="outline" onClick={() => {
-          saveProjects([...loadProjects().filter((p) => p.id !== project.id), project])
-          toast({ title: 'Saved', description: 'Project updates saved locally.' })
+        <Button variant="outline" onClick={async () => {
+          try {
+            await fetch(`/api/ads/video-projects/${project.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: project.title,
+                description: project.description,
+                status: project.status,
+                duration: project.duration,
+                scenes: project.scenes,
+                assets: project.assets
+              }),
+            })
+            toast({ title: 'Saved', description: 'Project updates saved successfully.' })
+          } catch (error) {
+            console.error('Error saving project:', error)
+            toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+          }
         }}>
           <Save className="w-4 h-4 mr-2" /> Save
         </Button>
