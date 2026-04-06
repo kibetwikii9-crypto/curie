@@ -14,7 +14,7 @@ export const api = axios.create({
   },
 });
 
-export async function apiFetch(input: RequestInfo, init?: RequestInit) {
+export async function apiFetch(input: RequestInfo, init: RequestInit = {}) {
   const isBrowser = typeof window !== 'undefined'
   const url = typeof input === 'string' && input.startsWith('/api/')
     ? (process.env.NEXT_PUBLIC_API_URL || !isBrowser
@@ -22,7 +22,19 @@ export async function apiFetch(input: RequestInfo, init?: RequestInit) {
         : input)
     : input;
 
-  return fetch(url, init);
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('Content-Type') && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (isBrowser) {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+  }
+
+  return fetch(url, { ...init, headers });
 }
 
 
