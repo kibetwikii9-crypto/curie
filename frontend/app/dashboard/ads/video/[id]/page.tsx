@@ -444,7 +444,7 @@ export default function VideoProjectDetailPage() {
         <Button variant="outline" onClick={async () => {
           setSaving(true)
           try {
-            await apiFetch(`/api/ads/video-projects/${project.id}`, {
+            const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -456,13 +456,18 @@ export default function VideoProjectDetailPage() {
                 assets: project.assets
               }),
             })
+            
+            if (!response.ok) {
+              throw new Error('Failed to save project')
+            }
+
             toast({ title: 'Saved', description: 'Project updates saved successfully.' })
-            // redirect to project library so saved project is visible immediately
+            // Redirect to project library so saved project is visible immediately
+            await new Promise(resolve => setTimeout(resolve, 500))
             router.push('/dashboard/ads/video')
           } catch (error) {
             console.error('Error saving project:', error)
             toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-          } finally {
             setSaving(false)
           }
         }} disabled={saving}>

@@ -491,6 +491,16 @@ async def get_video_projects(
 
     projects = query.order_by(desc(VideoProject.created_at)).offset(offset).limit(limit).all()
 
+    def parse_json_field(value):
+        """Safely parse JSON field, return empty list if invalid"""
+        if not value:
+            return []
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            log.warning(f"Failed to parse JSON field: {value}")
+            return []
+
     return {
         "projects": [
             {
@@ -499,8 +509,8 @@ async def get_video_projects(
                 "description": p.description,
                 "status": p.status,
                 "duration": p.duration,
-                "scenes": json.loads(p.scenes) if p.scenes else [],
-                "assets": json.loads(p.assets) if p.assets else [],
+                "scenes": parse_json_field(p.scenes),
+                "assets": parse_json_field(p.assets),
                 "created_at": p.created_at.isoformat() if p.created_at else None,
                 "updated_at": p.updated_at.isoformat() if p.updated_at else None
             }
@@ -569,14 +579,24 @@ async def get_video_project(
     if not project:
         raise HTTPException(status_code=404, detail="Video project not found")
 
+    def parse_json_field(value):
+        """Safely parse JSON field, return empty list if invalid"""
+        if not value:
+            return []
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            log.warning(f"Failed to parse JSON field: {value}")
+            return []
+
     return {
         "id": project.id,
         "name": project.name,
         "description": project.description,
         "status": project.status,
         "duration": project.duration,
-        "scenes": json.loads(project.scenes) if project.scenes else [],
-        "assets": json.loads(project.assets) if project.assets else [],
+        "scenes": parse_json_field(project.scenes),
+        "assets": parse_json_field(project.assets),
         "created_at": project.created_at.isoformat() if project.created_at else None,
         "updated_at": project.updated_at.isoformat() if project.updated_at else None
     }

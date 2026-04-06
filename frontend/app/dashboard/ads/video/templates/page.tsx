@@ -66,16 +66,17 @@ export default function TemplatesPage() {
         },
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        toast({
-          title: 'Success',
-          description: `Project created from template`,
-        })
-        router.push(`/dashboard/ads/video/${data.project?.id}`)
-      } else {
+      if (!response.ok) {
         throw new Error('Failed to create project from template')
       }
+
+      const data = await response.json()
+      toast({
+        title: 'Success',
+        description: `Project created from template`,
+      })
+      await new Promise(resolve => setTimeout(resolve, 500))
+      router.push(`/dashboard/ads/video/${data.project?.id}`)
     } catch (error) {
       console.error('Error creating project:', error)
       toast({
