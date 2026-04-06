@@ -1,4 +1,5 @@
 """Ads System API routes for campaign management, video editing, and analytics."""
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
@@ -452,7 +453,7 @@ async def create_video_project_from_template(
         status="draft",
         duration=template_config.get("duration", "00:30"),
         scenes=json.dumps(template_config.get("scenes", [])),
-        assets="[]"
+        assets=json.dumps([])
     )
 
     db.add(project)
@@ -498,8 +499,8 @@ async def get_video_projects(
                 "description": p.description,
                 "status": p.status,
                 "duration": p.duration,
-                "scenes": p.scenes or [],
-                "assets": p.assets or [],
+                "scenes": json.loads(p.scenes) if p.scenes else [],
+                "assets": json.loads(p.assets) if p.assets else [],
                 "created_at": p.created_at.isoformat() if p.created_at else None,
                 "updated_at": p.updated_at.isoformat() if p.updated_at else None
             }
@@ -534,8 +535,8 @@ async def create_video_project(
         template_id=request.template_id,
         status=request.status,
         duration=request.duration,
-        scenes=request.scenes,
-        assets=request.assets
+        scenes=json.dumps(request.scenes) if request.scenes else None,
+        assets=json.dumps(request.assets) if request.assets else None
     )
 
     db.add(project)
@@ -574,8 +575,8 @@ async def get_video_project(
         "description": project.description,
         "status": project.status,
         "duration": project.duration,
-        "scenes": project.scenes or [],
-        "assets": project.assets or [],
+        "scenes": json.loads(project.scenes) if project.scenes else [],
+        "assets": json.loads(project.assets) if project.assets else [],
         "created_at": project.created_at.isoformat() if project.created_at else None,
         "updated_at": project.updated_at.isoformat() if project.updated_at else None
     }
@@ -608,7 +609,10 @@ async def update_video_project(
     # Update only provided fields
     update_data = request.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(project, field, value)
+        if field in ['scenes', 'assets'] and value is not None:
+            setattr(project, field, json.dumps(value))
+        else:
+            setattr(project, field, value)
 
     db.commit()
     db.refresh(project)
