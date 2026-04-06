@@ -15,9 +15,11 @@ export const api = axios.create({
 });
 
 export async function apiFetch(input: RequestInfo, init?: RequestInit) {
-  // `input` may already be absolute URL, otherwise prefix with API_BASE_URL
+  const isBrowser = typeof window !== 'undefined'
   const url = typeof input === 'string' && input.startsWith('/api/')
-    ? `${normalizedApiBaseUrl}${input}`
+    ? (process.env.NEXT_PUBLIC_API_URL || !isBrowser
+        ? `${normalizedApiBaseUrl}${input}`
+        : input)
     : input;
 
   return fetch(url, init);
