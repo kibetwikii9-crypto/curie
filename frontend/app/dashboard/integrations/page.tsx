@@ -308,6 +308,30 @@ export default function IntegrationsPage() {
     }
   };
 
+  const extractAuthUrl = (response: any): string | null => {
+    if (response?.data?.auth_url) {
+      return response.data.auth_url;
+    }
+
+    const responseURL = response?.request?.responseURL;
+    if (typeof responseURL === 'string' && !responseURL.includes('/api/integrations/')) {
+      return responseURL;
+    }
+
+    return null;
+  };
+
+  const showIntegrationError = (error: any, fallback: string) => {
+    const message =
+      error?.response?.data?.detail ||
+      error?.response?.data?.message ||
+      error?.response?.data ||
+      error?.message ||
+      fallback;
+
+    alert(message);
+  };
+
   const getChannelColor = (channel: string) => {
     const channelData = availableChannels.find((c) => c.id === channel);
     return channelData?.color || 'from-gray-500 to-gray-600';
@@ -393,8 +417,9 @@ export default function IntegrationsPage() {
         },
       });
 
-      if (response.data?.auth_url) {
-        popup.location.href = response.data.auth_url;
+      const authUrl = extractAuthUrl(response);
+      if (authUrl) {
+        popup.location.href = authUrl;
       } else {
         throw new Error('No auth_url in response');
       }
@@ -440,365 +465,7 @@ export default function IntegrationsPage() {
       } else if (error.response?.status === 403) {
         alert(error.response?.data?.detail || 'You do not have permission');
       } else {
-        alert('Integration in progress... If this persists, please try again.');
-      }
-    }
-  };
-
-  const connectInstagram = async () => {
-    const width = 600;
-    const height = 700;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    const popup = window.open(
-      'about:blank',
-      'Instagram OAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-
-    if (!popup) {
-      alert('Please allow popups for this site to connect Instagram');
-      return;
-    }
-
-    popup.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connecting Instagram...</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #E1306C 0%, #C13584 50%, #833AB4 100%);
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-          }
-          .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #E1306C;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
-          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h2>Connecting Instagram...</h2>
-          <p>Please wait while we prepare the connection.</p>
-        </div>
-      </body>
-      </html>
-    `);
-
-    try {
-      // Use api.get() to send JWT token with request
-      const response = await api.get('/api/integrations/instagram/connect', {
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      // Backend returns auth_url in JSON
-      if (response.data?.auth_url) {
-        popup.location.href = response.data.auth_url;
-      } else {
-        throw new Error('No auth_url in response');
-      }
-
-      // Listen for messages from popup
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data.type === 'instagram-oauth-success') {
-          console.log('Instagram connected successfully:', event.data.account);
-          fetchIntegrations();
-          popup.close();
-          window.removeEventListener('message', handleMessage);
-        } else if (event.data.type === 'instagram-oauth-error') {
-          console.error('Instagram connection error:', event.data.error);
-          alert(`Failed to connect Instagram: ${event.data.error}`);
-          popup.close();
-          window.removeEventListener('message', handleMessage);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      // Check if popup was closed
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-          fetchIntegrations();
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.error('Instagram connection error:', error);
-      popup.close();
-      if (error.response?.status === 401) {
-        alert('Please log in first');
-      } else if (error.response?.status === 403) {
-        alert(error.response?.data?.detail || 'You do not have permission');
-      } else {
-        alert('Integration in progress... If this persists, please try again.');
-      }
-    }
-  };
-
-  const connectMessenger = async () => {
-    const width = 600;
-    const height = 700;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    const popup = window.open(
-      'about:blank',
-      'Messenger OAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-
-    if (!popup) {
-      alert('Please allow popups for this site to connect Messenger');
-      return;
-    }
-
-    popup.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connecting Messenger...</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #0084ff 0%, #0066ff 100%);
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-          }
-          .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #0084ff;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
-          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h2>Connecting Messenger...</h2>
-          <p>Please wait while we prepare the connection.</p>
-        </div>
-      </body>
-      </html>
-    `);
-
-    try {
-      // Use api.get() to send JWT token with request
-      const response = await api.get('/api/integrations/messenger/connect', {
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      // Backend returns auth_url in JSON
-      if (response.data?.auth_url) {
-        popup.location.href = response.data.auth_url;
-      } else {
-        throw new Error('No auth_url in response');
-      }
-
-      // Listen for messages from popup
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data.type === 'messenger-oauth-success') {
-          console.log('Messenger connected successfully:', event.data.account);
-          fetchIntegrations();
-          popup.close();
-          window.removeEventListener('message', handleMessage);
-        } else if (event.data.type === 'messenger-oauth-error') {
-          console.error('Messenger connection error:', event.data.error);
-          alert(`Failed to connect Messenger: ${event.data.error}`);
-          popup.close();
-          window.removeEventListener('message', handleMessage);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      // Check if popup was closed
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-          fetchIntegrations();
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.error('Messenger connection error:', error);
-      popup.close();
-      if (error.response?.status === 401) {
-        alert('Please log in first');
-      } else if (error.response?.status === 403) {
-        alert(error.response?.data?.detail || 'You do not have permission');
-      } else {
-        alert('Integration in progress... If this persists, please try again.');
-      }
-    }
-  };
-
-  const connectEmail = async () => {
-    const width = 600;
-    const height = 700;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    const popup = window.open(
-      'about:blank',
-      'Email OAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-
-    if (!popup) {
-      alert('Please allow popups for this site to connect Email');
-      return;
-    }
-
-    popup.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connecting Email...</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #EA4335 0%, #FBBC05 50%, #34A853 100%);
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-          }
-          .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #EA4335;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
-          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h2>Connecting Gmail...</h2>
-          <p>Please wait while we prepare the connection.</p>
-        </div>
-      </body>
-      </html>
-    `);
-
-    try {
-      // Use api.get() to send JWT token with request
-      const response = await api.get('/api/integrations/email/connect', {
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      // Backend should return auth_url in JSON or redirect with 302
-      if (response.data?.auth_url) {
-        popup.location.href = response.data.auth_url;
-      } else {
-        throw new Error('No auth_url in response');
-      }
-
-      const handleMessage = (event: MessageEvent) => {
-        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-        const backendOrigin = new URL(backendUrl).origin;
-
-        if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-          return;
-        }
-
-        if (event.data?.type !== 'email-oauth-success' && event.data?.type !== 'email-oauth-error') {
-          return;
-        }
-
-        if (event.data.type === 'email-oauth-success') {
-          console.log('Email connected successfully:', event.data.account);
-          fetchIntegrations();
-          popup.close();
-        } else if (event.data.type === 'email-oauth-error') {
-          console.error('Email connection error:', event.data.error);
-          alert(`Failed to connect Email: ${event.data.error}`);
-          popup.close();
-        }
-
-        window.removeEventListener('message', handleMessage);
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      // Check if popup was closed
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-          fetchIntegrations();
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.error('Email connection error:', error);
-      popup.close();
-      if (error.response?.status === 401) {
-        alert('Please log in first');
-      } else if (error.response?.status === 403) {
-        alert(error.response?.data?.detail || 'You do not have permission');
-      } else {
-        alert('Integration in progress... If this persists, please try again.');
+        showIntegrationError(error, 'Integration in progress... If this persists, please try again.');
       }
     }
   };
@@ -806,13 +473,10 @@ export default function IntegrationsPage() {
   const connectWebchat = async () => {
     try {
       const response = await api.post('/api/integrations/webchat/connect');
-      
-      if (response.data.success) {
-        // Show embed code modal
-        const embedCode = response.data.embed_code;
-        const widgetId = response.data.widget_id;
-        
-        // Create modal to show embed code
+      const data = response.data;
+
+      if (data?.success) {
+        const embedCode = data.embed_code;
         const modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
         modal.innerHTML = `
@@ -822,7 +486,7 @@ export default function IntegrationsPage() {
             <div style="background:#f5f5f5;padding:1rem;border-radius:8px;margin-bottom:1rem;overflow-x:auto;">
               <code style="font-family:monospace;font-size:0.875rem;white-space:pre;display:block;">${embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
             </div>
-            <div style="display:flex;gap:0.5rem;">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
               <button onclick="navigator.clipboard.writeText(\`${embedCode.replace(/`/g, '\\`')}\`).then(() => alert('Copied to clipboard!')); this.textContent='✓ Copied!';" style="flex:1;padding:0.75rem;background:#10b981;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
                 Copy Embed Code
               </button>
@@ -833,19 +497,111 @@ export default function IntegrationsPage() {
           </div>
         `;
         document.body.appendChild(modal);
-        
         fetchIntegrations();
       }
     } catch (error: any) {
       console.error('Website chat connection error:', error);
-      if (error.response?.status === 401) {
+      if (error?.response?.status === 401) {
         alert('Please log in first');
-      } else if (error.response?.status === 403) {
+      } else if (error?.response?.status === 403) {
         alert(error.response?.data?.detail || 'You do not have permission');
       } else {
         alert('Integration in progress... If this persists, please try again.');
       }
     }
+  };
+
+  const startOAuthPopup = async (
+    endpoint: string,
+    title: string,
+    successType: string,
+    errorType: string,
+    successMessage: string
+  ) => {
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const popup = window.open(
+      'about:blank',
+      title,
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      alert('Please allow popups for this site');
+      return;
+    }
+
+    try {
+      const response = await api.get(endpoint, {
+        headers: { Accept: 'application/json' },
+      });
+
+      const authUrl = extractAuthUrl(response);
+      if (!authUrl) throw new Error('No auth_url returned');
+
+      popup.location.href = authUrl;
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === successType) {
+          popup.close();
+          fetchIntegrations();
+          queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
+          alert(successMessage);
+          window.removeEventListener('message', handleMessage);
+        }
+
+        if (event.data?.type === errorType) {
+          popup.close();
+          alert(`Error: ${event.data.error || 'Unknown error'}`);
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+        }
+      }, 1000);
+    } catch (error: any) {
+      popup.close();
+      showIntegrationError(error, 'Failed to start OAuth');
+    }
+  };
+
+  const connectInstagram = async () => {
+    await startOAuthPopup(
+      '/api/integrations/instagram/connect',
+      'Instagram OAuth',
+      'instagram-oauth-success',
+      'instagram-oauth-error',
+      'Instagram connected successfully!'
+    );
+  };
+
+  const connectMessenger = async () => {
+    await startOAuthPopup(
+      '/api/integrations/messenger/connect',
+      'Messenger OAuth',
+      'messenger-oauth-success',
+      'messenger-oauth-error',
+      'Messenger connected successfully!'
+    );
+  };
+
+  const connectEmail = async () => {
+    await startOAuthPopup(
+      '/api/integrations/email/connect',
+      'Email OAuth',
+      'email-oauth-success',
+      'email-oauth-error',
+      'Email connected successfully!'
+    );
   };
 
   if (!canManage) {
