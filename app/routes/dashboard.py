@@ -11,7 +11,7 @@ from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, AdTemplate, BrandAsset, VideoTemplate, AdPublication, AssetAnalytics, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule
+from app.models import Conversation, Lead, AnalyticsEvent, ChannelIntegration, User as UserModel, Message, ConversationMemory, KnowledgeEntry, AdAsset, AdTemplate, BrandAsset, VideoTemplate, AdPublication, AssetAnalytics, Business, ConversationTag, ConversationTagRelation, ConversationAssignment, AIRule, Subscription
 from app.routes.auth import get_current_user, get_user_business_id
 from app.middleware.rate_limiter import limiter, get_rate_limit
 
@@ -1151,14 +1151,19 @@ async def upload_knowledge_document(
         try:
             from app.services.usage_service import UsageService
             file_size_mb = file_size_bytes / 1024 / 1024
-            await UsageService.track_usage(
-                db,
-                business_id=business_id,
-                resource_type="storage",
-                resource_id=f"doc_{filename}",
-                quantity=int(file_size_mb) + 1  # Round up to nearest MB
-            )
-            log.debug(f"storage_usage_tracked business_id={business_id} size_mb={file_size_mb:.2f}")
+            # Get active subscription
+            subscription = db.query(Subscription).filter(
+                Subscription.business_id == business_id
+            ).first()
+            if subscription:
+                await UsageService.track_usage(
+                    db,
+                    business_id=business_id,
+                    subscription_id=subscription.id,
+                    resource_type="storage",
+                    quantity=int(file_size_mb) + 1  # Round up to nearest MB
+                )
+                log.debug(f"storage_usage_tracked business_id={business_id} size_mb={file_size_mb:.2f}")
         except Exception as usage_error:
             # Don't fail upload if usage tracking fails
             log.warning(f"storage_usage_tracking_failed business_id={business_id} error={str(usage_error)}")

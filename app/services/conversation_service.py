@@ -81,14 +81,20 @@ async def save_conversation(
             # Track usage for billing
             try:
                 from app.services.usage_service import UsageService
-                await UsageService.track_usage(
-                    db,
-                    business_id=business_id,
-                    resource_type="conversation",
-                    resource_id=str(conversation.id),
-                    quantity=1
-                )
-                log.debug(f"usage_tracked business_id={business_id} resource=conversation conversation_id={conversation.id}")
+                from app.models import Subscription
+                # Get active subscription
+                subscription = db.query(Subscription).filter(
+                    Subscription.business_id == business_id
+                ).first()
+                if subscription:
+                    await UsageService.track_usage(
+                        db,
+                        business_id=business_id,
+                        subscription_id=subscription.id,
+                        resource_type="conversation",
+                        quantity=1
+                    )
+                    log.debug(f"usage_tracked business_id={business_id} resource=conversation conversation_id={conversation.id}")
             except Exception as usage_error:
                 # Don't fail conversation save if usage tracking fails
                 log.warning(f"usage_tracking_failed business_id={business_id} error={str(usage_error)}")

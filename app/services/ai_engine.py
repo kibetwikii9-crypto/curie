@@ -394,14 +394,20 @@ async def process_message_with_gpt(
                     # Track AI token usage for billing
                     try:
                         from app.services.usage_service import UsageService
-                        await UsageService.track_usage(
-                            db,
-                            business_id=business_id,
-                            resource_type="ai_tokens",
-                            resource_id=f"gpt-4o_{message.user_id}",
-                            quantity=tokens_used
-                        )
-                        log.debug(f"ai_token_usage_tracked business_id={business_id} tokens={tokens_used}")
+                        from app.models import Subscription
+                        # Get active subscription
+                        subscription = db.query(Subscription).filter(
+                            Subscription.business_id == business_id
+                        ).first()
+                        if subscription:
+                            await UsageService.track_usage(
+                                db,
+                                business_id=business_id,
+                                subscription_id=subscription.id,
+                                resource_type="ai_tokens",
+                                quantity=tokens_used
+                            )
+                            log.debug(f"ai_token_usage_tracked business_id={business_id} tokens={tokens_used}")
                     except Exception as usage_error:
                         # Don't fail AI response if usage tracking fails
                         log.warning(f"ai_token_usage_tracking_failed business_id={business_id} error={str(usage_error)}")
