@@ -81,8 +81,8 @@ async def save_conversation(
             # Track usage for billing
             try:
                 from app.services.usage_service import UsageService
-                usage_service = UsageService(db)
-                usage_service.track_usage(
+                await UsageService.track_usage(
+                    db,
                     business_id=business_id,
                     resource_type="conversation",
                     resource_id=str(conversation.id),

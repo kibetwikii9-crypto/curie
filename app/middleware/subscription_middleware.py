@@ -170,8 +170,7 @@ class SubscriptionMiddleware:
                     detail="Active subscription required"
                 )
             
-            usage_service = UsageService()
-            can_use = await usage_service.can_use_resource(
+            can_use = await UsageService.can_use_resource(
                 db, business_id, subscription.id, resource_type
             )
             

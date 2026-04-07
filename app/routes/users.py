@@ -136,8 +136,7 @@ async def create_user(
     
     # Check user limit (feature gating)
     from app.services.usage_service import UsageService
-    usage_service = UsageService(db)
-    can_add, reason = usage_service.can_use_resource(business_id, "user")
+    can_add = await UsageService.can_use_resource(db, business_id, "user")
     if not can_add:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,

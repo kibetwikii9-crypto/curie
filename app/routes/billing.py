@@ -552,14 +552,12 @@ async def get_usage(
         if not subscription:
             return {"usage": {}, "limits": {}, "message": "No active subscription"}
         
-        usage_service = UsageService()
-        
         # Get usage for each resource type
         resources = ['conversation', 'channel', 'user', 'storage', 'ai_token']
         usage_data = {}
         
         for resource in resources:
-            limit_info = await usage_service.check_limit(
+            limit_info = await UsageService.check_limit(
                 db, business_id, subscription.id, resource
             )
             usage_data[resource] = limit_info

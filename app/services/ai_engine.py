@@ -394,8 +394,8 @@ async def process_message_with_gpt(
                     # Track AI token usage for billing
                     try:
                         from app.services.usage_service import UsageService
-                        usage_service = UsageService(db)
-                        usage_service.track_usage(
+                        await UsageService.track_usage(
+                            db,
                             business_id=business_id,
                             resource_type="ai_tokens",
                             resource_id=f"gpt-4o_{message.user_id}",

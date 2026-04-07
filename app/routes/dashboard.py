@@ -1150,9 +1150,9 @@ async def upload_knowledge_document(
         # Track storage usage for billing (convert bytes to MB)
         try:
             from app.services.usage_service import UsageService
-            usage_service = UsageService(db)
             file_size_mb = file_size_bytes / 1024 / 1024
-            usage_service.track_usage(
+            await UsageService.track_usage(
+                db,
                 business_id=business_id,
                 resource_type="storage",
                 resource_id=f"doc_{filename}",
