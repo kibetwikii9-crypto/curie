@@ -141,6 +141,7 @@ class ChannelIntegration(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
     channel = Column(String, nullable=False, index=True)  # telegram, whatsapp, instagram, etc.
     channel_name = Column(String, nullable=True)  # Custom name for the integration
+    channel_user_id = Column(String, nullable=True, index=True)  # External platform/user id for webhook routing
     credentials = Column(Text, nullable=True)  # Encrypted JSON credentials
     is_active = Column(Boolean, default=True, nullable=False)
     webhook_url = Column(String, nullable=True)

@@ -1501,6 +1501,7 @@ async def instagram_oauth_callback(
             business_id=business_id,
             channel="instagram",
             channel_name=f"@{ig_username}" if ig_username else page_name,
+            channel_user_id=ig_account_id,
             credentials=credentials,
             is_active=True,
             webhook_url=f"{settings.public_url}/api/integrations/instagram/webhook"
@@ -1919,6 +1920,7 @@ async def messenger_oauth_callback(
             business_id=business_id,
             channel="messenger",
             channel_name=page_name,
+            channel_user_id=page_id,
             credentials=credentials,
             is_active=True,
             webhook_url=f"{settings.public_url}/api/integrations/messenger/webhook"
@@ -2410,6 +2412,7 @@ async def create_webchat_widget(
                 business_id=business_id,
                 channel="webchat",
                 channel_name="Website Chat Widget",
+                channel_user_id=widget_id,
                 credentials=credentials,
                 is_active=True,
                 webhook_url=f"{settings.public_url}/api/integrations/webchat/webhook"

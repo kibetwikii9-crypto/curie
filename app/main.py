@@ -114,6 +114,17 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️  Database initialization error: {e}")
     
+    # Run database migrations to ensure schema is up to date
+    try:
+        from database.run_migration import run_migration
+        success = run_migration()
+        if success:
+            print("✅ Database migrations completed successfully")
+        else:
+            print("⚠️  Database migrations failed - some features may not work")
+    except Exception as e:
+        print(f"⚠️  Database migration error: {e}")
+    
     # Auto-create admin user if it doesn't exist
     try:
         from app.database import get_db_context

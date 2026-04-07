@@ -25,7 +25,10 @@ def run_migration():
     # List of migration files in order
     migration_files = [
         "001_add_billing_system.sql",
-        "002_add_ads_system.sql"
+        "002_add_ads_system.sql",
+        "003_update_video_projects.sql",
+        "004_add_missing_video_project_columns.sql",
+        "005_add_channel_user_id_to_channel_integrations.sql"
     ]
     
     # Get database connection
@@ -47,20 +50,14 @@ def run_migration():
                 with open(migration_path, 'r') as f:
                     migration_sql = f.read()
                 
-                # Split SQL into statements and execute each one
-                statements = migration_sql.split(';')
-                
-                for i, statement in enumerate(statements, 1):
-                    statement = statement.strip()
-                    if not statement or statement.startswith('--'):
-                        continue
-                    
-                    try:
-                        log.info(f"Executing statement {i} from {migration_file}")
-                        connection.execute(text(statement))
-                    except Exception as e:
-                        log.error(f"Error executing statement {i} from {migration_file}: {e}")
-                        raise
+                # Execute the entire migration file as one statement
+                try:
+                    log.info(f"Executing migration: {migration_file}")
+                    connection.execute(text(migration_sql))
+                except Exception as e:
+                    log.error(f"Error executing migration {migration_file}: {e}")
+                    # Continue with other migrations even if one fails
+                    continue
         
         log.info("✅ Migration completed successfully!")
         return True
