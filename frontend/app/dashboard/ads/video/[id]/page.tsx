@@ -266,22 +266,22 @@ export default function VideoProjectDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge className={statusClass}>{project.status}</Badge>
-            <Button size="sm" variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
+            <Button variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Back
             </Button>
-            <Button size="sm" onClick={() => setStatus('rendering')}>
+            <Button onClick={() => setStatus('rendering')}>
               <Play className="w-4 h-4 mr-1" /> Render
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setStatus('published')}>
+            <Button variant="outline" onClick={() => setStatus('published')}>
               Publish
             </Button>
-            <Button size="sm" variant="outline" onClick={saveAsTemplate}>
+            <Button variant="outline" onClick={saveAsTemplate}>
               <Share2 className="w-4 h-4 mr-1" /> Template
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setStatus('failed')} className="text-red-600 border-red-300 hover:bg-red-50">
+            <Button variant="outline" onClick={() => setStatus('failed')} className="text-red-600 border-red-300 hover:bg-red-50">
               Failed
             </Button>
-            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-600 border-red-300 hover:bg-red-50">
+            <Button variant="outline" onClick={onDelete} className="text-red-600 border-red-300 hover:bg-red-50">
               <Trash2 className="w-4 h-4 mr-1" /> Delete
             </Button>
           </div>
