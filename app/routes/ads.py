@@ -512,8 +512,8 @@ async def create_video_project_from_template(
         template_id=template_id,
         status="draft",
         duration=template_config.get("duration", "00:30"),
-        scenes=json.dumps(template_config.get("scenes", [])),
-        assets=json.dumps([])
+        scenes=template_config.get("scenes", []),
+        assets=[]
     )
 
     db.add(project)
@@ -595,8 +595,8 @@ async def create_video_project(
         template_id=request.template_id,
         status=request.status,
         duration=request.duration,
-        scenes=json.dumps(request.scenes) if request.scenes else None,
-        assets=json.dumps(request.assets) if request.assets else None
+        scenes=request.scenes if request.scenes else None,
+        assets=request.assets if request.assets else None
     )
 
     db.add(project)
@@ -669,10 +669,7 @@ async def update_video_project(
     # Update only provided fields
     update_data = request.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if field in ['scenes', 'assets'] and value is not None:
-            setattr(project, field, json.dumps(value))
-        else:
-            setattr(project, field, value)
+        setattr(project, field, value)
 
     db.commit()
     db.refresh(project)

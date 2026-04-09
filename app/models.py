@@ -396,12 +396,12 @@ class VideoProject(Base):
     template_id = Column(Integer, ForeignKey("video_templates.id"), nullable=True)
     status = Column(String, default="draft", nullable=False)  # draft, rendering, published, failed
     duration = Column(String, nullable=True)  # e.g., "00:30"
-    scenes = Column(Text, nullable=True)  # JSON array of scene objects
-    assets = Column(Text, nullable=True)  # JSON array of asset objects
+    scenes = Column(JSON, nullable=True)  # JSON array of scene objects
+    assets = Column(JSON, nullable=True)  # JSON array of asset objects
     edits = Column(Text, nullable=True)  # JSON with user edits
-    output_formats = Column(Text, nullable=True)  # JSON array of export formats
+    output_formats = Column(JSON, nullable=True)  # JSON array of export formats
     render_progress = Column(Float, default=0.0, nullable=False)  # 0-100%
-    output_urls = Column(Text, nullable=True)  # JSON with download URLs
+    output_urls = Column(JSON, nullable=True)  # JSON with download URLs
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
