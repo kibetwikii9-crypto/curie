@@ -57,6 +57,7 @@ interface Integration {
   webhook_url: string | null;
   created_at: string;
   updated_at: string;
+  has_webhook?: boolean;
 }
 
 interface TelegramStatus {
@@ -115,7 +116,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'instagram',
     status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
-    icon: '/intagram-icon.png',
+    icon: '/instagram-icon.png',
     category: 'Social Media',
     color: 'from-pink-500 to-purple-600',
     features: ['DM automation', 'Comment replies', 'Story mentions', 'Media'],
@@ -545,6 +546,11 @@ export default function IntegrationsPage() {
       popup.location.href = authUrl;
 
       const handleMessage = (event: MessageEvent) => {
+        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
+        const backendOrigin = new URL(backendUrl).origin;
+        if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
+          return;
+        }
         if (event.data?.type === successType) {
           popup.close();
           fetchIntegrations();
@@ -707,7 +713,7 @@ export default function IntegrationsPage() {
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Webhooks</p>
                 <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">
-                  {healthData.integrations.filter((i) => i.webhook_url).length}
+                  {healthData.integrations.filter((i) => i.has_webhook || i.webhook_url).length}
                 </p>
               </div>
               <Webhook className="h-8 w-8 text-gray-400 dark:text-gray-500" />

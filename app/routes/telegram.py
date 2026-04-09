@@ -2,7 +2,7 @@
 import logging
 import json
 
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, status, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.logging_context import set_request_id
@@ -17,8 +17,33 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _load_credentials(integration: ChannelIntegration) -> dict:
+    try:
+        return json.loads(integration.credentials) if integration.credentials else {}
+    except Exception:
+        return {}
+
+
+def _find_integration_by_secret(db: Session, secret: str | None) -> ChannelIntegration | None:
+    if not secret:
+        return None
+    integrations = db.query(ChannelIntegration).filter(
+        ChannelIntegration.channel == "telegram",
+        ChannelIntegration.is_active == True
+    ).all()
+    for integration in integrations:
+        credentials = _load_credentials(integration)
+        if credentials.get("webhook_secret") == secret:
+            return integration
+    return None
+
+
 @router.post("/webhook", status_code=status.HTTP_200_OK)
-async def telegram_webhook(update: TelegramUpdate):
+async def telegram_webhook(
+    request: Request,
+    update: TelegramUpdate,
+    db: Session = Depends(get_db),
+):
     """
     Receive Telegram webhook payloads, normalize them, and send a reply.
 
@@ -47,6 +72,11 @@ async def telegram_webhook(update: TelegramUpdate):
     reply_text = SAFE_DEFAULT_RESPONSE
     normalized_message = None
     chat_id = None
+    integration = _find_integration_by_secret(
+        db,
+        request.headers.get("X-Telegram-Bot-Api-Secret-Token"),
+    )
+    used_business_id = integration.business_id if integration else None
 
     # Log incoming webhook with more details
     try:
@@ -105,31 +135,13 @@ async def telegram_webhook(update: TelegramUpdate):
                 try:
                     chat_id_int = int(chat_id) if chat_id is not None else None
                     if chat_id_int:
-                        # Try per-business tokens first
                         send_success = False
-                        db = next(get_db())
-                        try:
-                            integrations = db.query(ChannelIntegration).filter(
-                                ChannelIntegration.channel == "telegram",
-                                ChannelIntegration.is_active == True
-                            ).all()
-                            
-                            for integration in integrations:
-                                try:
-                                    if integration.credentials:
-                                        credentials = json.loads(integration.credentials)
-                                        bot_token = credentials.get("bot_token")
-                                        if bot_token:
-                                            bot_service = TelegramService(bot_token)
-                                            send_success = await bot_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
-                                            if send_success:
-                                                break
-                                except Exception:
-                                    continue
-                        except Exception:
-                            pass
-                        finally:
-                            db.close()
+                        if integration:
+                            credentials = _load_credentials(integration)
+                            bot_token = credentials.get("bot_token")
+                            if bot_token:
+                                bot_service = TelegramService(bot_token)
+                                send_success = await bot_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
                         
                         if send_success:
                             log.info(f"default_response_sent chat_id={chat_id_int}")
@@ -148,25 +160,9 @@ async def telegram_webhook(update: TelegramUpdate):
 
         # Step 3: Get business_id from integration (for AI engine context with RAG and AI Rules)
         # Look up which business this message belongs to BEFORE processing
-        business_id_for_ai = 1  # Default business ID
-        try:
-            db = next(get_db())
-            try:
-                # Get the first active Telegram integration (most recently updated)
-                integration = db.query(ChannelIntegration).filter(
-                    ChannelIntegration.channel == "telegram",
-                    ChannelIntegration.is_active == True
-                ).order_by(ChannelIntegration.updated_at.desc()).first()
-                
-                if integration and integration.business_id:
-                    business_id_for_ai = integration.business_id
-                    log.debug(f"business_context_determined business_id={business_id_for_ai} integration_id={integration.id}")
-            except Exception as lookup_error:
-                log.warning(f"business_lookup_failed error={type(lookup_error).__name__} using_default")
-            finally:
-                db.close()
-        except Exception as e:
-            log.warning(f"db_access_failed error={type(e).__name__} using_default_business")
+        business_id_for_ai = integration.business_id if integration and integration.business_id else 1
+        if integration:
+            log.debug(f"business_context_determined business_id={business_id_for_ai} integration_id={integration.id}")
         
         # Step 4: Process message through AI Engine (with GPT-4o, RAG, AI Rules, Memory)
         # This is the ONLY source of reply text generation
@@ -213,7 +209,6 @@ async def telegram_webhook(update: TelegramUpdate):
         # Step 6: Send reply using AI-generated text
         # This MUST happen before saving conversation to ensure user receives reply
         # Bot behavior is unchanged - reply is sent regardless of what happens next
-        used_business_id = None  # Track which business's bot was used
         if chat_id:
             try:
                 # Ensure chat_id is an int (Telegram API requires int)
@@ -221,58 +216,19 @@ async def telegram_webhook(update: TelegramUpdate):
                 if chat_id_int:
                     log.info(f"attempting_reply chat_id={chat_id_int} user_id={normalized_message.user_id} reply_length={len(reply_text)}")
                     
-                    # Try to find the correct bot token from database integrations
-                    # This supports per-business bot tokens (new system)
-                    # IMPORTANT: We try integrations in order, but we need to be deterministic
-                    # If multiple integrations exist, we prefer the most recently updated one
                     send_success = False
-                    db = next(get_db())
-                    try:
-                        # Get all active Telegram integrations, ordered by most recently updated first
-                        # This makes the selection more deterministic
-                        integrations = db.query(ChannelIntegration).filter(
-                            ChannelIntegration.channel == "telegram",
-                            ChannelIntegration.is_active == True
-                        ).order_by(ChannelIntegration.updated_at.desc()).all()
-                        
-                        # Log if multiple integrations exist (potential issue)
-                        if len(integrations) > 1:
-                            log.warning(
-                                f"Multiple active Telegram integrations found ({len(integrations)}). "
-                                f"This can cause non-deterministic business_id assignment. "
-                                f"Integration IDs: {[i.id for i in integrations]}, Business IDs: {[i.business_id for i in integrations]}"
-                            )
-                        
-                        # Try each bot token until one works
-                        # We use the first one that successfully sends (most recently updated)
-                        for integration in integrations:
-                            try:
-                                if integration.credentials:
-                                    credentials = json.loads(integration.credentials)
-                                    bot_token = credentials.get("bot_token")
-                                    if bot_token:
-                                        # Create a service instance with this bot's token
-                                        bot_service = TelegramService(bot_token)
-                                        send_success = await bot_service.send_message(chat_id_int, reply_text)
-                                        if send_success:
-                                            used_business_id = integration.business_id  # Track which business's bot was used
-                                            log.info(
-                                                f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id} "
-                                                f"bot={integration.channel_name} business_id={used_business_id} integration_id={integration.id}"
-                                            )
-                                            # Log for debugging
-                                            log.info(
-                                                f"CONVERSATION_SAVE_INFO: business_id={used_business_id} "
-                                                f"integration_id={integration.id} bot_username={integration.channel_name}"
-                                            )
-                                            break
-                            except Exception as e:
-                                log.debug(f"tried_bot_token integration_id={integration.id} error={type(e).__name__}")
-                                continue
-                    except Exception as db_error:
-                        log.warning(f"db_lookup_failed error={type(db_error).__name__}")
-                    finally:
-                        db.close()
+                    if integration:
+                        credentials = _load_credentials(integration)
+                        bot_token = credentials.get("bot_token")
+                        if bot_token:
+                            bot_service = TelegramService(bot_token)
+                            send_success = await bot_service.send_message(chat_id_int, reply_text)
+                            if send_success:
+                                used_business_id = integration.business_id
+                                log.info(
+                                    f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id} "
+                                    f"bot={integration.channel_name} business_id={used_business_id} integration_id={integration.id}"
+                                )
                     
                     if send_success:
                         log.info(f"reply_sent chat_id={chat_id_int} user_id={normalized_message.user_id} business_id={used_business_id}")
@@ -295,31 +251,13 @@ async def telegram_webhook(update: TelegramUpdate):
             try:
                 chat_id_int = int(chat_id) if isinstance(chat_id, (int, str)) else None
                 if chat_id_int:
-                    # Try per-business tokens first, then fallback to global
                     send_success = False
-                    db = next(get_db())
-                    try:
-                        integrations = db.query(ChannelIntegration).filter(
-                            ChannelIntegration.channel == "telegram",
-                            ChannelIntegration.is_active == True
-                        ).all()
-                        
-                        for integration in integrations:
-                            try:
-                                if integration.credentials:
-                                    credentials = json.loads(integration.credentials)
-                                    bot_token = credentials.get("bot_token")
-                                    if bot_token:
-                                        bot_service = TelegramService(bot_token)
-                                        send_success = await bot_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
-                                        if send_success:
-                                            break
-                            except Exception:
-                                continue
-                    except Exception:
-                        pass
-                    finally:
-                        db.close()
+                    if integration:
+                        credentials = _load_credentials(integration)
+                        bot_token = credentials.get("bot_token")
+                        if bot_token:
+                            bot_service = TelegramService(bot_token)
+                            send_success = await bot_service.send_message(chat_id_int, SAFE_DEFAULT_RESPONSE)
                     
                     if send_success:
                         log.info(f"fallback_response_sent chat_id={chat_id_int}")

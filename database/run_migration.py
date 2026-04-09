@@ -31,6 +31,7 @@ def run_migration():
         "005_add_channel_user_id_to_channel_integrations.sql",
         "006_sync_ads_schema_columns.sql",
         "007_add_video_ownership_columns.sql",
+        "008_dedupe_channel_integrations.sql",
     ]
     
     # Get database connection

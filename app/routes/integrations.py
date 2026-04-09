@@ -2,12 +2,12 @@
 import logging
 import json
 import secrets
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models import ChannelIntegration, Business, User as UserModel, Subscription
@@ -20,16 +20,67 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _get_error_html(error_message: str) -> str:
-    """Generate HTML page that posts error message to parent window (for popup OAuth)."""
+OAUTH_STATE_TTL_MINUTES = 15
+oauth_states: Dict[str, Dict[str, Any]] = {}
+
+
+def _frontend_origin() -> str:
     frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    return frontend_url.rstrip('/')
+
+
+def _consume_oauth_state(state: str, expected_channel: Optional[str] = None) -> Dict[str, Any]:
+    state_data = oauth_states.get(state)
+    if not state_data:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    expires_at = state_data.get("expires_at")
+    if not expires_at or datetime.utcnow() > expires_at:
+        oauth_states.pop(state, None)
+        raise HTTPException(status_code=400, detail="OAuth state expired. Please retry connection.")
+
+    if expected_channel and state_data.get("channel") != expected_channel:
+        oauth_states.pop(state, None)
+        raise HTTPException(status_code=400, detail="OAuth state channel mismatch")
+
+    oauth_states.pop(state, None)
+    return state_data
+
+
+def _build_webhook_url(path: str) -> str:
+    public_url = (settings.public_url or "").rstrip("/")
+    return f"{public_url}{path}"
+
+
+def _safe_webhook_url(webhook_url: Optional[str]) -> Optional[str]:
+    if not webhook_url:
+        return webhook_url
+    # Never expose query params (can include verify tokens).
+    return webhook_url.split("?", 1)[0]
+
+
+def _integration_response(integration: ChannelIntegration) -> IntegrationResponse:
+    return IntegrationResponse(
+        id=integration.id,
+        channel=integration.channel,
+        channel_name=integration.channel_name,
+        is_active=integration.is_active,
+        webhook_url=_safe_webhook_url(integration.webhook_url),
+        created_at=integration.created_at.isoformat(),
+        updated_at=integration.updated_at.isoformat(),
+    )
+
+
+def _get_error_html(error_message: str, event_type: str = "oauth-error") -> str:
+    """Generate HTML page that posts error message to parent window (for popup OAuth)."""
+    frontend_url = _frontend_origin()
     # Escape single quotes in error message for JavaScript
     escaped_error = error_message.replace("'", "\\'").replace("\n", "\\n")
     return f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>WhatsApp Connection Error</title>
+        <title>Connection Error</title>
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -73,9 +124,9 @@ def _get_error_html(error_message: str) -> str:
             // Post error message to parent window
             if (window.opener) {{
                 window.opener.postMessage({{
-                    type: 'whatsapp-oauth-error',
+                    type: '{event_type}',
                     error: '{escaped_error}'
-                }}, '*');
+                }}, '{frontend_url}');
                 
                 // Close popup after a short delay
                 setTimeout(function() {{
@@ -148,18 +199,7 @@ async def list_integrations(
         ChannelIntegration.business_id == business_id
     ).all()
     
-    return [
-        IntegrationResponse(
-            id=integration.id,
-            channel=integration.channel,
-            channel_name=integration.channel_name,
-            is_active=integration.is_active,
-            webhook_url=integration.webhook_url,
-            created_at=integration.created_at.isoformat(),
-            updated_at=integration.updated_at.isoformat(),
-        )
-        for integration in integrations
-    ]
+    return [_integration_response(integration) for integration in integrations]
 
 
 @router.post("/telegram/connect", response_model=IntegrationResponse)
@@ -297,12 +337,17 @@ async def connect_telegram(
             detail=f"Webhook URL must use HTTPS. Current PUBLIC_URL: {settings.public_url}, constructed URL: {webhook_url}. Please set PUBLIC_URL in Render dashboard to your full backend URL with https:// (e.g., https://automify-ai-backend-xxxx.onrender.com)."
         )
     
+    webhook_secret = secrets.token_urlsafe(24)
     try:
-        set_webhook_url = f"https://api.telegram.org/bot{request.bot_token}/setWebhook?url={webhook_url}"
+        set_webhook_url = f"https://api.telegram.org/bot{request.bot_token}/setWebhook"
         log.info(f"Setting webhook for bot @{bot_username} to: {webhook_url}")
         
         async with httpx.AsyncClient() as client:
-            response = await client.get(set_webhook_url, timeout=10.0)
+            response = await client.post(
+                set_webhook_url,
+                json={"url": webhook_url, "secret_token": webhook_secret},
+                timeout=10.0,
+            )
             response.raise_for_status()
             webhook_result = response.json()
             
@@ -379,7 +424,8 @@ async def connect_telegram(
     # For now, store as JSON string - in production, encrypt this
     credentials = json.dumps({
         "bot_token": request.bot_token,
-        "bot_username": bot_username
+        "bot_username": bot_username,
+        "webhook_secret": webhook_secret,
     })
     
     if existing:
@@ -394,15 +440,7 @@ async def connect_telegram(
         
         log.info(f"Telegram integration updated: {existing.id} by user {current_user.id}")
         
-        return IntegrationResponse(
-            id=existing.id,
-            channel=existing.channel,
-            channel_name=existing.channel_name,
-            is_active=existing.is_active,
-            webhook_url=existing.webhook_url,
-            created_at=existing.created_at.isoformat(),
-            updated_at=existing.updated_at.isoformat(),
-        )
+        return _integration_response(existing)
     else:
         # Create new integration
         integration = ChannelIntegration(
@@ -419,15 +457,7 @@ async def connect_telegram(
         
         log.info(f"Telegram integration created: {integration.id} by user {current_user.id}")
         
-        return IntegrationResponse(
-            id=integration.id,
-            channel=integration.channel,
-            channel_name=integration.channel_name,
-            is_active=integration.is_active,
-            webhook_url=integration.webhook_url,
-            created_at=integration.created_at.isoformat(),
-            updated_at=integration.updated_at.isoformat(),
-        )
+        return _integration_response(integration)
 
 
 @router.get("/telegram/status", response_model=TelegramStatusResponse)
@@ -650,10 +680,6 @@ async def disconnect_telegram(
 # WHATSAPP OAUTH INTEGRATION (Self-Serve)
 # ============================================================================
 
-# Store OAuth state temporarily (use Redis in production)
-oauth_states = {}
-
-
 @router.get("/whatsapp/connect")
 async def initiate_whatsapp_oauth(
     request: Request,
@@ -711,7 +737,9 @@ async def initiate_whatsapp_oauth(
         state = secrets.token_urlsafe(32)
         oauth_states[state] = {
             "user_id": current_user.id,
-            "business_id": business_id
+            "business_id": business_id,
+            "channel": "whatsapp",
+            "expires_at": datetime.utcnow() + timedelta(minutes=OAUTH_STATE_TTL_MINUTES),
         }
         
         # Initialize OAuth service
@@ -741,8 +769,8 @@ async def initiate_whatsapp_oauth(
 
 @router.get("/whatsapp/callback")
 async def whatsapp_oauth_callback(
-    code: str = Query(...),
-    state: str = Query(...),
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
     error_reason: Optional[str] = Query(None),
     db: Session = Depends(get_db)
@@ -758,10 +786,9 @@ async def whatsapp_oauth_callback(
         return Response(content=_get_error_html(error_message), media_type="text/html")
     
     # Verify state
-    if state not in oauth_states:
-        raise HTTPException(status_code=400, detail="Invalid state")
-    
-    oauth_data = oauth_states[state]
+    if not code or not state:
+        return Response(content=_get_error_html("Missing authorization code or state."), media_type="text/html")
+    oauth_data = _consume_oauth_state(state, expected_channel="whatsapp")
     user_id = oauth_data["user_id"]
     business_id = oauth_data["business_id"]
     
@@ -864,13 +891,11 @@ async def whatsapp_oauth_callback(
             ChannelIntegration.channel == "whatsapp"
         ).first()
         
-        webhook_url_full = f"{webhook_url}?hub.mode=subscribe&hub.verify_token={verify_token}"
-        
         if existing:
             # Update existing integration
             existing.credentials = credentials
             existing.is_active = True
-            existing.webhook_url = webhook_url_full
+            existing.webhook_url = webhook_url
             existing.channel_name = f"WhatsApp ({display_phone_number})"
             existing.updated_at = datetime.utcnow()
             db.commit()
@@ -884,15 +909,12 @@ async def whatsapp_oauth_callback(
                 channel_name=f"WhatsApp ({display_phone_number})",
                 credentials=credentials,
                 is_active=True,
-                webhook_url=webhook_url_full
+                webhook_url=webhook_url
             )
             db.add(integration)
             db.commit()
             db.refresh(integration)
             integration_id = integration.id
-        
-        # 11. Clean up state
-        del oauth_states[state]
         
         log.info(f"WhatsApp integration created/updated: {integration_id} by user {user_id}")
         
@@ -983,7 +1005,7 @@ async def whatsapp_oauth_callback(
                         channel: 'whatsapp',
                         phone: '{display_phone_number}',
                         name: '{verified_name or whatsapp_account_name}'
-                    }}, '*');
+                    }}, '{frontend_url}');
                     
                     // Close popup after showing success
                     setTimeout(function() {{
@@ -1034,15 +1056,7 @@ async def get_whatsapp_status(
             detail="WhatsApp not connected"
         )
     
-    return IntegrationResponse(
-        id=integration.id,
-        channel=integration.channel,
-        channel_name=integration.channel_name,
-        is_active=integration.is_active,
-        webhook_url=integration.webhook_url,
-        created_at=integration.created_at.isoformat(),
-        updated_at=integration.updated_at.isoformat(),
-    )
+    return _integration_response(integration)
 
 
 @router.delete("/whatsapp/disconnect")
@@ -1126,15 +1140,7 @@ async def get_integration(
             detail="Integration not found"
         )
     
-    return IntegrationResponse(
-        id=integration.id,
-        channel=integration.channel,
-        channel_name=integration.channel_name,
-        is_active=integration.is_active,
-        webhook_url=integration.webhook_url,
-        created_at=integration.created_at.isoformat(),
-        updated_at=integration.updated_at.isoformat(),
-    )
+    return _integration_response(integration)
 
 
 @router.put("/{integration_id}", response_model=IntegrationResponse)
@@ -1183,15 +1189,7 @@ async def update_integration(
     
     log.info(f"Integration {integration_id} updated by user {current_user.id}")
     
-    return IntegrationResponse(
-        id=integration.id,
-        channel=integration.channel,
-        channel_name=integration.channel_name,
-        is_active=integration.is_active,
-        webhook_url=integration.webhook_url,
-        created_at=integration.created_at.isoformat(),
-        updated_at=integration.updated_at.isoformat(),
-    )
+    return _integration_response(integration)
 
 
 @router.delete("/{integration_id}")
@@ -1324,6 +1322,8 @@ async def check_integrations_health(
             "channel": integration.channel,
             "channel_name": integration.channel_name,
             "is_active": integration.is_active,
+            "webhook_url": _safe_webhook_url(integration.webhook_url),
+            "has_webhook": bool(integration.webhook_url),
             "created_at": integration.created_at.isoformat(),
             "updated_at": integration.updated_at.isoformat(),
         })
@@ -1394,6 +1394,12 @@ async def initiate_instagram_oauth(
         
         # Generate state token with user_id for callback verification
         state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+        oauth_states[state_token] = {
+            "user_id": current_user.id,
+            "business_id": business_id,
+            "channel": "instagram",
+            "expires_at": datetime.utcnow() + timedelta(minutes=OAUTH_STATE_TTL_MINUTES),
+        }
         
         # Initialize Meta OAuth service
         meta_service = MetaOAuthService()
@@ -1442,33 +1448,32 @@ async def instagram_oauth_callback(
         error_msg = error_description or error
         log.error(f"Instagram OAuth error: {error_msg}")
         return Response(
-            content=_get_error_html(f"Instagram connection failed: {error_msg}"),
+            content=_get_error_html(f"Instagram connection failed: {error_msg}", event_type="instagram-oauth-error"),
             media_type="text/html"
         )
     
     if not code or not state:
         return Response(
-            content=_get_error_html("Missing authorization code or state parameter"),
+            content=_get_error_html("Missing authorization code or state parameter", event_type="instagram-oauth-error"),
             media_type="text/html"
         )
     
     try:
-        # Extract user_id from state
-        user_id_str = state.split("_")[0]
-        user_id = int(user_id_str)
+        state_data = _consume_oauth_state(state, expected_channel="instagram")
+        user_id = state_data["user_id"]
         
         # Get user
         user = db.query(UserModel).filter(UserModel.id == user_id).first()
         if not user:
             return Response(
-                content=_get_error_html("Invalid user session"),
+                content=_get_error_html("Invalid user session", event_type="instagram-oauth-error"),
                 media_type="text/html"
             )
         
         business_id = get_user_business_id(user, db)
         if business_id is None:
             return Response(
-                content=_get_error_html("Business account required"),
+                content=_get_error_html("Business account required", event_type="instagram-oauth-error"),
                 media_type="text/html"
             )
         
@@ -1491,7 +1496,7 @@ async def instagram_oauth_callback(
         
         if not instagram_accounts:
             return Response(
-                content=_get_error_html("No Instagram Business accounts found. Please connect an Instagram Business account to your Facebook Page."),
+                content=_get_error_html("No Instagram Business accounts found. Please connect an Instagram Business account to your Facebook Page.", event_type="instagram-oauth-error"),
                 media_type="text/html"
             )
         
@@ -1508,18 +1513,29 @@ async def instagram_oauth_callback(
             "ig_username": ig_username
         })
         
-        # Step 5: Store integration in database
-        integration = ChannelIntegration(
-            business_id=business_id,
-            channel="instagram",
-            channel_name=f"@{ig_username}" if ig_username else page_name,
-            channel_user_id=ig_account_id,
-            credentials=credentials,
-            is_active=True,
-            webhook_url=f"{settings.public_url}/api/integrations/instagram/webhook"
-        )
-        
-        db.add(integration)
+        # Step 5: Upsert integration to avoid duplicates
+        integration = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "instagram"
+        ).first()
+        if integration:
+            integration.channel_name = f"@{ig_username}" if ig_username else page_name
+            integration.channel_user_id = ig_account_id
+            integration.credentials = credentials
+            integration.is_active = True
+            integration.webhook_url = _build_webhook_url("/api/integrations/instagram/webhook")
+            integration.updated_at = datetime.utcnow()
+        else:
+            integration = ChannelIntegration(
+                business_id=business_id,
+                channel="instagram",
+                channel_name=f"@{ig_username}" if ig_username else page_name,
+                channel_user_id=ig_account_id,
+                credentials=credentials,
+                is_active=True,
+                webhook_url=_build_webhook_url("/api/integrations/instagram/webhook")
+            )
+            db.add(integration)
         db.commit()
         db.refresh(integration)
         
@@ -1534,14 +1550,14 @@ async def instagram_oauth_callback(
     except Exception as e:
         log.error(f"Error in Instagram OAuth callback: {e}")
         return Response(
-            content=_get_error_html(f"Failed to complete Instagram setup: {str(e)}"),
+            content=_get_error_html(f"Failed to complete Instagram setup: {str(e)}", event_type="instagram-oauth-error"),
             media_type="text/html"
         )
 
 
 def _get_success_html(platform: str, account_name: str) -> str:
     """Generate HTML page that posts success message to parent window (for popup OAuth)."""
-    frontend_url = getattr(settings, 'frontend_url', 'http://localhost:3000')
+    frontend_url = _frontend_origin()
     return f"""
     <!DOCTYPE html>
     <html>
@@ -1592,7 +1608,7 @@ def _get_success_html(platform: str, account_name: str) -> str:
                 window.opener.postMessage({{
                     type: '{platform.lower()}-oauth-success',
                     account: '{account_name}'
-                }}, '*');
+                }}, '{frontend_url}');
                 
                 // Close popup after a short delay
                 setTimeout(function() {{
@@ -1684,6 +1700,8 @@ async def get_instagram_status(
     db: Session = Depends(get_db)
 ):
     """Get Instagram integration status."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can view integration status")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -1704,15 +1722,7 @@ async def get_instagram_status(
             detail="Instagram not connected"
         )
     
-    return IntegrationResponse(
-        id=integration.id,
-        channel=integration.channel,
-        channel_name=integration.channel_name,
-        is_active=integration.is_active,
-        webhook_url=integration.webhook_url,
-        created_at=integration.created_at.isoformat(),
-        updated_at=integration.updated_at.isoformat()
-    )
+    return _integration_response(integration)
 
 
 @router.delete("/instagram/disconnect")
@@ -1721,6 +1731,8 @@ async def disconnect_instagram(
     db: Session = Depends(get_db)
 ):
     """Disconnect Instagram integration."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can disconnect integrations")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -1814,6 +1826,12 @@ async def initiate_messenger_oauth(
         
         # Generate state token with user_id for callback verification
         state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+        oauth_states[state_token] = {
+            "user_id": current_user.id,
+            "business_id": business_id,
+            "channel": "messenger",
+            "expires_at": datetime.utcnow() + timedelta(minutes=OAUTH_STATE_TTL_MINUTES),
+        }
         
         # Initialize Meta OAuth service
         meta_service = MetaOAuthService()
@@ -1862,33 +1880,32 @@ async def messenger_oauth_callback(
         error_msg = error_description or error
         log.error(f"Messenger OAuth error: {error_msg}")
         return Response(
-            content=_get_error_html(f"Messenger connection failed: {error_msg}"),
+            content=_get_error_html(f"Messenger connection failed: {error_msg}", event_type="messenger-oauth-error"),
             media_type="text/html"
         )
     
     if not code or not state:
         return Response(
-            content=_get_error_html("Missing authorization code or state parameter"),
+            content=_get_error_html("Missing authorization code or state parameter", event_type="messenger-oauth-error"),
             media_type="text/html"
         )
     
     try:
-        # Extract user_id from state
-        user_id_str = state.split("_")[0]
-        user_id = int(user_id_str)
+        state_data = _consume_oauth_state(state, expected_channel="messenger")
+        user_id = state_data["user_id"]
         
         # Get user
         user = db.query(UserModel).filter(UserModel.id == user_id).first()
         if not user:
             return Response(
-                content=_get_error_html("Invalid user session"),
+                content=_get_error_html("Invalid user session", event_type="messenger-oauth-error"),
                 media_type="text/html"
             )
         
         business_id = get_user_business_id(user, db)
         if business_id is None:
             return Response(
-                content=_get_error_html("Business account required"),
+                content=_get_error_html("Business account required", event_type="messenger-oauth-error"),
                 media_type="text/html"
             )
         
@@ -1911,7 +1928,7 @@ async def messenger_oauth_callback(
         
         if not pages:
             return Response(
-                content=_get_error_html("No Facebook Pages found. Please create a Facebook Page to use Messenger."),
+                content=_get_error_html("No Facebook Pages found. Please create a Facebook Page to use Messenger.", event_type="messenger-oauth-error"),
                 media_type="text/html"
             )
         
@@ -1931,18 +1948,29 @@ async def messenger_oauth_callback(
             "page_name": page_name
         })
         
-        # Step 6: Store integration in database
-        integration = ChannelIntegration(
-            business_id=business_id,
-            channel="messenger",
-            channel_name=page_name,
-            channel_user_id=page_id,
-            credentials=credentials,
-            is_active=True,
-            webhook_url=f"{settings.public_url}/api/integrations/messenger/webhook"
-        )
-        
-        db.add(integration)
+        # Step 6: Upsert integration in database
+        integration = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "messenger"
+        ).first()
+        if integration:
+            integration.channel_name = page_name
+            integration.channel_user_id = page_id
+            integration.credentials = credentials
+            integration.is_active = True
+            integration.webhook_url = _build_webhook_url("/api/integrations/messenger/webhook")
+            integration.updated_at = datetime.utcnow()
+        else:
+            integration = ChannelIntegration(
+                business_id=business_id,
+                channel="messenger",
+                channel_name=page_name,
+                channel_user_id=page_id,
+                credentials=credentials,
+                is_active=True,
+                webhook_url=_build_webhook_url("/api/integrations/messenger/webhook")
+            )
+            db.add(integration)
         db.commit()
         db.refresh(integration)
         
@@ -1957,7 +1985,7 @@ async def messenger_oauth_callback(
     except Exception as e:
         log.error(f"Error in Messenger OAuth callback: {e}")
         return Response(
-            content=_get_error_html(f"Failed to complete Messenger setup: {str(e)}"),
+            content=_get_error_html(f"Failed to complete Messenger setup: {str(e)}", event_type="messenger-oauth-error"),
             media_type="text/html"
         )
 
@@ -2038,6 +2066,8 @@ async def get_messenger_status(
     db: Session = Depends(get_db)
 ):
     """Get Messenger integration status."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can view integration status")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -2058,15 +2088,7 @@ async def get_messenger_status(
             detail="Messenger not connected"
         )
     
-    return IntegrationResponse(
-        id=integration.id,
-        channel=integration.channel,
-        channel_name=integration.channel_name,
-        is_active=integration.is_active,
-        webhook_url=integration.webhook_url,
-        created_at=integration.created_at.isoformat(),
-        updated_at=integration.updated_at.isoformat()
-    )
+    return _integration_response(integration)
 
 
 @router.delete("/messenger/disconnect")
@@ -2075,6 +2097,8 @@ async def disconnect_messenger(
     db: Session = Depends(get_db)
 ):
     """Disconnect Messenger integration."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can disconnect integrations")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -2171,6 +2195,12 @@ async def initiate_email_oauth(
         
         # Generate state token with user_id for callback verification
         state_token = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+        oauth_states[state_token] = {
+            "user_id": current_user.id,
+            "business_id": business_id,
+            "channel": "email",
+            "expires_at": datetime.utcnow() + timedelta(minutes=OAUTH_STATE_TTL_MINUTES),
+        }
         
         # Initialize Gmail OAuth service
         gmail_service = GmailOAuthService()
@@ -2217,33 +2247,32 @@ async def email_oauth_callback(
     if error:
         log.error(f"Email OAuth error: {error}")
         return Response(
-            content=_get_error_html(f"Email connection failed: {error}"),
+            content=_get_error_html(f"Email connection failed: {error}", event_type="email-oauth-error"),
             media_type="text/html"
         )
     
     if not code or not state:
         return Response(
-            content=_get_error_html("Missing authorization code or state parameter"),
+            content=_get_error_html("Missing authorization code or state parameter", event_type="email-oauth-error"),
             media_type="text/html"
         )
     
     try:
-        # Extract user_id from state
-        user_id_str = state.split("_")[0]
-        user_id = int(user_id_str)
+        state_data = _consume_oauth_state(state, expected_channel="email")
+        user_id = state_data["user_id"]
         
         # Get user
         user = db.query(UserModel).filter(UserModel.id == user_id).first()
         if not user:
             return Response(
-                content=_get_error_html("Invalid user session"),
+                content=_get_error_html("Invalid user session", event_type="email-oauth-error"),
                 media_type="text/html"
             )
         
         business_id = get_user_business_id(user, db)
         if business_id is None:
             return Response(
-                content=_get_error_html("Business account required"),
+                content=_get_error_html("Business account required", event_type="email-oauth-error"),
                 media_type="text/html"
             )
         
@@ -2268,17 +2297,27 @@ async def email_oauth_callback(
             "user_email": user_email
         })
         
-        # Step 4: Store integration in database
-        integration = ChannelIntegration(
-            business_id=business_id,
-            channel="email",
-            channel_name=user_email,
-            credentials=credentials,
-            is_active=True,
-            webhook_url=None  # Gmail uses polling, not webhooks
-        )
-        
-        db.add(integration)
+        # Step 4: Upsert integration in database
+        integration = db.query(ChannelIntegration).filter(
+            ChannelIntegration.business_id == business_id,
+            ChannelIntegration.channel == "email"
+        ).first()
+        if integration:
+            integration.channel_name = user_email
+            integration.credentials = credentials
+            integration.is_active = True
+            integration.webhook_url = None  # Gmail uses polling, not webhooks
+            integration.updated_at = datetime.utcnow()
+        else:
+            integration = ChannelIntegration(
+                business_id=business_id,
+                channel="email",
+                channel_name=user_email,
+                credentials=credentials,
+                is_active=True,
+                webhook_url=None
+            )
+            db.add(integration)
         db.commit()
         db.refresh(integration)
         
@@ -2293,7 +2332,7 @@ async def email_oauth_callback(
     except Exception as e:
         log.error(f"Error in Email OAuth callback: {e}")
         return Response(
-            content=_get_error_html(f"Failed to complete Email setup: {str(e)}"),
+            content=_get_error_html(f"Failed to complete Email setup: {str(e)}", event_type="email-oauth-error"),
             media_type="text/html"
         )
 
@@ -2304,6 +2343,8 @@ async def get_email_status(
     db: Session = Depends(get_db)
 ):
     """Get Email integration status."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can view integration status")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -2324,15 +2365,7 @@ async def get_email_status(
             detail="Email not connected"
         )
     
-    return IntegrationResponse(
-        id=integration.id,
-        channel=integration.channel,
-        channel_name=integration.channel_name,
-        is_active=integration.is_active,
-        webhook_url=integration.webhook_url,
-        created_at=integration.created_at.isoformat(),
-        updated_at=integration.updated_at.isoformat()
-    )
+    return _integration_response(integration)
 
 
 @router.delete("/email/disconnect")
@@ -2341,6 +2374,8 @@ async def disconnect_email(
     db: Session = Depends(get_db)
 ):
     """Disconnect Email integration."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can disconnect integrations")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -2385,6 +2420,8 @@ async def create_webchat_widget(
     This is instant - no OAuth needed!
     """
     try:
+        if current_user.role not in ["admin", "business_owner"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can connect integrations")
         business_id = get_user_business_id(current_user, db)
         
         if business_id is None:
@@ -2486,6 +2523,8 @@ async def get_webchat_status(
     db: Session = Depends(get_db)
 ):
     """Get website chat widget status."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can view integration status")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
@@ -2545,6 +2584,8 @@ async def disconnect_webchat(
     db: Session = Depends(get_db)
 ):
     """Disconnect website chat widget."""
+    if current_user.role not in ["admin", "business_owner"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin and Business Owner roles can disconnect integrations")
     business_id = get_user_business_id(current_user, db)
     
     if business_id is None:
