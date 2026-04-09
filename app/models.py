@@ -366,18 +366,18 @@ class Campaign(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String, default="draft", nullable=False)  # draft, scheduled, active, paused, completed
+    status = Column(String, default="draft", nullable=False)  # draft, scheduled, running, paused, completed, cancelled
+    campaign_type = Column(String, default="standard", nullable=False)  # standard, ab_test, video, automated
     objective = Column(String, nullable=False)  # awareness, traffic, conversions, engagement, leads
     platform = Column(String, nullable=False)  # instagram, facebook, whatsapp, etc.
-    budget_total = Column(Float, default=0.0, nullable=False)
-    budget_daily = Column(Float, default=0.0, nullable=False)
-    budget_spent = Column(Float, default=0.0, nullable=False)
-    start_date = Column(DateTime, nullable=True)
-    end_date = Column(DateTime, nullable=True)
+    budget = Column(Float, nullable=True)
+    budget_type = Column(String, default="daily", nullable=False)  # daily, lifetime, unlimited
     scheduled_at = Column(DateTime, nullable=True)  # When to start the campaign
-    target_audience = Column(Text, nullable=True)  # JSON with age, gender, interests, location
-    creative_assets = Column(Text, nullable=True)  # JSON array of asset IDs
-    performance_metrics = Column(Text, nullable=True)  # JSON with aggregated metrics
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    target_audience = Column(JSON, nullable=True)  # JSON with age, gender, interests, location
+    settings = Column(JSON, nullable=True)  # Campaign settings JSON
+    extra_data = Column("metadata", JSON, nullable=True)  # Metadata JSON (metadata is reserved in SQLAlchemy)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -416,13 +416,18 @@ class ABTest(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
-    status = Column(String, default="running", nullable=False)  # running, completed, paused
+    description = Column(Text, nullable=True)
+    status = Column(String, default="draft", nullable=False)  # draft, running, completed, cancelled
     test_type = Column(String, nullable=False)  # creative, audience, budget, timing
-    variants = Column(Text, nullable=False)  # JSON array of test variants
-    winner_variant = Column(String, nullable=True)
+    variants = Column(JSON, nullable=False)  # JSON array of test variants
+    winner_variant_id = Column(String, nullable=True)
+    winner_criteria = Column(JSON, nullable=True)
     confidence_level = Column(Float, default=0.0, nullable=False)  # Statistical confidence
-    start_date = Column(DateTime, default=datetime.utcnow, nullable=False)
-    end_date = Column(DateTime, nullable=True)
+    test_duration_days = Column(Integer, default=7, nullable=False)
+    min_sample_size = Column(Integer, default=1000, nullable=False)
+    results = Column(JSON, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -439,14 +444,22 @@ class CampaignPerformance(Base):
     platform = Column(String, nullable=False)
     date = Column(Date, nullable=False, index=True)
     impressions = Column(Integer, default=0)
+    reach = Column(Integer, default=0)
     clicks = Column(Integer, default=0)
+    engagements = Column(Integer, default=0)
+    shares = Column(Integer, default=0)
+    comments = Column(Integer, default=0)
+    likes = Column(Integer, default=0)
+    saves = Column(Integer, default=0)
     conversions = Column(Integer, default=0)
     spend = Column(Float, default=0.0)
-    revenue = Column(Float, default=0.0)
     ctr = Column(Float, default=0.0)
     cpc = Column(Float, default=0.0)
-    cpa = Column(Float, default=0.0)
+    cpm = Column(Float, default=0.0)
     roas = Column(Float, default=0.0)
+    conversion_rate = Column(Float, default=0.0)
+    frequency = Column(Float, default=0.0)
+    extra_data = Column("metadata", JSON, nullable=True)  # Metadata JSON (metadata is reserved in SQLAlchemy)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

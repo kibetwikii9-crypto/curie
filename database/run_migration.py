@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import engine, SessionLocal
+from app.database import engine
 from sqlalchemy import text
 import logging
 
@@ -28,7 +28,8 @@ def run_migration():
         "002_add_ads_system.sql",
         "003_update_video_projects.sql",
         "004_add_missing_video_project_columns.sql",
-        "005_add_channel_user_id_to_channel_integrations.sql"
+        "005_add_channel_user_id_to_channel_integrations.sql",
+        "006_sync_ads_schema_columns.sql",
     ]
     
     # Get database connection
@@ -37,27 +38,34 @@ def run_migration():
     try:
         log.info("Starting database migration...")
         
-        # Execute migrations in a transaction
-        with db_engine.begin() as connection:
-            for migration_file in migration_files:
-                migration_path = Path(__file__).parent / "migrations" / migration_file
-                
-                if not migration_path.exists():
-                    log.error(f"Migration file not found: {migration_path}")
-                    return False
-                
-                log.info(f"Reading migration file: {migration_path}")
-                with open(migration_path, 'r') as f:
-                    migration_sql = f.read()
-                
-                # Execute the entire migration file as one statement
-                try:
-                    log.info(f"Executing migration: {migration_file}")
-                    connection.execute(text(migration_sql))
-                except Exception as e:
-                    log.error(f"Error executing migration {migration_file}: {e}")
-                    # Continue with other migrations even if one fails
-                    continue
+        # Execute one migration file at a time using raw DBAPI cursor.
+        # This handles multi-statement SQL files (functions, triggers, etc.)
+        # more reliably than SQLAlchemy text() execution for large scripts.
+        for migration_file in migration_files:
+            migration_path = Path(__file__).parent / "migrations" / migration_file
+
+            if not migration_path.exists():
+                log.error(f"Migration file not found: {migration_path}")
+                return False
+
+            log.info(f"Reading migration file: {migration_path}")
+            with open(migration_path, "r", encoding="utf-8") as f:
+                migration_sql = f.read()
+
+            raw_conn = db_engine.raw_connection()
+            try:
+                log.info(f"Executing migration: {migration_file}")
+                with raw_conn.cursor() as cursor:
+                    cursor.execute(migration_sql)
+                raw_conn.commit()
+                log.info(f"✅ Migration applied: {migration_file}")
+            except Exception as e:
+                raw_conn.rollback()
+                log.error(f"Error executing migration {migration_file}: {e}")
+                # Continue so IF NOT EXISTS migrations still apply later.
+                continue
+            finally:
+                raw_conn.close()
         
         log.info("✅ Migration completed successfully!")
         return True
