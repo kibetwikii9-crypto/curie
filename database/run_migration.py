@@ -32,6 +32,7 @@ def run_migration():
         "006_sync_ads_schema_columns.sql",
         "007_add_video_ownership_columns.sql",
         "008_dedupe_channel_integrations.sql",
+        "009_add_subscriptions_ended_at.sql",
     ]
     
     # Get database connection

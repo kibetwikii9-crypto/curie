@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import Image from 'next/image';
 import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
   Plug,
@@ -45,6 +44,10 @@ import {
   Upload,
   Target,
   Layers,
+  Instagram,
+  Send,
+  MessageCircle,
+  Mail,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import ConnectTelegramModal from '@/components/ConnectTelegramModal';
@@ -84,7 +87,6 @@ interface AvailableChannel {
   id: string;
   status: string;
   description: string;
-  icon: string;
   category: string;
   color: string;
   features: string[];
@@ -96,7 +98,6 @@ const availableChannels: AvailableChannel[] = [
     id: 'whatsapp',
     status: 'available',
     description: 'Connect WhatsApp Business API with one-click OAuth',
-    icon: '/whatsapp-icon.png',
     category: 'Messaging',
     color: 'from-green-500 to-green-600',
     features: ['Auto-replies', 'Media support', 'Template messages', 'Analytics'],
@@ -106,7 +107,6 @@ const availableChannels: AvailableChannel[] = [
     id: 'telegram',
     status: 'available',
     description: 'Telegram bot integration for instant messaging',
-    icon: '/telegram-icon.png',
     category: 'Messaging',
     color: 'from-blue-500 to-blue-600',
     features: ['Bot commands', 'Group chats', 'File sharing', 'Inline keyboards'],
@@ -116,7 +116,6 @@ const availableChannels: AvailableChannel[] = [
     id: 'instagram',
     status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
-    icon: '/instagram-icon.png',
     category: 'Social Media',
     color: 'from-pink-500 to-purple-600',
     features: ['DM automation', 'Comment replies', 'Story mentions', 'Media'],
@@ -126,7 +125,6 @@ const availableChannels: AvailableChannel[] = [
     id: 'messenger',
     status: 'available',
     description: 'Integrate Facebook Messenger conversations',
-    icon: '/messenger-icon.png',
     category: 'Social Media',
     color: 'from-blue-600 to-indigo-600',
     features: ['Instant replies', 'Rich media', 'Quick replies', 'Templates'],
@@ -136,7 +134,6 @@ const availableChannels: AvailableChannel[] = [
     id: 'webchat',
     status: 'available',
     description: 'Embed chat widget on your website',
-    icon: '/chat-icon.png',
     category: 'Web',
     color: 'from-gray-600 to-gray-700',
     features: ['Custom branding', 'Instant setup', 'Copy-paste embed', 'Real-time chat'],
@@ -146,7 +143,6 @@ const availableChannels: AvailableChannel[] = [
     id: 'email',
     status: 'available',
     description: 'Connect Gmail with one-click OAuth',
-    icon: '/chat-icon.png',
     category: 'Email',
     color: 'from-red-500 to-red-600',
     features: ['Auto-responses', 'Gmail integration', 'AI-powered replies', 'Smart inbox'],
@@ -339,8 +335,21 @@ export default function IntegrationsPage() {
   };
 
   const getChannelIcon = (channel: string) => {
-    const iconPath = availableChannels.find((c) => c.id === channel)?.icon;
-    return iconPath || '/chat-icon.png';
+    switch (channel) {
+      case 'whatsapp':
+        return MessageCircle;
+      case 'telegram':
+        return Send;
+      case 'instagram':
+        return Instagram;
+      case 'messenger':
+        return MessageSquare;
+      case 'email':
+        return Mail;
+      case 'webchat':
+      default:
+        return MessageSquare;
+    }
   };
 
   const filteredChannels = availableChannels.filter((channel) => {
@@ -790,13 +799,10 @@ export default function IntegrationsPage() {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-4">
                             <div className="flex items-center justify-center">
-                              <Image
-                                src={getChannelIcon(integration.channel)}
-                                alt={integration.channel}
-                                width={56}
-                                height={56}
-                                className="w-14 h-14 object-contain"
-                              />
+                              {(() => {
+                                const ChannelIcon = getChannelIcon(integration.channel);
+                                return <ChannelIcon className="w-14 h-14 text-gray-700 dark:text-gray-200" />;
+                              })()}
                             </div>
                             <div>
                               <h4 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
@@ -874,13 +880,10 @@ export default function IntegrationsPage() {
                       >
                         <div className="flex items-center gap-4 flex-1">
                           <div className="flex items-center justify-center">
-                            <Image
-                              src={getChannelIcon(integration.channel)}
-                              alt={integration.channel}
-                              width={48}
-                              height={48}
-                              className="w-12 h-12 object-contain"
-                            />
+                            {(() => {
+                              const ChannelIcon = getChannelIcon(integration.channel);
+                              return <ChannelIcon className="w-12 h-12 text-gray-700 dark:text-gray-200" />;
+                            })()}
                           </div>
                           <div className="flex-1">
                             <h4 className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
@@ -992,13 +995,10 @@ export default function IntegrationsPage() {
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center justify-center">
-                        <Image
-                          src={channel.icon}
-                          alt={channel.name}
-                          width={64}
-                          height={64}
-                          className="w-16 h-16 object-contain"
-                        />
+                        {(() => {
+                          const ChannelIcon = getChannelIcon(channel.id);
+                          return <ChannelIcon className="w-16 h-16 text-gray-700 dark:text-gray-200" />;
+                        })()}
                       </div>
                       {channel.status === 'available' && isConnected && (
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">

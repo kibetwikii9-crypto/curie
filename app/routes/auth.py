@@ -10,10 +10,10 @@ from app.database import get_db
 from app.schemas.auth import Token, UserCreate, UserResponse
 from app.models import User as UserModel, Business
 from app.services.auth import (
-    authenticate_user,
     create_access_token,
     create_user,
     get_user_by_email,
+    verify_password,
     verify_token,
 )
 from app.middleware.rate_limiter import limiter, get_rate_limit
@@ -98,13 +98,25 @@ async def login(
     db: Session = Depends(get_db),
 ):
     """Login endpoint - returns JWT token."""
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user = get_user_by_email(db, form_data.username)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No account found with this email. Please sign up first!",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive. Please contact support.",
+        )
+    if not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     access_token = create_access_token(data={"sub": user.email, "user_id": user.id, "role": user.role})
     return {
         "access_token": access_token,
