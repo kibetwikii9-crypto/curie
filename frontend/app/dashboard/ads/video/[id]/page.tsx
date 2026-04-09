@@ -199,15 +199,6 @@ export default function VideoProjectDetailPage() {
     const updated = { ...project, assets: [...project.assets, ...assets] }
     setProject(updated)
     setPreviewAsset(assets[0])
-  const isPlayableVideo = (asset: VideoAsset | null) =>
-    !!asset && !!asset.url && !asset.url.startsWith('blob:')
-
-  const getPreviewImage = (asset: VideoAsset | null) => {
-    if (!asset) return null
-    if (asset.thumbnail) return asset.thumbnail
-    if (asset.type === 'image' && asset.url && !asset.url.startsWith('blob:')) return asset.url
-    return null
-  }
     
     try {
       await apiFetch(`/api/ads/video-projects/${project.id}`, {
@@ -226,6 +217,16 @@ export default function VideoProjectDetailPage() {
       console.error('Error saving project:', error)
       toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
     }
+  }
+
+  const isPlayableVideo = (asset: VideoAsset | null) =>
+    !!asset && !!asset.url && !asset.url.startsWith('blob:')
+
+  const getPreviewImage = (asset: VideoAsset | null) => {
+    if (!asset) return null
+    if (asset.thumbnail) return asset.thumbnail
+    if (asset.type === 'image' && asset.url && !asset.url.startsWith('blob:')) return asset.url
+    return null
   }
 
   const setStatus = async (status: VideoProject['status']) => {
