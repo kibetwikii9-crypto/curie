@@ -59,7 +59,7 @@ def _safe_webhook_url(webhook_url: Optional[str]) -> Optional[str]:
     return webhook_url.split("?", 1)[0]
 
 
-def _integration_response(integration: ChannelIntegration) -> IntegrationResponse:
+def _integration_response(integration: ChannelIntegration) -> "IntegrationResponse":
     return IntegrationResponse(
         id=integration.id,
         channel=integration.channel,
