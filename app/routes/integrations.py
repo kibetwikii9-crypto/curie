@@ -71,6 +71,21 @@ def _integration_response(integration: ChannelIntegration) -> "IntegrationRespon
     )
 
 
+def _get_subscription_id_for_limits(db: Session, business_id: int) -> Optional[int]:
+    """
+    Return a subscription id using a minimal-column query.
+    This avoids selecting all Subscription columns when production schema is behind.
+    """
+    try:
+        row = db.query(Subscription.id).filter(
+            Subscription.business_id == business_id
+        ).first()
+        return int(row[0]) if row else None
+    except Exception as e:
+        log.warning("Subscription lookup skipped for business_id=%s: %s", business_id, e)
+        return None
+
+
 def _get_error_html(error_message: str, event_type: str = "oauth-error") -> str:
     """Generate HTML page that posts error message to parent window (for popup OAuth)."""
     frontend_url = _frontend_origin()
@@ -226,12 +241,9 @@ async def connect_telegram(
     business_id = get_user_business_id(current_user, db)
     if business_id:
         from app.services.usage_service import UsageService
-        # Get active subscription
-        subscription = db.query(Subscription).filter(
-            Subscription.business_id == business_id
-        ).first()
-        if subscription:
-            can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "channel")
+        subscription_id = _get_subscription_id_for_limits(db, business_id)
+        if subscription_id:
+            can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -713,12 +725,9 @@ async def initiate_whatsapp_oauth(
         
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
-        # Get active subscription
-        subscription = db.query(Subscription).filter(
-            Subscription.business_id == business_id
-        ).first()
-        if subscription:
-            can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "channel")
+        subscription_id = _get_subscription_id_for_limits(db, business_id)
+        if subscription_id:
+            can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -1367,12 +1376,9 @@ async def initiate_instagram_oauth(
         
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
-        # Get active subscription
-        subscription = db.query(Subscription).filter(
-            Subscription.business_id == business_id
-        ).first()
-        if subscription:
-            can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "channel")
+        subscription_id = _get_subscription_id_for_limits(db, business_id)
+        if subscription_id:
+            can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -1799,12 +1805,9 @@ async def initiate_messenger_oauth(
         
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
-        # Get active subscription
-        subscription = db.query(Subscription).filter(
-            Subscription.business_id == business_id
-        ).first()
-        if subscription:
-            can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "channel")
+        subscription_id = _get_subscription_id_for_limits(db, business_id)
+        if subscription_id:
+            can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -2168,12 +2171,9 @@ async def initiate_email_oauth(
         
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
-        # Get active subscription
-        subscription = db.query(Subscription).filter(
-            Subscription.business_id == business_id
-        ).first()
-        if subscription:
-            can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "channel")
+        subscription_id = _get_subscription_id_for_limits(db, business_id)
+        if subscription_id:
+            can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -2432,12 +2432,9 @@ async def create_webchat_widget(
         
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
-        # Get active subscription
-        subscription = db.query(Subscription).filter(
-            Subscription.business_id == business_id
-        ).first()
-        if subscription:
-            can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "channel")
+        subscription_id = _get_subscription_id_for_limits(db, business_id)
+        if subscription_id:
+            can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
