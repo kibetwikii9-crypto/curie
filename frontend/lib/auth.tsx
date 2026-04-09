@@ -53,19 +53,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    try {
+    const doLoginRequest = async () => {
       const params = new URLSearchParams();
       params.append('username', email);
       params.append('password', password);
 
       const loginUrl = api.defaults.baseURL + '/api/auth/login';
       console.log('[Auth] Attempting login to:', loginUrl);
-      
-      const response = await api.post('/api/auth/login', params, {
+      return api.post('/api/auth/login', params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
+    };
+
+    try {
+      let response;
+      try {
+        response = await doLoginRequest();
+      } catch (firstError: any) {
+        // Render cold starts / transient restarts can briefly drop connections.
+        const isNetworkError = firstError?.code === 'ERR_NETWORK' || firstError?.message?.includes('Network Error');
+        if (!isNetworkError) throw firstError;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        response = await doLoginRequest();
+      }
 
       if (!response.data || !response.data.access_token) {
         throw new Error('Invalid response from server');

@@ -391,7 +391,13 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
                   </p>
                 </div>
 
-                <div className="space-y-4">
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!isLoading) handleSignInSubmit();
+                  }}
+                >
                   {signInErrors.submit && (
                     <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium flex items-start gap-2">
                       <span className="flex-shrink-0 mt-0.5">⚠️</span>
@@ -493,14 +499,14 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
                   </div>
 
                   <button
-                    type="button"
+                    type="submit"
                     onClick={handleSignInSubmit}
                     disabled={isLoading}
                     className="w-full py-3 px-4 bg-[#007FFF] hover:bg-[#0066CC] text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#007FFF]/20 hover:shadow-xl hover:shadow-[#007FFF]/30 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:ring-offset-2"
                   >
                     {isLoading ? 'Signing in...' : 'Sign In'}
                   </button>
-                </div>
+                </form>
               </div>
             )}
 
