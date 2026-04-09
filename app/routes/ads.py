@@ -98,6 +98,10 @@ class VideoProjectUpdateRequest(BaseModel):
     scenes: Optional[List[Dict[str, Any]]] = None
     assets: Optional[List[Dict[str, Any]]] = None
 
+
+class SaveTemplateRequest(BaseModel):
+    template_name: str
+
 class VideoTemplateResponse(BaseModel):
     id: int
     name: str
@@ -151,6 +155,34 @@ def _parse_json_field(value, default):
             log.warning("Failed to decode JSON field")
             return default
     return default
+
+
+def _autogen_template_thumbnail(template_name: str, assets: Any) -> str:
+    """Generate a thumbnail URL from assets, or fallback SVG data URL."""
+    parsed_assets = _parse_json_field(assets, [])
+    if isinstance(parsed_assets, list):
+        for asset in parsed_assets:
+            if not isinstance(asset, dict):
+                continue
+            url = asset.get("url")
+            if isinstance(url, str) and url:
+                return url
+
+    # Fallback: deterministic simple SVG thumbnail based on template name
+    initials = "".join([part[0] for part in template_name.split()[:2]]).upper() or "VT"
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>"
+        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+        "<stop offset='0%' stop-color='#0ea5e9'/>"
+        "<stop offset='100%' stop-color='#6366f1'/>"
+        "</linearGradient></defs>"
+        "<rect width='1280' height='720' fill='url(#g)'/>"
+        f"<text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' "
+        "font-family='Arial, sans-serif' font-size='180' fill='white' opacity='0.95'>"
+        f"{initials}</text></svg>"
+    )
+    import urllib.parse
+    return "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
 
 # ========== CAMPAIGN ENDPOINTS ==========
 @router.get("/campaigns", response_model=None)
@@ -688,11 +720,16 @@ async def update_video_project(
 @router.post("/video-projects/{project_id}/save-as-template", response_model=None)
 async def save_video_project_as_template(
     project_id: int,
-    template_name: str = Query(...),
+    template_name: Optional[str] = Query(None),
+    body: Optional[SaveTemplateRequest] = None,
     db: Session = Depends(get_db),
     business_id: int = Depends(get_user_business_id)
 ):
     """Save an existing video project as a reusable template."""
+    resolved_template_name = (template_name or (body.template_name if body else "")).strip()
+    if not resolved_template_name:
+        raise HTTPException(status_code=422, detail="template_name is required")
+
     project = db.query(VideoProject).filter(
         VideoProject.id == project_id,
         VideoProject.business_id == business_id
@@ -701,39 +738,45 @@ async def save_video_project_as_template(
     if not project:
         raise HTTPException(status_code=404, detail="Video project not found")
 
-    import json
-    
     # Create or update template
     existing_template = db.query(VideoTemplate).filter(
-        VideoTemplate.name == template_name,
+        VideoTemplate.name == resolved_template_name,
         VideoTemplate.business_id == business_id
     ).first()
 
     template_config = {
         "duration": project.duration,
-        "scenes": json.loads(project.scenes) if isinstance(project.scenes, str) else project.scenes
+        "scenes": _parse_json_field(project.scenes, [])
     }
+    thumbnail_url = _autogen_template_thumbnail(resolved_template_name, project.assets)
 
     if existing_template:
         existing_template.template_config = json.dumps(template_config)
         existing_template.description = project.description
+        existing_template.thumbnail_url = thumbnail_url
         existing_template.updated_at = datetime.utcnow()
         template = existing_template
     else:
         template = VideoTemplate(
             business_id=business_id,
-            name=template_name,
+            name=resolved_template_name,
             description=project.description or f"Template from {project.name}",
             video_type="custom",
             platform="custom",
             template_config=json.dumps(template_config),
+            thumbnail_url=thumbnail_url,
             is_public=True,  # Global/shared template
             usage_count=0
         )
         db.add(template)
 
-    db.commit()
-    db.refresh(template)
+    try:
+        db.commit()
+        db.refresh(template)
+    except Exception as e:
+        db.rollback()
+        log.error("Failed to save template: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save template")
 
     return {
         "message": "Project saved as template successfully",

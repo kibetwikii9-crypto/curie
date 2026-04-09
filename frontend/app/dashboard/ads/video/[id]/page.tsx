@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Play, Trash2, UploadCloud, Save, Share2 } from 'lucide-react'
+import { ArrowLeft, Play, Trash2, UploadCloud, Save, Share2, Film, CheckCircle2 } from 'lucide-react'
 
 type VideoAsset = { id: number; name: string; type: 'video' | 'image' | 'audio'; url: string }
 
@@ -40,7 +40,6 @@ export default function VideoProjectDetailPage() {
   const [project, setProject] = useState<VideoProject | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
 
   useEffect(() => {
     loadProject()
@@ -244,52 +243,61 @@ export default function VideoProjectDetailPage() {
           description: `Saved as template: "${templateName}". Other users can now use this template.`,
         })
       } else {
-        throw new Error('Failed to save template')
+        let errorMessage = 'Failed to save template'
+        try {
+          const payload = await response.json()
+          errorMessage = payload?.detail || errorMessage
+        } catch {
+          // Keep fallback error message
+        }
+        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error('Error saving template:', error)
       toast({
         title: 'Error',
-        description: 'Failed to save as template',
+        description: error instanceof Error ? error.message : 'Failed to save as template',
         variant: 'destructive',
       })
     }
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-6xl">
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border border-gray-200 rounded-lg p-3 mb-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div className="container mx-auto px-4 pb-8 max-w-6xl">
+      <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-4 bg-white/95 backdrop-blur border-b border-gray-200">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 max-w-6xl mx-auto">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-gray-500">Edit Video Project</p>
             <h1 className="text-xl font-bold text-gray-900 truncate">{project.title}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge className={statusClass}>{project.status}</Badge>
-            <Button variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
-              <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            <Button variant="ghost" className="h-9 px-2 sm:px-3" onClick={() => router.push('/dashboard/ads/video')}>
+              <ArrowLeft className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">Back</span>
             </Button>
-            <Button onClick={() => setStatus('rendering')}>
-              <Play className="w-4 h-4 mr-1" /> Render
+            <Button className="h-9 px-2 sm:px-3" onClick={() => setStatus('rendering')}>
+              <Play className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">Render</span>
             </Button>
-            <Button variant="outline" onClick={() => setStatus('published')}>
-              Publish
+            <Button variant="outline" className="h-9 px-2 sm:px-3" onClick={() => setStatus('published')}>
+              <CheckCircle2 className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">Publish</span>
             </Button>
-            <Button variant="outline" onClick={saveAsTemplate}>
-              <Share2 className="w-4 h-4 mr-1" /> Template
+            <Button variant="outline" className="h-9 px-2 sm:px-3" onClick={saveAsTemplate}>
+              <Share2 className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">Template</span>
             </Button>
-            <Button variant="outline" onClick={() => setStatus('failed')} className="text-red-600 border-red-300 hover:bg-red-50">
-              Failed
-            </Button>
-            <Button variant="outline" onClick={onDelete} className="text-red-600 border-red-300 hover:bg-red-50">
-              <Trash2 className="w-4 h-4 mr-1" /> Delete
+            <Button variant="outline" className="h-9 px-2 sm:px-3 text-red-600 border-red-300 hover:bg-red-50" onClick={onDelete}>
+              <Trash2 className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">Delete</span>
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="md:col-span-2">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Project Basics</CardTitle>
           </CardHeader>
@@ -366,14 +374,27 @@ export default function VideoProjectDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Project Summary</CardTitle>
-            <CardDescription>Quick overview</CardDescription>
+            <CardTitle>Live Preview</CardTitle>
+            <CardDescription>Quick look at your project output</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
-            <p><strong>Status:</strong> {project.status}</p>
-            <p><strong>Scenes:</strong> {project.scenes.length}</p>
-            <p><strong>Assets:</strong> {project.assets.length}</p>
-            <p><strong>Duration:</strong> {project.duration}</p>
+          <CardContent className="space-y-3">
+            {preview ? (
+              <video
+                className="w-full rounded-md max-h-[260px] object-cover bg-black"
+                src={preview}
+                controls
+              />
+            ) : (
+              <div className="rounded-md border border-dashed border-gray-300 h-[180px] flex items-center justify-center text-gray-500">
+                <Film className="w-5 h-5 mr-2" /> No preview yet
+              </div>
+            )}
+            <div className="space-y-1 text-sm text-gray-600">
+              <p><strong>Status:</strong> {project.status}</p>
+              <p><strong>Scenes:</strong> {project.scenes.length}</p>
+              <p><strong>Assets:</strong> {project.assets.length}</p>
+              <p><strong>Duration:</strong> {project.duration}</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -420,24 +441,7 @@ export default function VideoProjectDetailPage() {
             <p className="text-sm text-gray-500">No assets yet. Upload at least one video file to preview.</p>
           )}
 
-          {preview ? (
-            <div className="mt-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold">Preview</label>
-                <Button variant="outline" onClick={() => setIsPreviewFullscreen((prev) => !prev)}>
-                  {isPreviewFullscreen ? 'Compact' : 'Fullscreen'}
-                </Button>
-              </div>
-              <video
-                className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'}`}
-                src={preview}
-                controls
-                autoPlay
-              />
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">Select a video asset to preview.</p>
-          )}
+          <p className="text-sm text-gray-500">Select a video asset to update preview on the right.</p>
         </CardContent>
       </Card>
 
