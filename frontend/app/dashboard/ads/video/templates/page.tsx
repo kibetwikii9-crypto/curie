@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Film, Plus } from 'lucide-react'
+import { ArrowLeft, Film, Plus, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { apiFetch } from '@/lib/api'
 
@@ -31,6 +31,8 @@ export default function TemplatesPage() {
   const { toast } = useToast()
   const [templates, setTemplates] = useState<VideoTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [creatingTemplateId, setCreatingTemplateId] = useState<number | null>(null)
+  const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null)
 
   useEffect(() => {
     loadTemplates()
@@ -63,9 +65,11 @@ export default function TemplatesPage() {
   }
 
   const handleCreateFromTemplate = async (templateId: number) => {
+    if (creatingTemplateId !== null) return
     const projectName = `${templates.find(t => t.id === templateId)?.name || 'Project'} - ${new Date().toLocaleDateString()}`
     
     try {
+      setCreatingTemplateId(templateId)
       const response = await apiFetch(`/api/ads/video-projects/from-template/${templateId}?project_name=${encodeURIComponent(projectName)}`, {
         method: 'POST',
         headers: {
@@ -91,11 +95,31 @@ export default function TemplatesPage() {
         description: 'Failed to create project from template',
         variant: 'destructive'
       })
+    } finally {
+      setCreatingTemplateId(null)
     }
   }
 
   const handleCreateBlank = () => {
     router.push('/dashboard/ads/video/create')
+  }
+
+  const handleDeleteTemplate = async (templateId: number) => {
+    if (deletingTemplateId !== null) return
+    try {
+      setDeletingTemplateId(templateId)
+      const response = await apiFetch(`/api/ads/video-templates/${templateId}`, { method: 'DELETE' })
+      if (!response.ok) {
+        throw new Error('Failed to delete template')
+      }
+      setTemplates((prev) => prev.filter((t) => t.id !== templateId))
+      toast({ title: 'Deleted', description: 'Template removed successfully.' })
+    } catch (error) {
+      console.error('Error deleting template:', error)
+      toast({ title: 'Error', description: 'Failed to delete template', variant: 'destructive' })
+    } finally {
+      setDeletingTemplateId(null)
+    }
   }
 
   if (loading) {
@@ -140,9 +164,23 @@ export default function TemplatesPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
 
               <div className="absolute top-3 right-3">
-                <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-800">
-                  {template.duration || '00:30'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-800">
+                    {template.duration || '00:30'}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-full bg-white/90 p-1 text-red-600 hover:bg-white"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteTemplate(template.id)
+                    }}
+                    disabled={deletingTemplateId !== null}
+                    aria-label="Delete template"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
@@ -151,8 +189,12 @@ export default function TemplatesPage() {
               </div>
             </div>
             <CardContent className="p-3">
-              <Button onClick={() => handleCreateFromTemplate(template.id)} className="w-full">
-                Use Template
+              <Button
+                onClick={() => handleCreateFromTemplate(template.id)}
+                className="w-full"
+                disabled={creatingTemplateId !== null}
+              >
+                {creatingTemplateId === template.id ? 'Creating...' : 'Use Template'}
               </Button>
             </CardContent>
           </Card>

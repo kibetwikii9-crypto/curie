@@ -21,7 +21,7 @@ type VideoProject = {
   created_at: string
   updated_at: string
   scenes: Array<{ id: number; name: string; duration: number; caption: string }>
-  assets: Array<{ id: number; name: string; type: 'video' | 'image' | 'audio'; url: string }>
+  assets: Array<{ id: number; name: string; type: 'video' | 'image' | 'audio'; url: string; thumbnail?: string }>
 }
 
 const defaultProject: Omit<VideoProject, 'id' | 'created_at' | 'updated_at'> = {
@@ -41,6 +41,30 @@ const getTotalDuration = (scenes: VideoProject['scenes']) => {
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+const generateVideoThumbnail = (url: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.src = url
+    video.muted = true
+    video.playsInline = true
+    video.currentTime = 0.1
+    video.onloadeddata = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth || 640
+        canvas.height = video.videoHeight || 360
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return resolve(null)
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.75))
+      } catch {
+        resolve(null)
+      }
+    }
+    video.onerror = () => resolve(null)
+  })
 }
 
 export default function VideoProjectCreatePage() {
@@ -88,15 +112,22 @@ export default function VideoProjectCreatePage() {
     })
   }
 
-  const onFileUpload = (files: FileList | null, type: 'video' | 'image' | 'audio') => {
+  const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
-    const newAssets = Array.from(files).map((file, index) => ({
-      id: Date.now() + index,
-      name: file.name,
-      type,
-      url: URL.createObjectURL(file)
-    }))
+    const newAssets = await Promise.all(
+      Array.from(files).map(async (file, index) => {
+        const url = URL.createObjectURL(file)
+        const thumbnail = type === 'video' ? await generateVideoThumbnail(url) : undefined
+        return {
+          id: Date.now() + index,
+          name: file.name,
+          type,
+          url,
+          thumbnail: thumbnail || undefined,
+        }
+      })
+    )
 
     setProject((prev) => ({ ...prev, assets: [...prev.assets, ...newAssets], updated_at: new Date().toISOString().slice(0, 10) }))
     if (newAssets.length > 0) {

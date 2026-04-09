@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, Play, Trash2, UploadCloud, Save, Share2, Film, CheckCircle2 } from 'lucide-react'
 
-type VideoAsset = { id: number; name: string; type: 'video' | 'image' | 'audio'; url: string }
+type VideoAsset = { id: number; name: string; type: 'video' | 'image' | 'audio'; url: string; thumbnail?: string }
 
 type VideoScene = { id: number; name: string; duration: number; caption: string }
 
@@ -40,6 +40,7 @@ export default function VideoProjectDetailPage() {
   const [project, setProject] = useState<VideoProject | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [savingTemplate, setSavingTemplate] = useState(false)
 
   useEffect(() => {
     loadProject()
@@ -66,9 +67,9 @@ export default function VideoProjectDetailPage() {
         // Set preview to first video asset or first asset
         const firstVideo = loadedProject.assets.find((asset) => asset.type === 'video')
         if (firstVideo) {
-          setPreview(firstVideo.url)
+          setPreview(firstVideo.thumbnail || firstVideo.url)
         } else if (loadedProject.assets.length > 0) {
-          setPreview(loadedProject.assets[0].url)
+          setPreview(loadedProject.assets[0].thumbnail || loadedProject.assets[0].url)
         }
       } else {
         toast({ title: 'Not found', description: 'Video project does not exist', variant: 'destructive' })
@@ -154,19 +155,50 @@ export default function VideoProjectDetailPage() {
     }
   }
 
+  const generateVideoThumbnail = (url: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.src = url
+      video.muted = true
+      video.playsInline = true
+      video.currentTime = 0.1
+      video.onloadeddata = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = video.videoWidth || 640
+          canvas.height = video.videoHeight || 360
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return resolve(null)
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL('image/jpeg', 0.75))
+        } catch {
+          resolve(null)
+        }
+      }
+      video.onerror = () => resolve(null)
+    })
+  }
+
   const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
-    const assets = Array.from(files).map((file, idx) => ({
-      id: Date.now() + idx,
-      name: file.name,
-      type,
-      url: URL.createObjectURL(file)
-    }))
+    const assets = await Promise.all(
+      Array.from(files).map(async (file, idx) => {
+        const url = URL.createObjectURL(file)
+        const thumbnail = type === 'video' ? await generateVideoThumbnail(url) : undefined
+        return {
+          id: Date.now() + idx,
+          name: file.name,
+          type,
+          url,
+          thumbnail: thumbnail || undefined,
+        }
+      })
+    )
 
     const updated = { ...project, assets: [...project.assets, ...assets] }
     setProject(updated)
-    setPreview(assets[0].url)
+    setPreview(assets[0].thumbnail || assets[0].url)
     
     try {
       await apiFetch(`/api/ads/video-projects/${project.id}`, {
@@ -229,10 +261,12 @@ export default function VideoProjectDetailPage() {
   }
 
   const saveAsTemplate = async () => {
+    if (savingTemplate) return
     const templateName = prompt('Template name:', `${project.title} Template`)
     if (!templateName) return
 
     try {
+      setSavingTemplate(true)
       const response = await apiFetch(`/api/ads/video-projects/${project.id}/save-as-template?template_name=${encodeURIComponent(templateName)}`, {
         method: 'POST',
       })
@@ -259,6 +293,8 @@ export default function VideoProjectDetailPage() {
         description: error instanceof Error ? error.message : 'Failed to save as template',
         variant: 'destructive',
       })
+    } finally {
+      setSavingTemplate(false)
     }
   }
 
@@ -284,9 +320,9 @@ export default function VideoProjectDetailPage() {
               <CheckCircle2 className="w-4 h-4 sm:mr-1" />
               <span className="hidden sm:inline">Publish</span>
             </Button>
-            <Button variant="outline" className="h-9 px-2 sm:px-3" onClick={saveAsTemplate}>
+            <Button variant="outline" className="h-9 px-2 sm:px-3" onClick={saveAsTemplate} disabled={savingTemplate}>
               <Share2 className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">Template</span>
+              <span className="hidden sm:inline">{savingTemplate ? 'Saving...' : 'Template'}</span>
             </Button>
             <Button variant="outline" className="h-9 px-2 sm:px-3 text-red-600 border-red-300 hover:bg-red-50" onClick={onDelete}>
               <Trash2 className="w-4 h-4 sm:mr-1" />
@@ -379,11 +415,9 @@ export default function VideoProjectDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {preview ? (
-              <video
-                className="w-full rounded-md max-h-[260px] object-cover bg-black"
-                src={preview}
-                controls
-              />
+              <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
+                <video className="w-full h-full object-contain" src={preview} controls />
+              </div>
             ) : (
               <div className="rounded-md border border-dashed border-gray-300 h-[180px] flex items-center justify-center text-gray-500">
                 <Film className="w-5 h-5 mr-2" /> No preview yet
@@ -430,7 +464,7 @@ export default function VideoProjectDetailPage() {
                   <span className="text-sm">{asset.name}</span>
                   <Badge>{asset.type}</Badge>
                   {asset.type === 'video' && (
-                    <Button variant="ghost" onClick={() => setPreview(asset.url)}>
+                    <Button variant="ghost" onClick={() => setPreview(asset.thumbnail || asset.url)}>
                       View
                     </Button>
                   )}

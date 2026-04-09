@@ -164,6 +164,9 @@ def _autogen_template_thumbnail(template_name: str, assets: Any) -> str:
         for asset in parsed_assets:
             if not isinstance(asset, dict):
                 continue
+            thumb = asset.get("thumbnail")
+            if isinstance(thumb, str) and thumb:
+                return thumb
             url = asset.get("url")
             if isinstance(url, str) and url and not url.startswith("blob:"):
                 return url
@@ -494,11 +497,19 @@ async def complete_campaign(
 @router.get("/video-templates", response_model=None)
 async def get_video_templates(
     db: Session = Depends(get_db),
+    business_id: int = Depends(get_user_business_id)
 ):
     """Get all public video templates (global + user's business templates)."""
     templates = db.query(VideoTemplate).filter(
         VideoTemplate.is_public == True
     ).all()
+
+    # Hide legacy hardcoded template names from old demos.
+    legacy_names = {"Product Launch", "Testimonial", "Flash Sale"}
+    templates = [
+        t for t in templates
+        if t.name not in legacy_names and (t.business_id is None or t.business_id == business_id)
+    ]
 
     return {
         "templates": [
@@ -517,6 +528,26 @@ async def get_video_templates(
             for t in templates
         ]
     }
+
+
+@router.delete("/video-templates/{template_id}")
+async def delete_video_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    business_id: int = Depends(get_user_business_id)
+):
+    """Delete a video template owned by current business."""
+    template = db.query(VideoTemplate).filter(
+        VideoTemplate.id == template_id,
+        VideoTemplate.business_id == business_id
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    db.delete(template)
+    db.commit()
+    return {"message": "Template deleted successfully"}
 
 @router.post("/video-projects/from-template/{template_id}", response_model=None)
 async def create_video_project_from_template(

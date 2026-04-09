@@ -22,6 +22,8 @@ interface VideoProject {
 }
 
 const getProjectThumbnail = (project: VideoProject) => {
+  const thumb = project.assets?.find((asset) => asset?.thumbnail)?.thumbnail
+  if (typeof thumb === 'string' && thumb) return thumb
   const videoAsset = project.assets?.find((asset) => asset?.type === 'video' && asset?.url)
   if (videoAsset?.url && typeof videoAsset.url === 'string' && !videoAsset.url.startsWith('blob:')) return videoAsset.url as string
   const imageAsset = project.assets?.find((asset) => asset?.type === 'image' && asset?.url)
