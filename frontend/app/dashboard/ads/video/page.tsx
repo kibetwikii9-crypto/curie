@@ -40,6 +40,7 @@ const getProjectVideo = (project: VideoProject) => {
 export default function VideoDashboard() {
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeFilter, setActiveFilter] = useState<'all' | 'rendering' | 'published' | 'draft'>('all')
   const router = useRouter()
   const { toast } = useToast()
 
@@ -92,6 +93,18 @@ export default function VideoDashboard() {
     router.push('/dashboard/ads/video/templates')
   }
 
+  const filteredProjects = projects.filter((project) => {
+    if (activeFilter === 'all') return true
+    return project.status === activeFilter
+  })
+
+  const countByStatus = {
+    all: projects.length,
+    rendering: projects.filter((p) => p.status === 'rendering').length,
+    published: projects.filter((p) => p.status === 'published').length,
+    draft: projects.filter((p) => p.status === 'draft').length,
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -118,47 +131,28 @@ export default function VideoDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Projects</CardTitle>
-            <CardDescription>All active video projects</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{projects.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Rendering</CardTitle>
-            <CardDescription>Currently in render queue</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{projects.filter(p => p.status === 'rendering').length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Published</CardTitle>
-            <CardDescription>Released campaigns</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{projects.filter(p => p.status === 'published').length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Drafts</CardTitle>
-            <CardDescription>Work in progress</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{projects.filter(p => p.status === 'draft').length}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="mb-6">
+        <CardContent className="pt-5 pb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Project view</p>
+            <p className="text-xs text-gray-500">Choose one category to quickly focus your list.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="project-filter" className="text-sm text-gray-600">Show</label>
+            <select
+              id="project-filter"
+              className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm"
+              value={activeFilter}
+              onChange={(e) => setActiveFilter(e.target.value as 'all' | 'rendering' | 'published' | 'draft')}
+            >
+              <option value="all">Projects ({countByStatus.all})</option>
+              <option value="rendering">Rendering ({countByStatus.rendering})</option>
+              <option value="published">Published ({countByStatus.published})</option>
+              <option value="draft">Drafts ({countByStatus.draft})</option>
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -166,36 +160,39 @@ export default function VideoDashboard() {
           <CardDescription>Manage project timeline, assets, and rendering</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {projects.length === 0 ? (
+          {filteredProjects.length === 0 ? (
             <div className="text-center text-gray-500">
               <FileVideo className="mx-auto h-12 w-12" />
-              <p className="mt-3">No video projects yet. Start by creating a new one.</p>
+              <p className="mt-3">
+                {projects.length === 0
+                  ? 'No video projects yet. Start by creating a new one.'
+                  : 'No projects match this filter yet.'}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {projects.map((project) => {
+              {filteredProjects.map((project) => {
                 const thumbnail = getProjectThumbnail(project)
                 const videoUrl = getProjectVideo(project)
                 return (
                   <div key={project.id} className="rounded-lg border border-gray-200 overflow-hidden bg-white group">
-                    <div className="relative aspect-video bg-gray-100">
+                    <div className="relative aspect-video bg-black">
                       {videoUrl ? (
-                        <video className="h-full w-full object-cover" src={videoUrl} muted playsInline />
+                        <video className="h-full w-full object-contain" src={videoUrl} controls playsInline preload="metadata" />
                       ) : thumbnail ? (
-                        <img src={thumbnail} alt={project.name} className="h-full w-full object-cover" />
+                        <img src={thumbnail} alt={project.name} className="h-full w-full object-contain" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                           <FileVideo className="h-8 w-8 text-gray-500" />
                         </div>
                       )}
 
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
                       <div className="absolute top-3 right-3">
                         <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-800">
                           {project.duration}
                         </span>
                       </div>
-                      <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white pointer-events-none">
                         <h3 className="text-lg font-semibold leading-tight truncate">{project.name}</h3>
                         <p className="text-xs text-white/85 mt-1">
                           {project.status} • {new Date(project.updated_at).toLocaleDateString()}

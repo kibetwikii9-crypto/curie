@@ -11,8 +11,8 @@ from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, VideoTemplate
-from app.routes.auth import get_user_business_id
+from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, VideoTemplate, User as UserModel
+from app.routes.auth import get_user_business_id, get_current_user
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ads", tags=["ads"])
@@ -497,9 +497,9 @@ async def complete_campaign(
 @router.get("/video-templates", response_model=None)
 async def get_video_templates(
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    current_user: UserModel = Depends(get_current_user)
 ):
-    """Get all public video templates (global + user's business templates)."""
+    """Get all public templates; delete allowed only for creator."""
     templates = db.query(VideoTemplate).filter(
         VideoTemplate.is_public == True
     ).all()
@@ -508,7 +508,7 @@ async def get_video_templates(
     legacy_names = {"Product Launch", "Testimonial", "Flash Sale"}
     templates = [
         t for t in templates
-        if t.name not in legacy_names and (t.business_id is None or t.business_id == business_id)
+        if t.name not in legacy_names
     ]
 
     return {
@@ -523,7 +523,8 @@ async def get_video_templates(
                 "scenes": (_parse_json_field(t.template_config, {}) or {}).get("scenes", []),
                 "template_config": t.template_config,
                 "thumbnail_url": t.thumbnail_url,
-                "is_public": t.is_public
+                "is_public": t.is_public,
+                "can_delete": bool(t.creator_user_id and t.creator_user_id == current_user.id),
             }
             for t in templates
         ]
@@ -534,12 +535,12 @@ async def get_video_templates(
 async def delete_video_template(
     template_id: int,
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    current_user: UserModel = Depends(get_current_user)
 ):
-    """Delete a video template owned by current business."""
+    """Delete a video template only if current user created it."""
     template = db.query(VideoTemplate).filter(
         VideoTemplate.id == template_id,
-        VideoTemplate.business_id == business_id
+        VideoTemplate.creator_user_id == current_user.id
     ).first()
 
     if not template:
@@ -554,7 +555,8 @@ async def create_video_project_from_template(
     template_id: int,
     project_name: str = Query(...),
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
     """Create a new video project from a template."""
     template = db.query(VideoTemplate).filter(
@@ -570,6 +572,7 @@ async def create_video_project_from_template(
 
     project = VideoProject(
         business_id=business_id,
+        owner_user_id=current_user.id,
         name=project_name,
         description=template.description,
         template_id=template_id,
@@ -602,10 +605,14 @@ async def get_video_projects(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
-    """Get video projects for the business."""
-    query = db.query(VideoProject).filter(VideoProject.business_id == business_id)
+    """Get personal video projects for the current user."""
+    query = db.query(VideoProject).filter(
+        VideoProject.business_id == business_id,
+        VideoProject.owner_user_id == current_user.id
+    )
 
     if campaign_id:
         query = query.filter(VideoProject.campaign_id == campaign_id)
@@ -638,7 +645,8 @@ async def get_video_projects(
 async def create_video_project(
     request: VideoProjectCreateRequest,
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
     """Create a new video project."""
     # Validate campaign_id if provided
@@ -652,6 +660,7 @@ async def create_video_project(
 
     project = VideoProject(
         business_id=business_id,
+        owner_user_id=current_user.id,
         campaign_id=request.campaign_id,
         name=request.name,
         description=request.description,
@@ -681,12 +690,14 @@ async def create_video_project(
 async def get_video_project(
     project_id: int,
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
     """Get a specific video project."""
     project = db.query(VideoProject).filter(
         VideoProject.id == project_id,
-        VideoProject.business_id == business_id
+        VideoProject.business_id == business_id,
+        VideoProject.owner_user_id == current_user.id
     ).first()
 
     if not project:
@@ -709,12 +720,14 @@ async def update_video_project(
     project_id: int,
     request: VideoProjectUpdateRequest,
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
     """Update a video project."""
     project = db.query(VideoProject).filter(
         VideoProject.id == project_id,
-        VideoProject.business_id == business_id
+        VideoProject.business_id == business_id,
+        VideoProject.owner_user_id == current_user.id
     ).first()
 
     if not project:
@@ -754,7 +767,8 @@ async def save_video_project_as_template(
     template_name: Optional[str] = Query(None),
     body: Optional[SaveTemplateRequest] = None,
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
     """Save an existing video project as a reusable template."""
     resolved_template_name = (template_name or (body.template_name if body else "")).strip()
@@ -763,7 +777,8 @@ async def save_video_project_as_template(
 
     project = db.query(VideoProject).filter(
         VideoProject.id == project_id,
-        VideoProject.business_id == business_id
+        VideoProject.business_id == business_id,
+        VideoProject.owner_user_id == current_user.id
     ).first()
 
     if not project:
@@ -772,7 +787,7 @@ async def save_video_project_as_template(
     # Create or update template
     existing_template = db.query(VideoTemplate).filter(
         VideoTemplate.name == resolved_template_name,
-        VideoTemplate.business_id == business_id
+        VideoTemplate.creator_user_id == current_user.id
     ).first()
 
     template_config = {
@@ -790,6 +805,7 @@ async def save_video_project_as_template(
     else:
         template = VideoTemplate(
             business_id=business_id,
+            creator_user_id=current_user.id,
             name=resolved_template_name,
             description=project.description or f"Template from {project.name}",
             video_type="custom",
@@ -819,12 +835,14 @@ async def save_video_project_as_template(
 async def delete_video_project(
     project_id: int,
     db: Session = Depends(get_db),
-    business_id: int = Depends(get_user_business_id)
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
 ):
     """Delete a video project."""
     project = db.query(VideoProject).filter(
         VideoProject.id == project_id,
-        VideoProject.business_id == business_id
+        VideoProject.business_id == business_id,
+        VideoProject.owner_user_id == current_user.id
     ).first()
 
     if not project:

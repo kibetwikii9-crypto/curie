@@ -17,6 +17,7 @@ interface VideoTemplate {
   duration: string
   scenes: Array<{ id: number; name: string; duration: number; caption: string }>
   thumbnail_url?: string
+  can_delete?: boolean
 }
 
 const templateBgByType: Record<string, string> = {
@@ -156,7 +157,7 @@ export default function TemplatesPage() {
           <Card key={template.id} className="hover:shadow-lg transition-shadow overflow-hidden group">
             <div className="relative h-64">
               {template.thumbnail_url && !template.thumbnail_url.startsWith('blob:') ? (
-                <img src={template.thumbnail_url} alt={template.name} className="h-full w-full object-cover" />
+                <img src={template.thumbnail_url} alt={template.name} className="h-full w-full object-contain bg-black" />
               ) : (
                 <div className={`h-full w-full bg-gradient-to-br ${templateBgByType[template.video_type] || 'from-slate-500 to-gray-600'} flex items-center justify-center`}>
                   <Film className="w-10 h-10 text-white/90" />
@@ -170,18 +171,20 @@ export default function TemplatesPage() {
                   <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-800">
                     {template.duration || '00:30'}
                   </span>
-                  <button
-                    type="button"
-                    className="rounded-full bg-white/90 p-1 text-red-600 hover:bg-white"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteTemplate(template.id)
-                    }}
-                    disabled={deletingTemplateId !== null}
-                    aria-label="Delete template"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {template.can_delete && (
+                    <button
+                      type="button"
+                      className="rounded-full bg-white/90 p-1 text-red-600 hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteTemplate(template.id)
+                      }}
+                      disabled={deletingTemplateId !== null}
+                      aria-label="Delete template"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 

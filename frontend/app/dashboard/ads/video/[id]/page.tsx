@@ -41,6 +41,7 @@ export default function VideoProjectDetailPage() {
   const [previewAsset, setPreviewAsset] = useState<VideoAsset | null>(null)
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
 
   useEffect(() => {
     loadProject()
@@ -63,6 +64,7 @@ export default function VideoProjectDetailPage() {
           assets: data.assets || []
         }
         setProject(loadedProject)
+        setIsDirty(false)
         
         // Set preview to first video asset or first asset
         const firstVideo = loadedProject.assets.find((asset) => asset.type === 'video')
@@ -106,53 +108,19 @@ export default function VideoProjectDetailPage() {
     )
   }
 
-  const updateScene = async (sceneId: number, field: keyof VideoScene, value: string | number) => {
+  const updateScene = (sceneId: number, field: keyof VideoScene, value: string | number) => {
     const scenes = project.scenes.map((scene) =>
       scene.id === sceneId ? { ...scene, [field]: field === 'duration' ? Number(value) : value } : scene
     )
     const update = { ...project, scenes, duration: getTotalDuration(scenes) }
     setProject(update)
-    
-    try {
-      await apiFetch(`/api/ads/video-projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: update.title,
-          description: update.description,
-          status: update.status,
-          duration: update.duration,
-          scenes: update.scenes,
-          assets: update.assets
-        }),
-      })
-    } catch (error) {
-      console.error('Error saving project:', error)
-      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-    }
+    setIsDirty(true)
   }
 
-  const updateField = async (field: keyof VideoProject, value: string) => {
+  const updateField = (field: keyof VideoProject, value: string) => {
     const updated = { ...project, [field]: value }
     setProject(updated)
-    
-    try {
-      await apiFetch(`/api/ads/video-projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: updated.title,
-          description: updated.description,
-          status: updated.status,
-          duration: updated.duration,
-          scenes: updated.scenes,
-          assets: updated.assets
-        }),
-      })
-    } catch (error) {
-      console.error('Error saving project:', error)
-      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-    }
+    setIsDirty(true)
   }
 
   const generateVideoThumbnail = (url: string): Promise<string | null> => {
@@ -199,24 +167,7 @@ export default function VideoProjectDetailPage() {
     const updated = { ...project, assets: [...project.assets, ...assets] }
     setProject(updated)
     setPreviewAsset(assets[0])
-    
-    try {
-      await apiFetch(`/api/ads/video-projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: updated.title,
-          description: updated.description,
-          status: updated.status,
-          duration: updated.duration,
-          scenes: updated.scenes,
-          assets: updated.assets
-        }),
-      })
-    } catch (error) {
-      console.error('Error saving project:', error)
-      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-    }
+    setIsDirty(true)
   }
 
   const isPlayableVideo = (asset: VideoAsset | null) =>
@@ -394,24 +345,7 @@ export default function VideoProjectDetailPage() {
                     const scenes = project.scenes.filter((s) => s.id !== scene.id)
                     const updated = { ...project, scenes, duration: getTotalDuration(scenes) }
                     setProject(updated)
-                    
-                    try {
-                      await apiFetch(`/api/ads/video-projects/${project.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          name: updated.title,
-                          description: updated.description,
-                          status: updated.status,
-                          duration: updated.duration,
-                          scenes: updated.scenes,
-                          assets: updated.assets
-                        }),
-                      })
-                    } catch (error) {
-                      console.error('Error saving project:', error)
-                      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-                    }
+                    setIsDirty(true)
                   }}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -448,11 +382,12 @@ export default function VideoProjectDetailPage() {
             )}
             {previewAsset?.url?.startsWith('blob:') && (
               <p className="text-xs text-amber-600">
-                This video was saved with a local browser URL, so only thumbnail preview is available.
+                This file uses a temporary browser URL (`blob:`). Re-upload it to persistent storage to enable full video playback.
               </p>
             )}
             <div className="space-y-1 text-sm text-gray-600">
               <p><strong>Status:</strong> {project.status}</p>
+              <p><strong>Unsaved changes:</strong> {isDirty ? 'Yes' : 'No'}</p>
               <p><strong>Scenes:</strong> {project.scenes.length}</p>
               <p><strong>Assets:</strong> {project.assets.length}</p>
               <p><strong>Duration:</strong> {project.duration}</p>
@@ -529,6 +464,7 @@ export default function VideoProjectDetailPage() {
             }
 
             toast({ title: 'Saved', description: 'Project updates saved successfully.' })
+            setIsDirty(false)
             // Redirect to project library so saved project is visible immediately
             await new Promise(resolve => setTimeout(resolve, 500))
             router.push('/dashboard/ads/video')
