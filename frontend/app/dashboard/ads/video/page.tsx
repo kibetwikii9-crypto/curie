@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BarChart3, FileVideo, Plus, Play, Film, SlidersHorizontal } from 'lucide-react'
+import { FileVideo, Plus, Play } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { apiFetch } from '@/lib/api'
 
@@ -23,9 +23,10 @@ interface VideoProject {
 
 const getProjectThumbnail = (project: VideoProject) => {
   const videoAsset = project.assets?.find((asset) => asset?.type === 'video' && asset?.url)
-  if (videoAsset?.url) return videoAsset.url as string
+  if (videoAsset?.url && typeof videoAsset.url === 'string' && !videoAsset.url.startsWith('blob:')) return videoAsset.url as string
   const imageAsset = project.assets?.find((asset) => asset?.type === 'image' && asset?.url)
-  return (imageAsset?.url as string) || ''
+  if (imageAsset?.url && typeof imageAsset.url === 'string' && !imageAsset.url.startsWith('blob:')) return imageAsset.url as string
+  return ''
 }
 
 export default function VideoDashboard() {
@@ -167,8 +168,8 @@ export default function VideoDashboard() {
               {projects.map((project) => {
                 const thumbnail = getProjectThumbnail(project)
                 return (
-                  <div key={project.id} className="rounded-lg border border-gray-200 overflow-hidden bg-white">
-                    <div className="h-36 bg-gray-100">
+                  <div key={project.id} className="rounded-lg border border-gray-200 overflow-hidden bg-white group">
+                    <div className="relative h-64 bg-gray-100">
                       {thumbnail ? (
                         thumbnail.includes('blob:') ? (
                           <video className="h-full w-full object-cover" src={thumbnail} muted />
@@ -180,12 +181,21 @@ export default function VideoDashboard() {
                           <FileVideo className="h-8 w-8 text-gray-500" />
                         </div>
                       )}
-                    </div>
-                    <div className="p-4 flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold">{project.name}</h3>
-                        <p className="text-sm text-gray-500">Duration: {project.duration} • Updated {new Date(project.updated_at).toLocaleDateString()}</p>
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
+                      <div className="absolute top-3 right-3">
+                        <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-800">
+                          {project.duration}
+                        </span>
                       </div>
+                      <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                        <h3 className="text-lg font-semibold leading-tight truncate">{project.name}</h3>
+                        <p className="text-xs text-white/85 mt-1">
+                          {project.status} • {new Date(project.updated_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-3 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Badge className={getStatusClass(project.status)}>{project.status}</Badge>
                         <Button variant="outline" onClick={() => router.push(`/dashboard/ads/video/${project.id}`)}>
@@ -202,38 +212,6 @@ export default function VideoDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 mt-6 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Template Library</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
-            <p><strong>Product Launch</strong> – quick ad template</p>
-            <p><strong>Testimonial</strong> – customer story script</p>
-            <p><strong>Flash Sale</strong> – fast conversion story</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Assets</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
-            <p>Video clips, images, music library, and voiceover.</p>
-            <p>Drag & drop timeline assembly coming soon.</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Analytics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
-            <p><strong>Views</strong>, <strong>engagement</strong>, <strong>CTR</strong>.</p>
-            <p>Publish to social networks and track results.</p>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }

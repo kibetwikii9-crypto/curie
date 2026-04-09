@@ -165,7 +165,7 @@ def _autogen_template_thumbnail(template_name: str, assets: Any) -> str:
             if not isinstance(asset, dict):
                 continue
             url = asset.get("url")
-            if isinstance(url, str) and url:
+            if isinstance(url, str) and url and not url.startswith("blob:"):
                 return url
 
     # Fallback: deterministic simple SVG thumbnail based on template name

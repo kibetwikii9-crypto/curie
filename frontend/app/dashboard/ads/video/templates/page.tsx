@@ -31,7 +31,6 @@ export default function TemplatesPage() {
   const { toast } = useToast()
   const [templates, setTemplates] = useState<VideoTemplate[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
 
   useEffect(() => {
     loadTemplates()
@@ -128,45 +127,32 @@ export default function TemplatesPage() {
 
         {/* Template cards */}
         {templates.map((template) => (
-          <Card key={template.id} className="hover:shadow-lg transition-shadow overflow-hidden">
-            <div className="h-32 bg-gray-100">
-              {template.thumbnail_url ? (
+          <Card key={template.id} className="hover:shadow-lg transition-shadow overflow-hidden group">
+            <div className="relative h-64">
+              {template.thumbnail_url && !template.thumbnail_url.startsWith('blob:') ? (
                 <img src={template.thumbnail_url} alt={template.name} className="h-full w-full object-cover" />
               ) : (
                 <div className={`h-full w-full bg-gradient-to-br ${templateBgByType[template.video_type] || 'from-slate-500 to-gray-600'} flex items-center justify-center`}>
                   <Film className="w-10 h-10 text-white/90" />
                 </div>
               )}
-            </div>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-lg">{template.name}</CardTitle>
-                  <CardDescription className="text-xs mt-1">{template.duration}</CardDescription>
-                </div>
-                <Film className="w-5 h-5 text-gray-400" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-gray-600">{template.description}</p>
-              
-              <div className="bg-gray-50 rounded p-3">
-                <p className="text-xs font-semibold text-gray-700 mb-2">Scenes ({template.scenes?.length || 0}):</p>
-                <ul className="text-xs text-gray-600 space-y-1">
-                  {template.scenes?.map((scene, idx) => (
-                    <li key={idx} className="flex justify-between">
-                      <span>{scene.name}</span>
-                      <span className="text-gray-500">{scene.duration}s</span>
-                    </li>
-                  )) || <li>No scenes</li>}
-                </ul>
+
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
+
+              <div className="absolute top-3 right-3">
+                <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-800">
+                  {template.duration || '00:30'}
+                </span>
               </div>
 
-              <Button 
-                onClick={() => handleCreateFromTemplate(template.id)}
-                className="w-full"
-              >
-                Use This Template
+              <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                <h3 className="text-lg font-semibold leading-tight truncate">{template.name}</h3>
+                <p className="text-xs text-white/85 mt-1 line-clamp-2">{template.description || 'Ready-to-use video template'}</p>
+              </div>
+            </div>
+            <CardContent className="p-3">
+              <Button onClick={() => handleCreateFromTemplate(template.id)} className="w-full">
+                Use Template
               </Button>
             </CardContent>
           </Card>
