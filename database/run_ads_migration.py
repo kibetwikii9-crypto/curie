@@ -10,8 +10,7 @@ from pathlib import Path
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import engine, SessionLocal
-from sqlalchemy import text
+from app.database import engine
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +27,7 @@ def run_ads_migration():
         return False
 
     log.info(f"Reading migration file: {migration_file}")
-    with open(migration_file, 'r') as f:
+    with open(migration_file, "r", encoding="utf-8") as f:
         migration_sql = f.read()
 
     # Get database connection
@@ -37,13 +36,17 @@ def run_ads_migration():
     try:
         log.info("Starting ads system migration...")
 
-        # Execute the entire migration as one transaction
-        with db_engine.begin() as connection:
+        raw_conn = db_engine.raw_connection()
+        try:
             log.info("Executing ads system migration SQL...")
-            connection.execute(text(migration_sql))
-
-        log.info("✅ Ads system migration completed successfully!")
-        return True
+            with raw_conn.cursor() as cursor:
+                cursor.execute(migration_sql)
+            raw_conn.commit()
+        except Exception:
+            raw_conn.rollback()
+            raise
+        finally:
+            raw_conn.close()
 
         log.info("✅ Ads system migration completed successfully!")
         return True

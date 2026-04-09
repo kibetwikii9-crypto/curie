@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, Save } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
 
 interface Campaign {
   id: string
@@ -102,7 +103,7 @@ export default function EditCampaignPage() {
 
   const fetchCampaign = async () => {
     try {
-      const response = await fetch(`/api/ads/campaigns/${campaignId}`)
+      const response = await apiFetch(`/api/ads/campaigns/${campaignId}`)
       if (response.ok) {
         const campaign: Campaign = await response.json()
         setFormData({
@@ -178,8 +179,8 @@ export default function EditCampaignPage() {
         scheduled_at: formData.scheduled_at ? new Date(formData.scheduled_at).toISOString() : null
       }
 
-      const response = await fetch(`/api/ads/campaigns/${campaignId}`, {
-        method: 'PATCH',
+      const response = await apiFetch(`/api/ads/campaigns/${campaignId}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },

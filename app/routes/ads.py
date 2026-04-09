@@ -5,14 +5,14 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from pydantic import BaseModel, validator
-from sqlalchemy import func, and_, or_, desc
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, Business, User as UserModel, VideoTemplate
-from app.routes.auth import get_current_user, get_user_business_id
+from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, VideoTemplate
+from app.routes.auth import get_user_business_id
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ads", tags=["ads"])
@@ -137,6 +137,21 @@ class CampaignPerformanceData(BaseModel):
     frequency: float = 0.0
     metadata: Dict[str, Any] = {}
 
+
+def _parse_json_field(value, default):
+    """Handle JSON strings and native list/dict values safely."""
+    if value is None:
+        return default
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            log.warning("Failed to decode JSON field")
+            return default
+    return default
+
 # ========== CAMPAIGN ENDPOINTS ==========
 @router.get("/campaigns", response_model=None)
 async def get_campaigns(
@@ -204,7 +219,7 @@ async def create_campaign(
         budget_type=request.budget_type,
         scheduled_at=request.scheduled_at,
         settings=request.settings,
-        metadata=request.metadata
+        extra_data=request.metadata
     )
 
     db.add(campaign)
@@ -254,7 +269,7 @@ async def get_campaign(
         "started_at": campaign.started_at,
         "completed_at": campaign.completed_at,
         "settings": campaign.settings,
-        "metadata": campaign.metadata,
+        "metadata": campaign.extra_data or {},
         "created_at": campaign.created_at,
         "updated_at": campaign.updated_at
     }
@@ -277,8 +292,11 @@ async def update_campaign(
 
     # Update fields
     update_data = request.dict(exclude_unset=True)
+    field_map = {
+        "metadata": "extra_data",
+    }
     for field, value in update_data.items():
-        setattr(campaign, field, value)
+        setattr(campaign, field_map.get(field, field), value)
 
     db.commit()
     db.refresh(campaign)
@@ -319,6 +337,46 @@ async def delete_campaign(
     db.commit()
 
     return {"message": "Campaign deleted successfully"}
+
+
+@router.get("/campaigns/{campaign_id}/stats")
+async def get_campaign_stats(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    business_id: int = Depends(get_user_business_id)
+):
+    """Get aggregate stats for a single campaign."""
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.business_id == business_id
+    ).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    result = db.query(
+        func.sum(CampaignPerformance.impressions).label("impressions"),
+        func.sum(CampaignPerformance.clicks).label("clicks"),
+        func.sum(CampaignPerformance.conversions).label("conversions"),
+        func.sum(CampaignPerformance.spend).label("spend"),
+        func.avg(CampaignPerformance.ctr).label("ctr"),
+        func.avg(CampaignPerformance.cpc).label("cpc"),
+        func.avg(CampaignPerformance.cpm).label("cpm"),
+        func.avg(CampaignPerformance.roas).label("roas"),
+    ).filter(
+        CampaignPerformance.business_id == business_id,
+        CampaignPerformance.campaign_id == campaign_id
+    ).first()
+
+    return {
+        "impressions": int(result.impressions or 0),
+        "clicks": int(result.clicks or 0),
+        "conversions": int(result.conversions or 0),
+        "spend": float(result.spend or 0.0),
+        "ctr": float(result.ctr or 0.0),
+        "cpc": float(result.cpc or 0.0),
+        "cpm": float(result.cpm or 0.0),
+        "roas": float(result.roas or 0.0),
+    }
 
 @router.post("/campaigns/{campaign_id}/start")
 async def start_campaign(
@@ -418,6 +476,8 @@ async def get_video_templates(
                 "description": t.description,
                 "video_type": t.video_type,
                 "platform": t.platform,
+                "duration": (_parse_json_field(t.template_config, {}) or {}).get("duration"),
+                "scenes": (_parse_json_field(t.template_config, {}) or {}).get("scenes", []),
                 "template_config": t.template_config,
                 "thumbnail_url": t.thumbnail_url,
                 "is_public": t.is_public
@@ -491,16 +551,6 @@ async def get_video_projects(
 
     projects = query.order_by(desc(VideoProject.created_at)).offset(offset).limit(limit).all()
 
-    def parse_json_field(value):
-        """Safely parse JSON field, return empty list if invalid"""
-        if not value:
-            return []
-        try:
-            return json.loads(value)
-        except (json.JSONDecodeError, TypeError):
-            log.warning(f"Failed to parse JSON field: {value}")
-            return []
-
     return {
         "projects": [
             {
@@ -509,8 +559,8 @@ async def get_video_projects(
                 "description": p.description,
                 "status": p.status,
                 "duration": p.duration,
-                "scenes": parse_json_field(p.scenes),
-                "assets": parse_json_field(p.assets),
+                "scenes": _parse_json_field(p.scenes, []),
+                "assets": _parse_json_field(p.assets, []),
                 "created_at": p.created_at.isoformat() if p.created_at else None,
                 "updated_at": p.updated_at.isoformat() if p.updated_at else None
             }
@@ -579,24 +629,14 @@ async def get_video_project(
     if not project:
         raise HTTPException(status_code=404, detail="Video project not found")
 
-    def parse_json_field(value):
-        """Safely parse JSON field, return empty list if invalid"""
-        if not value:
-            return []
-        try:
-            return json.loads(value)
-        except (json.JSONDecodeError, TypeError):
-            log.warning(f"Failed to parse JSON field: {value}")
-            return []
-
     return {
         "id": project.id,
         "name": project.name,
         "description": project.description,
         "status": project.status,
         "duration": project.duration,
-        "scenes": parse_json_field(project.scenes),
-        "assets": parse_json_field(project.assets),
+        "scenes": _parse_json_field(project.scenes, []),
+        "assets": _parse_json_field(project.assets, []),
         "created_at": project.created_at.isoformat() if project.created_at else None,
         "updated_at": project.updated_at.isoformat() if project.updated_at else None
     }
@@ -899,7 +939,7 @@ async def get_campaign_performance(
                 "roas": p.roas,
                 "conversion_rate": p.conversion_rate,
                 "frequency": p.frequency,
-                "metadata": p.metadata
+                "metadata": p.extra_data or {}
             }
             for p in performance_data
         ]
@@ -944,7 +984,7 @@ async def add_campaign_performance(
             roas=data.roas,
             conversion_rate=data.conversion_rate,
             frequency=data.frequency,
-            metadata=data.metadata
+            extra_data=data.metadata
         )
         db.add(perf)
 

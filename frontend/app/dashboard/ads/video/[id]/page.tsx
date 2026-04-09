@@ -234,12 +234,8 @@ export default function VideoProjectDetailPage() {
     if (!templateName) return
 
     try {
-      const response = await fetch(`/api/ads/video-projects/${project.id}/save-as-template`, {
+      const response = await apiFetch(`/api/ads/video-projects/${project.id}/save-as-template?template_name=${encodeURIComponent(templateName)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          template_name: templateName,
-        }),
       })
 
       if (response.ok) {

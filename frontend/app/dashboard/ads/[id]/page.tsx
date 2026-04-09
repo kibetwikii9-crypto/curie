@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, Edit, Play, Pause, Trash2, BarChart3, Users, Target, DollarSign } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
 
 interface Campaign {
   id: string
@@ -61,7 +62,7 @@ export default function CampaignDetailsPage() {
 
   const fetchCampaign = async () => {
     try {
-      const response = await fetch(`/api/ads/campaigns/${campaignId}`)
+      const response = await apiFetch(`/api/ads/campaigns/${campaignId}`)
       if (response.ok) {
         const data = await response.json()
         setCampaign(data)
@@ -82,7 +83,7 @@ export default function CampaignDetailsPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/ads/campaigns/${campaignId}/stats`)
+      const response = await apiFetch(`/api/ads/campaigns/${campaignId}/stats`)
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -95,8 +96,8 @@ export default function CampaignDetailsPage() {
   const updateCampaignStatus = async (status: string) => {
     setActionLoading(true)
     try {
-      const response = await fetch(`/api/ads/campaigns/${campaignId}`, {
-        method: 'PATCH',
+      const response = await apiFetch(`/api/ads/campaigns/${campaignId}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
@@ -104,8 +105,8 @@ export default function CampaignDetailsPage() {
       })
 
       if (response.ok) {
-        const updatedCampaign = await response.json()
-        setCampaign(updatedCampaign)
+        const updatedPayload = await response.json()
+        setCampaign((prev) => prev ? { ...prev, ...updatedPayload.campaign } : prev)
         toast({
           title: 'Success',
           description: `Campaign ${status.toLowerCase()} successfully`
@@ -127,11 +128,11 @@ export default function CampaignDetailsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'active':
+      case 'running':
         return 'bg-green-100 text-green-800'
       case 'paused':
         return 'bg-yellow-100 text-yellow-800'
-      case 'stopped':
+      case 'cancelled':
         return 'bg-red-100 text-red-800'
       case 'draft':
         return 'bg-gray-100 text-gray-800'
@@ -271,9 +272,9 @@ export default function CampaignDetailsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-4">
-            {campaign.status !== 'active' && (
+            {campaign.status !== 'running' && (
               <Button
-                onClick={() => updateCampaignStatus('active')}
+                onClick={() => updateCampaignStatus('running')}
                 disabled={actionLoading}
                 className="bg-green-600 hover:bg-green-700"
               >
@@ -282,7 +283,7 @@ export default function CampaignDetailsPage() {
               </Button>
             )}
 
-            {campaign.status === 'active' && (
+            {campaign.status === 'running' && (
               <Button
                 onClick={() => updateCampaignStatus('paused')}
                 disabled={actionLoading}
@@ -294,9 +295,9 @@ export default function CampaignDetailsPage() {
               </Button>
             )}
 
-            {campaign.status !== 'stopped' && (
+            {campaign.status !== 'cancelled' && (
               <Button
-                onClick={() => updateCampaignStatus('stopped')}
+                onClick={() => updateCampaignStatus('cancelled')}
                 disabled={actionLoading}
                 variant="outline"
                 className="border-red-500 text-red-700 hover:bg-red-50"
@@ -364,21 +365,21 @@ export default function CampaignDetailsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="text-sm font-medium text-gray-600">Age Range</label>
-                  <p className="text-lg font-semibold">{campaign.target_audience.age_range}</p>
+                  <p className="text-lg font-semibold">{campaign.target_audience?.age_range || 'N/A'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Gender</label>
-                  <p className="text-lg font-semibold capitalize">{campaign.target_audience.gender}</p>
+                  <p className="text-lg font-semibold capitalize">{campaign.target_audience?.gender || 'all'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Location</label>
-                  <p className="text-lg font-semibold">{campaign.target_audience.location}</p>
+                  <p className="text-lg font-semibold">{campaign.target_audience?.location || 'N/A'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Interests</label>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {campaign.target_audience.interests.length > 0 ? (
-                      campaign.target_audience.interests.map((interest, index) => (
+                    {(campaign.target_audience?.interests || []).length > 0 ? (
+                      (campaign.target_audience?.interests || []).map((interest, index) => (
                         <Badge key={index}>{interest}</Badge>
                       ))
                     ) : (
