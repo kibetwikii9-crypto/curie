@@ -106,6 +106,8 @@ export default function TemplatesPage() {
 
   const handleDeleteTemplate = async (templateId: number) => {
     if (deletingTemplateId !== null) return
+    const confirmed = window.confirm('Are you sure you want to delete this template? This action cannot be undone.')
+    if (!confirmed) return
     try {
       setDeletingTemplateId(templateId)
       const response = await apiFetch(`/api/ads/video-templates/${templateId}`, { method: 'DELETE' })

@@ -31,6 +31,12 @@ const getProjectThumbnail = (project: VideoProject) => {
   return ''
 }
 
+const getProjectVideo = (project: VideoProject) => {
+  const videoAsset = project.assets?.find((asset) => asset?.type === 'video' && typeof asset?.url === 'string')
+  if (videoAsset?.url && !videoAsset.url.startsWith('blob:')) return videoAsset.url as string
+  return null
+}
+
 export default function VideoDashboard() {
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [loading, setLoading] = useState(true)
@@ -169,15 +175,14 @@ export default function VideoDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {projects.map((project) => {
                 const thumbnail = getProjectThumbnail(project)
+                const videoUrl = getProjectVideo(project)
                 return (
                   <div key={project.id} className="rounded-lg border border-gray-200 overflow-hidden bg-white group">
-                    <div className="relative h-64 bg-gray-100">
-                      {thumbnail ? (
-                        thumbnail.includes('blob:') ? (
-                          <video className="h-full w-full object-cover" src={thumbnail} muted />
-                        ) : (
-                          <img src={thumbnail} alt={project.name} className="h-full w-full object-cover" />
-                        )
+                    <div className="relative aspect-video bg-gray-100">
+                      {videoUrl ? (
+                        <video className="h-full w-full object-cover" src={videoUrl} muted playsInline />
+                      ) : thumbnail ? (
+                        <img src={thumbnail} alt={project.name} className="h-full w-full object-cover" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                           <FileVideo className="h-8 w-8 text-gray-500" />

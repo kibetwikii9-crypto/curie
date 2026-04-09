@@ -38,7 +38,7 @@ export default function VideoProjectDetailPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [project, setProject] = useState<VideoProject | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<VideoAsset | null>(null)
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
 
@@ -67,9 +67,9 @@ export default function VideoProjectDetailPage() {
         // Set preview to first video asset or first asset
         const firstVideo = loadedProject.assets.find((asset) => asset.type === 'video')
         if (firstVideo) {
-          setPreview(firstVideo.thumbnail || firstVideo.url)
+          setPreviewAsset(firstVideo)
         } else if (loadedProject.assets.length > 0) {
-          setPreview(loadedProject.assets[0].thumbnail || loadedProject.assets[0].url)
+          setPreviewAsset(loadedProject.assets[0])
         }
       } else {
         toast({ title: 'Not found', description: 'Video project does not exist', variant: 'destructive' })
@@ -198,7 +198,16 @@ export default function VideoProjectDetailPage() {
 
     const updated = { ...project, assets: [...project.assets, ...assets] }
     setProject(updated)
-    setPreview(assets[0].thumbnail || assets[0].url)
+    setPreviewAsset(assets[0])
+  const isPlayableVideo = (asset: VideoAsset | null) =>
+    !!asset && !!asset.url && !asset.url.startsWith('blob:')
+
+  const getPreviewImage = (asset: VideoAsset | null) => {
+    if (!asset) return null
+    if (asset.thumbnail) return asset.thumbnail
+    if (asset.type === 'image' && asset.url && !asset.url.startsWith('blob:')) return asset.url
+    return null
+  }
     
     try {
       await apiFetch(`/api/ads/video-projects/${project.id}`, {
@@ -244,6 +253,9 @@ export default function VideoProjectDetailPage() {
   }
 
   const onDelete = async () => {
+    const confirmed = window.confirm('Are you sure you want to delete this project? This action cannot be undone.')
+    if (!confirmed) return
+
     try {
       const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'DELETE',
@@ -414,14 +426,29 @@ export default function VideoProjectDetailPage() {
             <CardDescription>Quick look at your project output</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {preview ? (
-              <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
-                <video className="w-full h-full object-contain" src={preview} controls />
-              </div>
+            {previewAsset ? (
+              isPlayableVideo(previewAsset) ? (
+                <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
+                  <video className="w-full h-full object-contain" src={previewAsset!.url} controls />
+                </div>
+              ) : getPreviewImage(previewAsset) ? (
+                <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
+                  <img src={getPreviewImage(previewAsset)!} alt="Project preview thumbnail" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-gray-300 h-[180px] flex items-center justify-center text-gray-500">
+                  <Film className="w-5 h-5 mr-2" /> Preview unavailable
+                </div>
+              )
             ) : (
               <div className="rounded-md border border-dashed border-gray-300 h-[180px] flex items-center justify-center text-gray-500">
                 <Film className="w-5 h-5 mr-2" /> No preview yet
               </div>
+            )}
+            {previewAsset?.url?.startsWith('blob:') && (
+              <p className="text-xs text-amber-600">
+                This video was saved with a local browser URL, so only thumbnail preview is available.
+              </p>
             )}
             <div className="space-y-1 text-sm text-gray-600">
               <p><strong>Status:</strong> {project.status}</p>
@@ -464,8 +491,8 @@ export default function VideoProjectDetailPage() {
                   <span className="text-sm">{asset.name}</span>
                   <Badge>{asset.type}</Badge>
                   {asset.type === 'video' && (
-                    <Button variant="ghost" onClick={() => setPreview(asset.thumbnail || asset.url)}>
-                      View
+                    <Button variant="ghost" onClick={() => setPreviewAsset(asset)}>
+                      Preview
                     </Button>
                   )}
                 </div>

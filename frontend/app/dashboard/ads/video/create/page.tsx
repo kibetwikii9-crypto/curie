@@ -86,32 +86,6 @@ export default function VideoProjectCreatePage() {
     setProject((prev) => ({ ...prev, [key]: value, updated_at: new Date().toISOString().slice(0, 10) }))
   }
 
-  const updateScene = (sceneId: number, field: 'name' | 'duration' | 'caption', value: string | number) => {
-    setProject((prev) => {
-      const scenes = prev.scenes.map((scene) =>
-        scene.id === sceneId
-          ? { ...scene, [field]: field === 'duration' ? Number(value) : value }
-          : scene
-      )
-      return { ...prev, scenes, duration: getTotalDuration(scenes), updated_at: new Date().toISOString().slice(0, 10) }
-    })
-  }
-
-  const addScene = () => {
-    setProject((prev) => {
-      const nextId = prev.scenes.length > 0 ? Math.max(...prev.scenes.map((s) => s.id)) + 1 : 1
-      const scenes = [...prev.scenes, { id: nextId, name: `Scene ${nextId}`, duration: 5, caption: '' }]
-      return { ...prev, scenes, duration: getTotalDuration(scenes), updated_at: new Date().toISOString().slice(0, 10) }
-    })
-  }
-
-  const removeScene = (sceneId: number) => {
-    setProject((prev) => {
-      const scenes = prev.scenes.filter((scene) => scene.id !== sceneId)
-      return { ...prev, scenes, duration: getTotalDuration(scenes), updated_at: new Date().toISOString().slice(0, 10) }
-    })
-  }
-
   const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
@@ -225,24 +199,6 @@ export default function VideoProjectCreatePage() {
                 placeholder="Describe the campaign angle..."
                 rows={3}
               />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Scenes</CardTitle>
-            <CardDescription>Auto-managed scenes, keep it simple</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-sm text-gray-600">We will create a default scene structure for you. You can fine-tune timing and captions later in the project editor.</p>
-            <div className="rounded-md border border-gray-200 p-3">
-              {project.scenes.map((scene) => (
-                <div key={scene.id} className="flex items-center justify-between text-sm text-gray-700">
-                  <span>{scene.name}</span>
-                  <span>{scene.duration}s</span>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>
