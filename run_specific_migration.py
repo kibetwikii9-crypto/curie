@@ -38,7 +38,7 @@ def run_specific_migration():
         raw_conn = engine.raw_connection()
         try:
             with raw_conn.cursor() as cursor:
-                cursor.execute(migration_sql)
+                cursor.execute(migration_sql, prepare=False)
             raw_conn.commit()
         except Exception:
             raw_conn.rollback()

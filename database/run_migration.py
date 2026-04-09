@@ -41,6 +41,7 @@ def run_migration():
         # Execute one migration file at a time using raw DBAPI cursor.
         # This handles multi-statement SQL files (functions, triggers, etc.)
         # more reliably than SQLAlchemy text() execution for large scripts.
+        failed_migrations = []
         for migration_file in migration_files:
             migration_path = Path(__file__).parent / "migrations" / migration_file
 
@@ -56,17 +57,22 @@ def run_migration():
             try:
                 log.info(f"Executing migration: {migration_file}")
                 with raw_conn.cursor() as cursor:
-                    cursor.execute(migration_sql)
+                    cursor.execute(migration_sql, prepare=False)
                 raw_conn.commit()
                 log.info(f"✅ Migration applied: {migration_file}")
             except Exception as e:
                 raw_conn.rollback()
                 log.error(f"Error executing migration {migration_file}: {e}")
+                failed_migrations.append(migration_file)
                 # Continue so IF NOT EXISTS migrations still apply later.
                 continue
             finally:
                 raw_conn.close()
-        
+
+        if failed_migrations:
+            log.error(f"❌ Migration completed with failures: {failed_migrations}")
+            return False
+
         log.info("✅ Migration completed successfully!")
         return True
         

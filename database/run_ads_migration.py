@@ -40,7 +40,7 @@ def run_ads_migration():
         try:
             log.info("Executing ads system migration SQL...")
             with raw_conn.cursor() as cursor:
-                cursor.execute(migration_sql)
+                cursor.execute(migration_sql, prepare=False)
             raw_conn.commit()
         except Exception:
             raw_conn.rollback()
