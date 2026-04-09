@@ -257,18 +257,34 @@ export default function VideoProjectDetailPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Edit Video Project</h1>
-          <p className="text-gray-600">{project.title}</p>
-        </div>
-
-        <div className="flex gap-2 items-center">
-          <Badge className={statusClass}>{project.status}</Badge>
-          <Button variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
+    <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border border-gray-200 rounded-lg p-3 mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Edit Video Project</p>
+            <h1 className="text-xl font-bold text-gray-900 truncate">{project.title}</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className={statusClass}>{project.status}</Badge>
+            <Button size="sm" variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
+              <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            </Button>
+            <Button size="sm" onClick={() => setStatus('rendering')}>
+              <Play className="w-4 h-4 mr-1" /> Render
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setStatus('published')}>
+              Publish
+            </Button>
+            <Button size="sm" variant="outline" onClick={saveAsTemplate}>
+              <Share2 className="w-4 h-4 mr-1" /> Template
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setStatus('failed')} className="text-red-600 border-red-300 hover:bg-red-50">
+              Failed
+            </Button>
+            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-600 border-red-300 hover:bg-red-50">
+              <Trash2 className="w-4 h-4 mr-1" /> Delete
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -350,25 +366,14 @@ export default function VideoProjectDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Render Actions</CardTitle>
-            <CardDescription>Control project state</CardDescription>
+            <CardTitle>Project Summary</CardTitle>
+            <CardDescription>Quick overview</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Button onClick={() => setStatus('rendering')}>
-              <Play className="w-4 h-4 mr-2" /> Start Rendering
-            </Button>
-            <Button onClick={() => setStatus('published')} variant="outline">
-              Publish
-            </Button>
-            <Button onClick={saveAsTemplate} variant="outline">
-              <Share2 className="w-4 h-4 mr-2" /> Save as Template
-            </Button>
-            <Button onClick={() => setStatus('failed')} variant="outline" className="text-red-600 border-red-300 hover:bg-red-50">
-              Mark failed
-            </Button>
-            <Button onClick={onDelete} variant="outline" className="text-red-600 border-red-300 hover:bg-red-50">
-              <Trash2 className="w-4 h-4 mr-2" /> Delete Project
-            </Button>
+          <CardContent className="space-y-2 text-sm text-gray-600">
+            <p><strong>Status:</strong> {project.status}</p>
+            <p><strong>Scenes:</strong> {project.scenes.length}</p>
+            <p><strong>Assets:</strong> {project.assets.length}</p>
+            <p><strong>Duration:</strong> {project.duration}</p>
           </CardContent>
         </Card>
       </div>

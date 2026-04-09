@@ -21,6 +21,13 @@ interface VideoProject {
   updated_at: string
 }
 
+const getProjectThumbnail = (project: VideoProject) => {
+  const videoAsset = project.assets?.find((asset) => asset?.type === 'video' && asset?.url)
+  if (videoAsset?.url) return videoAsset.url as string
+  const imageAsset = project.assets?.find((asset) => asset?.type === 'image' && asset?.url)
+  return (imageAsset?.url as string) || ''
+}
+
 export default function VideoDashboard() {
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [loading, setLoading] = useState(true)
@@ -156,22 +163,40 @@ export default function VideoDashboard() {
               <p className="mt-3">No video projects yet. Start by creating a new one.</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {projects.map((project) => (
-                <div key={project.id} className="rounded-md border border-gray-200 p-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold">{project.name}</h3>
-                    <p className="text-sm text-gray-500">Duration: {project.duration} • Updated {new Date(project.updated_at).toLocaleDateString()}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {projects.map((project) => {
+                const thumbnail = getProjectThumbnail(project)
+                return (
+                  <div key={project.id} className="rounded-lg border border-gray-200 overflow-hidden bg-white">
+                    <div className="h-36 bg-gray-100">
+                      {thumbnail ? (
+                        thumbnail.includes('blob:') ? (
+                          <video className="h-full w-full object-cover" src={thumbnail} muted />
+                        ) : (
+                          <img src={thumbnail} alt={project.name} className="h-full w-full object-cover" />
+                        )
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                          <FileVideo className="h-8 w-8 text-gray-500" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold">{project.name}</h3>
+                        <p className="text-sm text-gray-500">Duration: {project.duration} • Updated {new Date(project.updated_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusClass(project.status)}>{project.status}</Badge>
+                        <Button variant="outline" onClick={() => router.push(`/dashboard/ads/video/${project.id}`)}>
+                          <Play className="w-4 h-4 mr-1" />
+                          Open
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={getStatusClass(project.status)}>{project.status}</Badge>
-                    <Button variant="outline" onClick={() => router.push(`/dashboard/ads/video/${project.id}`)}>
-                      <Play className="w-4 h-4 mr-1" />
-                      Open
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>

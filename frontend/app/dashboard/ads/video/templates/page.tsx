@@ -16,6 +16,14 @@ interface VideoTemplate {
   platform: string
   duration: string
   scenes: Array<{ id: number; name: string; duration: number; caption: string }>
+  thumbnail_url?: string
+}
+
+const templateBgByType: Record<string, string> = {
+  story: 'from-purple-500 to-pink-500',
+  reel: 'from-indigo-500 to-cyan-500',
+  post: 'from-orange-500 to-red-500',
+  custom: 'from-emerald-500 to-teal-500',
 }
 
 export default function TemplatesPage() {
@@ -121,6 +129,15 @@ export default function TemplatesPage() {
         {/* Template cards */}
         {templates.map((template) => (
           <Card key={template.id} className="hover:shadow-lg transition-shadow overflow-hidden">
+            <div className="h-32 bg-gray-100">
+              {template.thumbnail_url ? (
+                <img src={template.thumbnail_url} alt={template.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className={`h-full w-full bg-gradient-to-br ${templateBgByType[template.video_type] || 'from-slate-500 to-gray-600'} flex items-center justify-center`}>
+                  <Film className="w-10 h-10 text-white/90" />
+                </div>
+              )}
+            </div>
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div>
