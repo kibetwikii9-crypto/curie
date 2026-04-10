@@ -16,6 +16,7 @@ class MessageChannel(str, Enum):
     TELEGRAM = "telegram"
     WHATSAPP = "whatsapp"
     INSTAGRAM = "instagram"
+    MESSENGER = "messenger"
 
 
 class NormalizedMessage(BaseModel):

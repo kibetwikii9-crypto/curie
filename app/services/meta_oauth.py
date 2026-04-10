@@ -86,6 +86,26 @@ class MetaOAuthService:
         except Exception as e:
             logger.error(f"Error exchanging code for token: {e}")
             raise
+
+    async def exchange_code_for_token_with_redirect(self, code: str, redirect_uri: str) -> Dict[str, Any]:
+        """
+        Exchange authorization code for access token using channel-specific redirect URI.
+        """
+        url = f"{self.BASE_URL}/oauth/access_token"
+        params = {
+            "client_id": self.app_id,
+            "client_secret": self.app_secret,
+            "redirect_uri": redirect_uri,
+            "code": code,
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, timeout=10.0)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"Error exchanging code with channel redirect: {e}")
+            raise
     
     async def get_long_lived_token(self, short_lived_token: str) -> Dict[str, Any]:
         """
@@ -353,7 +373,7 @@ class MetaOAuthService:
         }
         
         params = {
-            "fields": "instagram_business_account,name,id"
+            "fields": "instagram_business_account,name,id,access_token"
         }
         
         try:
@@ -369,6 +389,7 @@ class MetaOAuthService:
                         ig_account = page["instagram_business_account"]
                         ig_account["page_name"] = page["name"]
                         ig_account["page_id"] = page["id"]
+                        ig_account["page_access_token"] = page.get("access_token")
                         instagram_accounts.append(ig_account)
                 
                 return instagram_accounts

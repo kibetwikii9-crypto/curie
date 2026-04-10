@@ -14,6 +14,9 @@ from app.models import ChannelIntegration, Business, User as UserModel, Subscrip
 from app.routes.auth import get_current_user, get_user_business_id
 from app.services.meta_oauth import MetaOAuthService
 from app.config import settings
+from app.schemas import NormalizedMessage, MessageChannel
+from app.services.processor import process_message
+from app.services.conversation_service import save_conversation_from_normalized
 import httpx
 
 log = logging.getLogger(__name__)
@@ -69,6 +72,38 @@ def _integration_response(integration: ChannelIntegration) -> "IntegrationRespon
         created_at=integration.created_at.isoformat(),
         updated_at=integration.updated_at.isoformat(),
     )
+
+
+def _load_integration_credentials(integration: ChannelIntegration) -> Dict[str, Any]:
+    try:
+        return json.loads(integration.credentials) if integration.credentials else {}
+    except Exception:
+        return {}
+
+
+async def _send_meta_reply(recipient_id: str, message_text: str, page_access_token: str) -> bool:
+    if not recipient_id or not message_text or not page_access_token:
+        return False
+
+    url = "https://graph.facebook.com/v21.0/me/messages"
+    payload = {
+        "recipient": {"id": recipient_id},
+        "messaging_type": "RESPONSE",
+        "message": {"text": message_text},
+    }
+    headers = {
+        "Authorization": f"Bearer {page_access_token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, headers=headers, timeout=15.0)
+            response.raise_for_status()
+        return True
+    except Exception as e:
+        log.error(f"Failed to send Meta reply: {e}")
+        return False
 
 
 def _get_subscription_id_for_limits(db: Session, business_id: int) -> Optional[int]:
@@ -1486,8 +1521,9 @@ async def instagram_oauth_callback(
         # Initialize Meta OAuth service
         meta_service = MetaOAuthService()
         
-        # Step 1: Exchange code for access token
-        token_response = await meta_service.exchange_code_for_token(code)
+        # Step 1: Exchange code for access token with Instagram-specific redirect URI
+        instagram_redirect_uri = getattr(settings, 'meta_instagram_redirect_uri', '')
+        token_response = await meta_service.exchange_code_for_token_with_redirect(code, instagram_redirect_uri)
         short_lived_token = token_response.get("access_token")
         
         if not short_lived_token:
@@ -1511,12 +1547,20 @@ async def instagram_oauth_callback(
         ig_account_id = ig_account.get("id")
         ig_username = ig_account.get("username", "Instagram Account")
         page_name = ig_account.get("page_name", "")
+        page_id = ig_account.get("page_id")
+        page_access_token = ig_account.get("page_access_token")
+
+        # Subscribe the linked page to app webhooks so IG messaging events are delivered.
+        if page_id and page_access_token:
+            await meta_service.subscribe_page_webhook(page_id, page_access_token)
         
         # Step 4: Store credentials as JSON
         credentials = json.dumps({
             "access_token": access_token,
             "ig_account_id": ig_account_id,
-            "ig_username": ig_username
+            "ig_username": ig_username,
+            "page_id": page_id,
+            "page_access_token": page_access_token,
         })
         
         # Step 5: Upsert integration to avoid duplicates
@@ -1676,7 +1720,11 @@ async def instagram_webhook(
                 # Check if message
                 if "message" in event:
                     message_data = event["message"]
+                    if message_data.get("is_echo"):
+                        continue
                     message_text = message_data.get("text", "")
+                    if not message_text:
+                        continue
                     
                     # Find integration for this Instagram account
                     integration = db.query(ChannelIntegration).filter(
@@ -1686,12 +1734,26 @@ async def instagram_webhook(
                     ).first()
                     
                     if integration:
-                        # TODO: Process message with AI and send response
-                        # For now, just log it
                         log.info(f"Instagram message from {sender_id}: {message_text}")
-                        
-                        # You can add message processing here
-                        # await process_instagram_message(integration, sender_id, message_text, db)
+                        normalized_message = NormalizedMessage(
+                            channel=MessageChannel.INSTAGRAM,
+                            user_id=str(sender_id),
+                            message_text=message_text,
+                            metadata={
+                                "recipient_id": recipient_id,
+                                "integration_id": integration.id,
+                                "source": "instagram_webhook",
+                            },
+                        )
+                        ai_reply = await process_message(normalized_message, integration.business_id)
+                        credentials = _load_integration_credentials(integration)
+                        page_access_token = credentials.get("page_access_token") or credentials.get("access_token")
+                        await _send_meta_reply(str(sender_id), ai_reply, page_access_token)
+                        await save_conversation_from_normalized(
+                            normalized_message=normalized_message,
+                            bot_reply=ai_reply,
+                            business_id=integration.business_id,
+                        )
         
         return {"status": "ok"}
         
@@ -1915,8 +1977,9 @@ async def messenger_oauth_callback(
         # Initialize Meta OAuth service
         meta_service = MetaOAuthService()
         
-        # Step 1: Exchange code for access token
-        token_response = await meta_service.exchange_code_for_token(code)
+        # Step 1: Exchange code for access token with Messenger-specific redirect URI
+        messenger_redirect_uri = getattr(settings, 'meta_messenger_redirect_uri', '')
+        token_response = await meta_service.exchange_code_for_token_with_redirect(code, messenger_redirect_uri)
         short_lived_token = token_response.get("access_token")
         
         if not short_lived_token:
@@ -2039,7 +2102,11 @@ async def messenger_webhook(
                 # Check if message
                 if "message" in event:
                     message_data = event["message"]
+                    if message_data.get("is_echo"):
+                        continue
                     message_text = message_data.get("text", "")
+                    if not message_text:
+                        continue
                     
                     # Find integration for this Facebook Page
                     integration = db.query(ChannelIntegration).filter(
@@ -2049,12 +2116,26 @@ async def messenger_webhook(
                     ).first()
                     
                     if integration:
-                        # TODO: Process message with AI and send response
-                        # For now, just log it
                         log.info(f"Messenger message from {sender_id}: {message_text}")
-                        
-                        # You can add message processing here
-                        # await process_messenger_message(integration, sender_id, message_text, db)
+                        normalized_message = NormalizedMessage(
+                            channel=MessageChannel.MESSENGER,
+                            user_id=str(sender_id),
+                            message_text=message_text,
+                            metadata={
+                                "recipient_id": recipient_id,
+                                "integration_id": integration.id,
+                                "source": "messenger_webhook",
+                            },
+                        )
+                        ai_reply = await process_message(normalized_message, integration.business_id)
+                        credentials = _load_integration_credentials(integration)
+                        page_access_token = credentials.get("access_token")
+                        await _send_meta_reply(str(sender_id), ai_reply, page_access_token)
+                        await save_conversation_from_normalized(
+                            normalized_message=normalized_message,
+                            bot_reply=ai_reply,
+                            business_id=integration.business_id,
+                        )
         
         return {"status": "ok"}
         
