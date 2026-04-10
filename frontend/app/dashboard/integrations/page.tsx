@@ -347,6 +347,7 @@ export default function IntegrationsPage() {
     if (categoryFilter === 'all') return true;
     return channel.category === categoryFilter;
   });
+  const activeIntegrations = integrations.filter((integration) => integration.is_active);
 
   const connectWhatsApp = async () => {
     const width = 600;
@@ -365,69 +366,12 @@ export default function IntegrationsPage() {
       return;
     }
 
-    popup.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connecting WhatsApp...</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-          }
-          .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #25D366;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          h2 { color: white; margin: 0.5rem 0; font-size: 1.5rem; }
-          p { color: rgba(255, 255, 255, 0.9); margin: 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h2>Connecting WhatsApp...</h2>
-          <p>Please wait while we prepare the connection.</p>
-        </div>
-      </body>
-      </html>
-    `);
-
     try {
-      const response = await api.get('/api/integrations/whatsapp/connect', {
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      const authUrl = extractAuthUrl(response);
-      if (authUrl) {
-        popup.location.href = authUrl;
-      } else {
-        throw new Error('No auth_url in response');
-      }
+      const backendUrl = api.defaults.baseURL || window.location.origin;
+      popup.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
 
       const handleMessage = (event: MessageEvent) => {
-        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-        const backendOrigin = new URL(backendUrl).origin;
+        const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
 
         if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
           return;
@@ -482,8 +426,9 @@ export default function IntegrationsPage() {
         modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
         modal.innerHTML = `
           <div style="background:white;padding:2rem;border-radius:12px;max-width:600px;width:90%;">
-            <h2 style="margin:0 0 1rem 0;font-size:1.5rem;color:#111;">Website Chat Widget Created! 🎉</h2>
-            <p style="color:#666;margin-bottom:1rem;">Copy the code below and paste it before the closing &lt;/body&gt; tag on your website:</p>
+            <h2 style="margin:0 0 1rem 0;font-size:1.5rem;color:#111;">Website Chat Widget Created 🎉</h2>
+            <p style="color:#666;margin-bottom:0.5rem;">Step 1 complete: your widget is ready.</p>
+            <p style="color:#666;margin-bottom:1rem;">Step 2: paste this code before the closing &lt;/body&gt; tag on your website. It is not live until this is installed.</p>
             <div style="background:#f5f5f5;padding:1rem;border-radius:8px;margin-bottom:1rem;overflow-x:auto;">
               <code style="font-family:monospace;font-size:0.875rem;white-space:pre;display:block;">${embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
             </div>
@@ -536,18 +481,11 @@ export default function IntegrationsPage() {
     }
 
     try {
-      const response = await api.get(endpoint, {
-        headers: { Accept: 'application/json' },
-      });
-
-      const authUrl = extractAuthUrl(response);
-      if (!authUrl) throw new Error('No auth_url returned');
-
-      popup.location.href = authUrl;
+      const backendUrl = api.defaults.baseURL || window.location.origin;
+      popup.location.href = `${backendUrl}${endpoint}`;
 
       const handleMessage = (event: MessageEvent) => {
-        const backendUrl = api.defaults.baseURL || 'http://localhost:8000';
-        const backendOrigin = new URL(backendUrl).origin;
+        const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
         if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
           return;
         }
@@ -751,7 +689,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div>
             </div>
-          ) : integrations.length > 0 ? (
+          ) : activeIntegrations.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="px-6 py-5">
                 <div className="flex items-center justify-between mb-6">
@@ -782,7 +720,7 @@ export default function IntegrationsPage() {
 
                 {viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {integrations.map((integration) => (
+                    {activeIntegrations.map((integration) => (
                       <div
                         key={integration.id}
                         className="group relative p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-xl transition-all transform hover:-translate-y-1"
@@ -867,7 +805,7 @@ export default function IntegrationsPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {integrations.map((integration) => (
+                    {activeIntegrations.map((integration) => (
                       <div
                         key={integration.id}
                         className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50"

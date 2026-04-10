@@ -2501,7 +2501,7 @@ async def create_webchat_widget(
             "success": True,
             "widget_id": widget_id,
             "embed_code": embed_code,
-            "message": "Website chat widget created successfully"
+            "message": "Website chat widget created. It will be live after you install the embed code on your website."
         }
         
     except Exception as e:
