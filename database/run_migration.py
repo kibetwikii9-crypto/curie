@@ -33,6 +33,8 @@ def run_migration():
         "007_add_video_ownership_columns.sql",
         "008_dedupe_channel_integrations.sql",
         "009_add_subscriptions_ended_at.sql",
+        "010_update_paystack_kes_plan_codes.sql",
+        "011_fix_subscriptions_schema_mismatch.sql",
     ]
     
     # Get database connection

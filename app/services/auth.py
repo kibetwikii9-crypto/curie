@@ -86,6 +86,10 @@ def create_user(db: Session, email: str, password: str, full_name: str = None, r
     hashed_password = get_password_hash(password)
     
     # Create user first (without business_id if we need to create business)
+    trial_ends_at = None
+    if role != "admin":
+        trial_ends_at = datetime.utcnow() + timedelta(days=settings.trial_days)
+
     user = User(
         email=email,
         hashed_password=hashed_password,
@@ -93,6 +97,7 @@ def create_user(db: Session, email: str, password: str, full_name: str = None, r
         role=role,
         business_id=None,  # Will be set after business is created
         is_active=True,
+        trial_ends_at=trial_ends_at,
     )
     db.add(user)
     db.flush()  # Flush to get user.id without committing

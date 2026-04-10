@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,7 +7,8 @@ from app.config import settings
 from app.logging_config import init_logging
 from app.routes import api_router
 from app.services.knowledge_service import load_knowledge
-from app.database import init_db
+from app.database import init_db, SessionLocal
+from app.services.auth import verify_token
 from app.models import (
     Conversation,
     User,
@@ -21,6 +24,7 @@ from app.models import (
     VideoProject,
     ABTest,
     CampaignPerformance,
+    Subscription,
 )  # Import all models to register with Base
 
 init_logging(settings.log_level)
@@ -77,6 +81,99 @@ app.include_router(api_router)
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+
+
+def _is_public_or_billing_path(path: str) -> bool:
+    """Allow auth/billing/public paths without subscription lock."""
+    public_prefixes = (
+        "/health",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/api/auth/",
+        "/api/billing/",
+        "/api/webhooks/",
+    )
+    return any(path.startswith(prefix) for prefix in public_prefixes)
+
+
+@app.middleware("http")
+async def subscription_access_guard(request: Request, call_next):
+    """
+    Global access guard:
+    - Allow public/auth/billing/webhook endpoints
+    - For other API endpoints, require active subscription or valid trial credits
+    """
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    if not path.startswith("/api/") or _is_public_or_billing_path(path):
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authentication required"},
+        )
+
+    token = auth_header.split(" ", 1)[1].strip()
+    payload = verify_token(token)
+    if not payload:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid authentication credentials"},
+        )
+
+    email = payload.get("sub")
+    if not email:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid authentication credentials"},
+        )
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return JSONResponse(status_code=401, content={"detail": "User not found"})
+
+        # Admin users are never blocked by subscription access guard.
+        if user.role == "admin":
+            return await call_next(request)
+
+        business_id = user.business_id
+        if business_id is None:
+            business = db.query(Business).filter(Business.owner_id == user.id).first()
+            if business:
+                business_id = business.id
+                user.business_id = business_id
+                db.add(user)
+                db.commit()
+
+        # Active/trialing paid subscription unlocks all protected endpoints.
+        if business_id is not None:
+            subscription = db.query(Subscription).filter(
+                Subscription.business_id == business_id
+            ).first()
+            if subscription and subscription.status in ("active", "trialing"):
+                return await call_next(request)
+
+        # No active subscription: allow while trial credits are valid.
+        if user.trial_ends_at and user.trial_ends_at >= datetime.utcnow():
+            return await call_next(request)
+
+        # Trial credits ended and no active subscription.
+        return JSONResponse(
+            status_code=402,
+            content={
+                "detail": "Subscription required. Your free credits have ended. Please subscribe to continue.",
+                "code": "SUBSCRIPTION_REQUIRED",
+            },
+        )
+    finally:
+        db.close()
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

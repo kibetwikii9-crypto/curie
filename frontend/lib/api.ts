@@ -67,6 +67,22 @@ api.interceptors.response.use(
         window.location.href = '/';
       }
     }
+
+    // Redirect to paywall when backend requires active subscription.
+    if (
+      error.response?.status === 402 &&
+      error.response?.data?.code === 'SUBSCRIPTION_REQUIRED' &&
+      typeof window !== 'undefined'
+    ) {
+      const currentPath = window.location.pathname;
+      const isBillingPath = currentPath.startsWith('/dashboard/billing');
+      const isPaywallPath = currentPath.startsWith('/dashboard/paywall');
+
+      if (!isBillingPath && !isPaywallPath) {
+        window.location.href = '/dashboard/paywall';
+      }
+    }
+
     return Promise.reject(error);
   }
 );

@@ -28,11 +28,34 @@ const pageNames: Record<string, string> = {
   '/dashboard/sales-products': 'Sales & Products',
 };
 
+function toTitleCase(value: string): string {
+  return value
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getBreadcrumbTitle(pathname: string): string {
+  if (!pathname || pathname === '/') return 'Dashboard';
+
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length === 0) return 'Dashboard';
+
+  const breadcrumbs: string[] = [];
+  let currentPath = '';
+
+  for (const part of parts) {
+    currentPath += `/${part}`;
+    breadcrumbs.push(pageNames[currentPath] || toTitleCase(part));
+  }
+
+  return breadcrumbs.join(' > ');
+}
+
 export default function Header({ onMenuToggle }: HeaderProps = {}) {
   const { user, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
-  const currentPage = pageNames[pathname] || 'Dashboard';
+  const currentPage = getBreadcrumbTitle(pathname);
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
