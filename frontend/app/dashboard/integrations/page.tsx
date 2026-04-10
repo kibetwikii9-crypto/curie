@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
 import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
   Plug,
@@ -155,6 +156,8 @@ const availableChannels: AvailableChannel[] = [
 
 export default function IntegrationsPage() {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [activeView, setActiveView] = useState<'connected' | 'marketplace' | 'health'>('connected');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -182,6 +185,13 @@ export default function IntegrationsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const canManage = user?.role === 'admin' || user?.role === 'business_owner';
+
+  const setView = (view: 'connected' | 'marketplace' | 'health') => {
+    setActiveView(view);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('view', view);
+    router.replace(`/dashboard/integrations?${params.toString()}`);
+  };
 
   const { data: healthData, isLoading: healthLoading } = useQuery<HealthStatus>({
     queryKey: ['integrations-health'],
@@ -220,6 +230,11 @@ export default function IntegrationsPage() {
   };
 
   useEffect(() => {
+    const requestedView = searchParams.get('view');
+    if (requestedView === 'connected' || requestedView === 'marketplace' || requestedView === 'health') {
+      setActiveView(requestedView);
+    }
+
     fetchIntegrations();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -236,7 +251,7 @@ export default function IntegrationsPage() {
       alert(`Connection failed: ${error}`);
       window.history.replaceState({}, '', '/dashboard/integrations');
     }
-  }, [canManage]);
+  }, [canManage, searchParams]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
@@ -603,7 +618,7 @@ export default function IntegrationsPage() {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => setActiveView('marketplace')}
+                onClick={() => setView('marketplace')}
                 className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 transition-all"
               >
                 <Plus className="h-5 w-5 mr-2" />
@@ -669,7 +684,7 @@ export default function IntegrationsPage() {
         ].map((view) => (
           <button
             key={view.id}
-            onClick={() => setActiveView(view.id as any)}
+            onClick={() => setView(view.id as 'connected' | 'marketplace' | 'health')}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
               activeView === view.id
                 ? 'bg-primary-500 text-white shadow-md'
@@ -886,7 +901,7 @@ export default function IntegrationsPage() {
                 Connect your first channel to start automating conversations
               </p>
               <button
-                onClick={() => setActiveView('marketplace')}
+                onClick={() => setView('marketplace')}
                 className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 transition-all"
               >
                 <Plus className="h-5 w-5 mr-2" />
