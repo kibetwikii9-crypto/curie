@@ -12,7 +12,7 @@ import { Check, X } from 'lucide-react';
 export default function BillingPlansPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const [isAnnual, setIsAnnual] = useState(false);
+  const [isAnnual] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'crypto'>('card');
 
   useEffect(() => {
@@ -81,32 +81,15 @@ export default function BillingPlansPage() {
           </p>
         </div>
 
-        {/* Billing Toggle */}
+        {/* Billing Cycle (monthly only until annual plan codes are configured) */}
         <div className="flex items-center justify-center mb-12">
-          <div className="relative inline-flex items-center gap-4 p-1.5 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => setIsAnnual(false)}
-              className={`relative px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 ${
-                !isAnnual
-                  ? 'bg-gradient-to-r from-primary-600 to-purple-600 text-white shadow-lg'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              }`}
-            >
+          <div className="inline-flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-3 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+            <span className="rounded-lg bg-gradient-to-r from-primary-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow">
               Monthly
-            </button>
-            <button
-              onClick={() => setIsAnnual(true)}
-              className={`relative px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 ${
-                isAnnual
-                  ? 'bg-gradient-to-r from-primary-600 to-purple-600 text-white shadow-lg'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              }`}
-            >
-              Annual
-              <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">
-                Save 20%
-              </span>
-            </button>
+            </span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Annual plans coming soon
+            </span>
           </div>
         </div>
 

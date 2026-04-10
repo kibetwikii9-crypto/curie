@@ -14,7 +14,8 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   
   const planId = searchParams.get('plan_id');
-  const billingCycle = searchParams.get('billing_cycle') as 'monthly' | 'annual' || 'monthly';
+  const billingCycleParam = searchParams.get('billing_cycle');
+  const billingCycle: 'monthly' = 'monthly';
   const paymentMethod = searchParams.get('payment_method') as 'card' | 'crypto' || 'card';
   
   const [checkoutData, setCheckoutData] = useState<any>(null);
@@ -27,6 +28,15 @@ function CheckoutContent() {
       router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    // Annual billing is disabled for now; normalize any incoming URL param to monthly.
+    if (billingCycleParam && billingCycleParam !== 'monthly') {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('billing_cycle', 'monthly');
+      router.replace(`/dashboard/billing/checkout?${params.toString()}`);
+    }
+  }, [billingCycleParam, router, searchParams]);
 
   // Fetch plan details
   const { data: plansData, isLoading: plansLoading } = useQuery({

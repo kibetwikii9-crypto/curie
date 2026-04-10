@@ -626,6 +626,12 @@ async def create_checkout_session(
 ):
     """Create payment initialization for card or crypto."""
     try:
+        if request.billing_cycle != 'monthly':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only monthly billing is currently available."
+            )
+
         business_id = get_user_business_id(current_user, db)
         if not business_id:
             raise HTTPException(
@@ -648,6 +654,13 @@ async def create_checkout_session(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Plan not found"
+            )
+
+        # Enterprise is handled via manual onboarding / sales workflow
+        if (plan.name or "").lower() == "enterprise":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Enterprise plan is handled manually. Please contact sales to get started."
             )
         
         # Calculate amount
@@ -705,6 +718,12 @@ async def create_checkout_session(
                 plan.stripe_price_id_annual if request.billing_cycle == 'annual'
                 else plan.stripe_price_id_monthly
             )
+
+            if not plan_code:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"No Paystack plan code configured for {plan.display_name} ({request.billing_cycle})."
+                )
             
             amount_in_kobo = int(amount * 100)
             
