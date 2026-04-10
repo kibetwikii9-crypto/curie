@@ -496,8 +496,16 @@ export default function IntegrationsPage() {
     }
 
     try {
-      const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}${endpoint}`;
+      // Fetch OAuth URL via authenticated API call first.
+      // Direct navigation to backend endpoint drops auth header and causes 401.
+      const response = await api.get(endpoint, {
+        headers: { Accept: 'application/json' },
+      });
+      const authUrl = response?.data?.auth_url;
+      if (!authUrl) {
+        throw new Error('Failed to get OAuth URL');
+      }
+      popup.location.href = authUrl;
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;

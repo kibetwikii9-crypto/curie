@@ -93,8 +93,21 @@ def _is_public_or_billing_path(path: str) -> bool:
         "/api/auth/",
         "/api/billing/",
         "/api/webhooks/",
+        "/api/integrations/",
     )
     return any(path.startswith(prefix) for prefix in public_prefixes)
+
+
+def _json_with_cors(request: Request, status_code: int, content: dict) -> JSONResponse:
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=status_code,
+        content=content,
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
 
 
 @app.middleware("http")
@@ -113,31 +126,22 @@ async def subscription_access_guard(request: Request, call_next):
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Authentication required"},
-        )
+        return _json_with_cors(request, 401, {"detail": "Authentication required"})
 
     token = auth_header.split(" ", 1)[1].strip()
     payload = verify_token(token)
     if not payload:
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid authentication credentials"},
-        )
+        return _json_with_cors(request, 401, {"detail": "Invalid authentication credentials"})
 
     email = payload.get("sub")
     if not email:
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid authentication credentials"},
-        )
+        return _json_with_cors(request, 401, {"detail": "Invalid authentication credentials"})
 
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:
-            return JSONResponse(status_code=401, content={"detail": "User not found"})
+            return _json_with_cors(request, 401, {"detail": "User not found"})
 
         # Admin users are never blocked by subscription access guard.
         if user.role == "admin":
@@ -170,6 +174,10 @@ async def subscription_access_guard(request: Request, call_next):
             content={
                 "detail": "Subscription required. Your free credits have ended. Please subscribe to continue.",
                 "code": "SUBSCRIPTION_REQUIRED",
+            },
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Credentials": "true",
             },
         )
     finally:
