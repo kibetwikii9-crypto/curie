@@ -5,8 +5,9 @@ from fastapi import APIRouter, Request, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Subscription, Invoice, Payment, PaymentMethod, BillingEvent, Business
+from app.models import Subscription, Invoice, Payment, PaymentMethod, BillingEvent, Business, User as UserModel
 from app.services.paystack_service import PaystackService
+from app.services.email_service import EmailService
 from app.config import settings
 
 log = logging.getLogger(__name__)
@@ -125,6 +126,14 @@ async def handle_subscription_created(db: Session, data: dict):
             subscription.stripe_subscription_id = subscription_code
             subscription.status = status_value
             log.info(f"Updated subscription {subscription.id} from webhook")
+            owner = db.query(UserModel).filter(UserModel.id == business.owner_id).first()
+            email_service = EmailService()
+            await email_service.send_billing_event_emails(
+                event_name="Subscription Activated",
+                customer_email=owner.email if owner else None,
+                business_name=business.name,
+                details=f"Status: {status_value}",
+            )
 
 
 async def handle_subscription_disabled(db: Session, data: dict):
@@ -143,6 +152,13 @@ async def handle_subscription_disabled(db: Session, data: dict):
         business = subscription.business
         if business:
             business.payment_status = 'suspended'
+            owner = db.query(UserModel).filter(UserModel.id == business.owner_id).first()
+            email_service = EmailService()
+            await email_service.send_billing_event_emails(
+                event_name="Subscription Canceled",
+                customer_email=owner.email if owner else None,
+                business_name=business.name,
+            )
         
         log.info(f"Subscription {subscription.id} disabled")
 
@@ -225,6 +241,16 @@ async def handle_charge_success(db: Session, data: dict):
                             is_active=True
                         )
                         db.add(payment_method)
+                owner = db.query(UserModel).filter(UserModel.id == business.owner_id).first()
+                email_service = EmailService()
+                await email_service.send_billing_event_emails(
+                    event_name="Payment Successful",
+                    customer_email=owner.email if owner else customer_email,
+                    business_name=business.name,
+                    amount=amount,
+                    currency=currency,
+                    details=f"Reference: {reference}",
+                )
     
     log.info(f"Payment succeeded: {reference}, amount: {amount} {currency}")
 
@@ -251,6 +277,16 @@ async def handle_charge_failed(db: Session, data: dict):
             metadata=None
         )
         db.add(event)
+        business = db.query(Business).filter(Business.id == payment.business_id).first()
+        if business:
+            owner = db.query(UserModel).filter(UserModel.id == business.owner_id).first()
+            email_service = EmailService()
+            await email_service.send_billing_event_emails(
+                event_name="Payment Failed",
+                customer_email=owner.email if owner else None,
+                business_name=business.name,
+                details=failure_message,
+            )
     
     log.warning(f"Payment failed: {reference}, reason: {failure_message}")
 
@@ -271,6 +307,18 @@ async def handle_invoice_payment_failed(db: Session, data: dict):
     """Handle invoice.payment_failed event."""
     # Paystack invoice payment failed handling
     log.warning("Invoice payment failed event received")
+    customer = data.get('customer', {}) if isinstance(data, dict) else {}
+    customer_code = customer.get('customer_code')
+    business = db.query(Business).filter(Business.stripe_customer_id == customer_code).first()
+    if business:
+        owner = db.query(UserModel).filter(UserModel.id == business.owner_id).first()
+        email_service = EmailService()
+        await email_service.send_billing_event_emails(
+            event_name="Invoice Payment Failed",
+            customer_email=owner.email if owner else None,
+            business_name=business.name,
+            details="Please update your payment method and retry.",
+        )
 
 
 @router.post("/binance")

@@ -26,6 +26,8 @@ class PaystackService:
     
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for Paystack API requests."""
+        if not self.secret_key:
+            raise ValueError("PAYSTACK_SECRET_KEY is missing on backend environment.")
         return {
             "Authorization": f"Bearer {self.secret_key}",
             "Content-Type": "application/json"

@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     currency_default: str = "USD"  # Default currency (set via CURRENCY_DEFAULT env var)
     tax_rate: float = 0.00  # Default tax rate (0.16 for Kenya VAT) (set via TAX_RATE env var)
     annual_discount: float = 0.20  # 20% discount for annual billing (set via ANNUAL_DISCOUNT env var)
+    
+    # Email notifications (Resend)
+    resend_api_key: str = ""  # Resend API key (set via RESEND_API_KEY env var)
+    billing_sender_email: str = "billing@automifyyai.com"  # From email for billing notifications
+    billing_admin_email: str = ""  # Admin inbox for billing alerts (set via BILLING_ADMIN_EMAIL env var)
 
     model_config = SettingsConfigDict(
         env_file=".env",

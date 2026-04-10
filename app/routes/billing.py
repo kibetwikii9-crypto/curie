@@ -748,6 +748,8 @@ async def create_checkout_session(
                 "access_code": transaction.get('access_code'),
                 "reference": transaction.get('reference')
             }
+    except HTTPException:
+        raise
     except Exception as e:
         log.error(f"Failed to create checkout session: {e}")
         raise HTTPException(
