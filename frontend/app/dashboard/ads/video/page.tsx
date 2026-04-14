@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { FileVideo, Plus, Play } from 'lucide-react'
+import { FileVideo, Plus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { apiFetch } from '@/lib/api'
 
@@ -175,7 +175,20 @@ export default function VideoDashboard() {
                 const thumbnail = getProjectThumbnail(project)
                 const videoUrl = getProjectVideo(project)
                 return (
-                  <div key={project.id} className="rounded-lg border border-gray-200 overflow-hidden bg-white group">
+                  <div
+                    key={project.id}
+                    className="rounded-lg border border-gray-200 overflow-hidden bg-white group cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => router.push(`/dashboard/ads/video/${project.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        router.push(`/dashboard/ads/video/${project.id}`)
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open video project ${project.name}`}
+                  >
                     <div className="relative aspect-video bg-black">
                       {videoUrl ? (
                         <video className="h-full w-full object-contain" src={videoUrl} controls playsInline preload="metadata" />
@@ -202,10 +215,6 @@ export default function VideoDashboard() {
                     <div className="p-3 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Badge className={getStatusClass(project.status)}>{project.status}</Badge>
-                        <Button variant="outline" onClick={() => router.push(`/dashboard/ads/video/${project.id}`)}>
-                          <Play className="w-4 h-4 mr-1" />
-                          Open
-                        </Button>
                       </div>
                     </div>
                   </div>

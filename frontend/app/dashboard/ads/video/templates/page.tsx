@@ -83,17 +83,16 @@ export default function TemplatesPage() {
       }
 
       const data = await response.json()
-      toast({
-        title: 'Success',
-        description: `Project created from template`,
-      })
-      await new Promise(resolve => setTimeout(resolve, 500))
-      router.push(`/dashboard/ads/video/${data.project?.id}`)
+      const projectId = data.project?.id
+      if (!projectId) {
+        throw new Error('Template project was created but no project id was returned')
+      }
+      router.push(`/dashboard/ads/video/${projectId}`)
     } catch (error) {
       console.error('Error creating project:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to create project from template',
+        title: 'Unable to open template project',
+        description: 'Please try again. If the issue persists, choose "Start from Scratch" and save as template later.',
         variant: 'destructive'
       })
     } finally {
@@ -154,7 +153,26 @@ export default function TemplatesPage() {
 
         {/* Template cards */}
         {templates.map((template) => (
-          <Card key={template.id} className="hover:shadow-lg transition-shadow overflow-hidden group">
+          <Card
+            key={template.id}
+            className={`hover:shadow-lg transition-shadow overflow-hidden group ${creatingTemplateId !== null ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}
+            onClick={() => {
+              if (creatingTemplateId === null) {
+                handleCreateFromTemplate(template.id)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (creatingTemplateId !== null) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                handleCreateFromTemplate(template.id)
+              }
+            }}
+            role="button"
+            tabIndex={creatingTemplateId !== null ? -1 : 0}
+            aria-label={`Use template ${template.name}`}
+            aria-disabled={creatingTemplateId !== null}
+          >
             <div className="relative h-64">
               {template.thumbnail_url && !template.thumbnail_url.startsWith('blob:') ? (
                 <img src={template.thumbnail_url} alt={template.name} className="h-full w-full object-contain bg-black" />
@@ -194,13 +212,9 @@ export default function TemplatesPage() {
               </div>
             </div>
             <CardContent className="p-3">
-              <Button
-                onClick={() => handleCreateFromTemplate(template.id)}
-                className="w-full"
-                disabled={creatingTemplateId !== null}
-              >
-                {creatingTemplateId === template.id ? 'Creating...' : 'Use Template'}
-              </Button>
+              <p className="text-sm text-gray-600 text-center">
+                {creatingTemplateId === template.id ? 'Opening editor...' : 'Click anywhere on this card to use template'}
+              </p>
             </CardContent>
           </Card>
         ))}

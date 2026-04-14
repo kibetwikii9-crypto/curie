@@ -146,9 +146,11 @@ export default function VideoProjectCreatePage() {
       }
 
       const data = await response.json()
-      toast({ title: 'Saved', description: 'Video project created successfully.' })
-      await new Promise(resolve => setTimeout(resolve, 500))
-      router.push(`/dashboard/ads/video/${data.project?.id}`)
+      const projectId = data.project?.id
+      if (!projectId) {
+        throw new Error('Project was created but no project id was returned')
+      }
+      router.push(`/dashboard/ads/video/${projectId}`)
     } catch (error) {
       console.error('Error saving project:', error)
       toast({ title: 'Error', description: 'Failed to save video project.', variant: 'destructive' })

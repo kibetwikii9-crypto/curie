@@ -171,7 +171,7 @@ export default function VideoProjectDetailPage() {
   }
 
   const isPlayableVideo = (asset: VideoAsset | null) =>
-    !!asset && !!asset.url && !asset.url.startsWith('blob:')
+    !!asset && asset.type === 'video' && !!asset.url
 
   const getPreviewImage = (asset: VideoAsset | null) => {
     if (!asset) return null
@@ -382,7 +382,7 @@ export default function VideoProjectDetailPage() {
             )}
             {previewAsset?.url?.startsWith('blob:') && (
               <p className="text-xs text-amber-600">
-                This file uses a temporary browser URL (`blob:`). Re-upload it to persistent storage to enable full video playback.
+                This video can play in this browser session, but `blob:` URLs are temporary and may stop working after refresh. Upload to persistent storage for long-term playback.
               </p>
             )}
             <div className="space-y-1 text-sm text-gray-600">
@@ -466,7 +466,6 @@ export default function VideoProjectDetailPage() {
             toast({ title: 'Saved', description: 'Project updates saved successfully.' })
             setIsDirty(false)
             // Redirect to project library so saved project is visible immediately
-            await new Promise(resolve => setTimeout(resolve, 500))
             router.push('/dashboard/ads/video')
           } catch (error) {
             console.error('Error saving project:', error)

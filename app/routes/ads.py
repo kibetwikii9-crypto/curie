@@ -571,6 +571,19 @@ async def create_video_project_from_template(
     if not isinstance(template_config, dict):
         template_config = {}
 
+    seed_assets: List[Dict[str, Any]] = []
+    thumb = template.thumbnail_url
+    if isinstance(thumb, str) and thumb and not thumb.startswith("blob:"):
+        seed_assets.append(
+            {
+                "id": int(datetime.utcnow().timestamp()),
+                "name": f"{template.name} preview",
+                "type": "image",
+                "url": thumb,
+                "thumbnail": thumb,
+            }
+        )
+
     project = VideoProject(
         business_id=business_id,
         owner_user_id=current_user.id,
@@ -580,7 +593,7 @@ async def create_video_project_from_template(
         status="draft",
         duration=template_config.get("duration", "00:30"),
         scenes=template_config.get("scenes", []),
-        assets=[]
+        assets=seed_assets
     )
 
     db.add(project)
