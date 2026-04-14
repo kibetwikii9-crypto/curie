@@ -5,12 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Play, Trash2, UploadCloud, Save, Share2, Film, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Trash2, UploadCloud, Save, Share2, Film, CheckCircle2 } from 'lucide-react'
 
 type VideoAsset = { id: number; name: string; type: 'video' | 'image' | 'audio'; url: string; thumbnail?: string }
 
@@ -42,6 +40,7 @@ export default function VideoProjectDetailPage() {
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  const [previewDuration, setPreviewDuration] = useState<string | null>(null)
 
   useEffect(() => {
     loadProject()
@@ -99,6 +98,8 @@ export default function VideoProjectDetailPage() {
         return 'bg-gray-100 text-gray-700'
     }
   }, [project])
+
+  const displayedDuration = previewDuration || project?.duration || '00:00'
 
   if (!project) {
     return (
@@ -262,6 +263,38 @@ export default function VideoProjectDetailPage() {
     }
   }
 
+  const saveProject = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: project.title,
+          description: project.description,
+          status: project.status,
+          duration: displayedDuration,
+          scenes: project.scenes,
+          assets: project.assets,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save project')
+      }
+
+      toast({ title: 'Saved', description: 'Project updates saved successfully.' })
+      setIsDirty(false)
+      await loadProject()
+    } catch (error) {
+      console.error('Error saving project:', error)
+      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 pb-10 max-w-7xl">
       <div className="pt-6 pb-4">
@@ -278,7 +311,7 @@ export default function VideoProjectDetailPage() {
             </div>
             <h1 className="mt-1 text-2xl font-bold text-gray-900 truncate">{project.title}</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Duration <span className="font-medium text-gray-900">{project.duration}</span> • {project.scenes.length} scenes • {project.assets.length} assets
+              Duration <span className="font-medium text-gray-900">{displayedDuration}</span> • {project.assets.length} assets
             </p>
           </div>
 
@@ -286,10 +319,6 @@ export default function VideoProjectDetailPage() {
             <Button variant="ghost" className="h-9 px-3" onClick={() => router.push('/dashboard/ads/video')}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
-            </Button>
-            <Button className="h-9 px-3" onClick={() => setStatus('rendering')}>
-              <Play className="w-4 h-4 mr-2" />
-              Render
             </Button>
             <Button variant="outline" className="h-9 px-3" onClick={() => setStatus('published')}>
               <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -314,82 +343,45 @@ export default function VideoProjectDetailPage() {
               <CardTitle>Project basics</CardTitle>
               <CardDescription>Update the name and description shown in your library.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-1">
-                <Label htmlFor="title">Title</Label>
-                <Input id="title" value={project.title} onChange={(e) => updateField('title', e.target.value)} />
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="title" className="text-xs text-gray-500">
+                  Title
+                </Label>
+                <input
+                  id="title"
+                  value={project.title}
+                  onChange={(e) => updateField('title', e.target.value)}
+                  className="mt-1 w-full bg-transparent text-lg font-semibold text-gray-900 outline-none border-0 p-0"
+                  placeholder="Project title"
+                />
+                <div className="mt-2 h-px w-full bg-gray-100" />
               </div>
-              <div className="md:col-span-1">
-                <Label>Duration</Label>
-                <Input value={project.duration} disabled />
+
+              <div>
+                <Label className="text-xs text-gray-500">Duration</Label>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayedDuration}</div>
               </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
+
+              <div>
+                <Label htmlFor="description" className="text-xs text-gray-500">
+                  Description
+                </Label>
+                <textarea
                   id="description"
                   value={project.description}
                   onChange={(e) => updateField('description', e.target.value)}
-                  rows={3}
+                  onInput={(e) => {
+                    const el = e.currentTarget
+                    el.style.height = 'auto'
+                    el.style.height = `${el.scrollHeight}px`
+                  }}
+                  rows={1}
+                  className="mt-1 w-full bg-transparent text-sm text-gray-800 outline-none border-0 p-0 resize-none overflow-hidden leading-6"
+                  placeholder="Add a short description…"
                 />
+                <div className="mt-2 h-px w-full bg-gray-100" />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Scenes</CardTitle>
-              <CardDescription>Fine-tune pacing and captions. Total duration updates automatically.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {project.scenes.length === 0 ? (
-                <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-600">
-                  No scenes yet.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="hidden md:grid md:grid-cols-12 gap-2 text-xs text-gray-500 px-2">
-                    <div className="col-span-5">Name</div>
-                    <div className="col-span-2">Seconds</div>
-                    <div className="col-span-4">Caption</div>
-                    <div className="col-span-1 text-right"> </div>
-                  </div>
-                  {project.scenes.map((scene) => (
-                    <div key={scene.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-start rounded-md border border-gray-200 p-2">
-                      <div className="md:col-span-5">
-                        <Label className="md:hidden">Name</Label>
-                        <Input value={scene.name} onChange={(e) => updateScene(scene.id, 'name', e.target.value)} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label className="md:hidden">Seconds</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={scene.duration}
-                          onChange={(e) => updateScene(scene.id, 'duration', Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="md:col-span-4">
-                        <Label className="md:hidden">Caption</Label>
-                        <Input value={scene.caption} onChange={(e) => updateScene(scene.id, 'caption', e.target.value)} />
-                      </div>
-                      <div className="md:col-span-1 md:flex md:justify-end">
-                        <Button
-                          variant="outline"
-                          className="w-full md:w-auto"
-                          onClick={() => {
-                            const scenes = project.scenes.filter((s) => s.id !== scene.id)
-                            const updated = { ...project, scenes, duration: getTotalDuration(scenes) }
-                            setProject(updated)
-                            setIsDirty(true)
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -464,39 +456,11 @@ export default function VideoProjectDetailPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <p className="text-xs text-gray-500">
-              Saving will update the project and return you to the library.
+              Save updates this project. You can keep previewing right away.
             </p>
             <Button
               variant="default"
-              onClick={async () => {
-                setSaving(true)
-                try {
-                  const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      name: project.title,
-                      description: project.description,
-                      status: project.status,
-                      duration: project.duration,
-                      scenes: project.scenes,
-                      assets: project.assets,
-                    }),
-                  })
-
-                  if (!response.ok) {
-                    throw new Error('Failed to save project')
-                  }
-
-                  toast({ title: 'Saved', description: 'Project updates saved successfully.' })
-                  setIsDirty(false)
-                  router.push('/dashboard/ads/video')
-                } catch (error) {
-                  console.error('Error saving project:', error)
-                  toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-                  setSaving(false)
-                }
-              }}
+              onClick={saveProject}
               disabled={saving}
               className="h-10"
             >
@@ -516,7 +480,24 @@ export default function VideoProjectDetailPage() {
               {previewAsset ? (
                 isPlayableVideo(previewAsset) ? (
                   <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
-                    <video className="w-full h-full object-contain" src={previewAsset.url} controls />
+                    <video
+                      className="w-full h-full object-contain"
+                      src={previewAsset.url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      onLoadedMetadata={(e) => {
+                        const secs = Math.max(0, Math.floor(e.currentTarget.duration || 0))
+                        if (!secs) return
+                        const mm = Math.floor(secs / 60).toString().padStart(2, '0')
+                        const ss = (secs % 60).toString().padStart(2, '0')
+                        const formatted = `${mm}:${ss}`
+                        setPreviewDuration(formatted)
+                        if (project.duration !== formatted) {
+                          setProject({ ...project, duration: formatted })
+                        }
+                      }}
+                    />
                   </div>
                 ) : getPreviewImage(previewAsset) ? (
                   <div className="w-full aspect-video rounded-md bg-black overflow-hidden">

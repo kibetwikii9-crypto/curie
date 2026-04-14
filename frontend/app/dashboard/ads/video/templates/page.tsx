@@ -213,7 +213,7 @@ export default function TemplatesPage() {
             </div>
             <CardContent className="p-3">
               <p className="text-sm text-gray-600 text-center">
-                {creatingTemplateId === template.id ? 'Opening editor...' : 'Click anywhere on this card to use template'}
+                {creatingTemplateId === template.id ? 'Opening editor...' : 'Use this template'}
               </p>
             </CardContent>
           </Card>

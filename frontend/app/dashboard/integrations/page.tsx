@@ -109,7 +109,7 @@ function ChannelIcon({
 
   const candidates =
     normalized === 'instagram'
-      ? ['/instagram-icon.png', '/intagram-icon.png', '/chat-icon.png']
+      ? ['/instagram-icon.png', '/chat-icon.png']
       : [getChannelIconPath(normalized), '/chat-icon.png'];
 
   const src = candidates[Math.min(srcIndex, candidates.length - 1)];
@@ -472,6 +472,36 @@ export default function IntegrationsPage() {
     }
 
     try {
+      // Render a quick loading UI so the popup doesn't feel "stuck" while we fetch authUrl.
+      // (We can't open the auth URL directly because we need auth headers on the initial request.)
+      try {
+        popup.document.title = title;
+        popup.document.body.style.margin = '0';
+        popup.document.body.innerHTML = `
+          <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; display:flex; align-items:center; justify-content:center; height:100vh; background:#f8fafc;">
+            <div style="width:min(420px, 92vw); background:white; border:1px solid #e5e7eb; border-radius:14px; padding:22px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:34px; height:34px; border-radius:999px; border:3px solid #e5e7eb; border-top-color:#06b6d4; animation:spin 1s linear infinite;"></div>
+                <div>
+                  <div style="font-size:14px; font-weight:700; color:#0f172a;">Opening ${title}…</div>
+                  <div style="font-size:12px; color:#64748b; margin-top:2px;">Fetching authorization link</div>
+                </div>
+              </div>
+              <div style="margin-top:14px; font-size:12px; color:#64748b;">
+                If this takes more than a few seconds, close this window and try again.
+              </div>
+            </div>
+          </div>
+          <style>
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          </style>
+        `;
+      } catch {
+        // Some browsers may restrict doc access briefly; ignore and proceed.
+      }
+
+      popup.focus();
+
       // Fetch OAuth URL via authenticated API call first.
       // Direct navigation to backend endpoint drops auth header and causes 401.
       const response = await api.get(endpoint, {
@@ -481,7 +511,8 @@ export default function IntegrationsPage() {
       if (!authUrl) {
         throw new Error('Failed to get OAuth URL');
       }
-      popup.location.href = authUrl;
+      // Replace avoids adding about:blank to history and feels snappier.
+      popup.location.replace(authUrl);
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
