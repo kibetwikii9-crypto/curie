@@ -71,21 +71,29 @@ class Settings(BaseSettings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        # FIX: Render keeps shortening URLs in environment variables
-        # If public_url is shortened (e.g., "automify-ai-backend"), fix it
-        if self.public_url and "automify" in self.public_url.lower():
-            if not self.public_url.startswith("http"):
-                # Extract service name and rebuild full URL
-                service_name = self.public_url.replace("https://", "").replace("http://", "").split("/")[0].split(".")[0]
-                self.public_url = f"https://{service_name}.onrender.com"
-                print(f"[AUTO-FIX] Corrected shortened PUBLIC_URL to: {self.public_url}")
-        
-        # FIX: Same for frontend_url
-        if self.frontend_url and "automify" in self.frontend_url.lower():
-            if not self.frontend_url.startswith("http"):
-                service_name = self.frontend_url.replace("https://", "").replace("http://", "").split("/")[0].split(".")[0]
-                self.frontend_url = f"https://{service_name}.onrender.com"
-                print(f"[AUTO-FIX] Corrected shortened FRONTEND_URL to: {self.frontend_url}")
+        # Normalize URLs from env:
+        # - If user provides a hostname without scheme (e.g., api.automifyyai.com), prepend https://
+        # - If user provides a Render service name without dots (e.g., automify-ai-backend), append .onrender.com
+        # This keeps backward compatibility while allowing custom domains.
+        if self.public_url:
+            raw = (self.public_url or "").strip().rstrip("/")
+            if raw and not raw.startswith(("http://", "https://")):
+                if "." in raw or raw.startswith("localhost"):
+                    self.public_url = f"https://{raw}"
+                else:
+                    self.public_url = f"https://{raw}.onrender.com"
+            else:
+                self.public_url = raw
+
+        if self.frontend_url:
+            raw = (self.frontend_url or "").strip().rstrip("/")
+            if raw and not raw.startswith(("http://", "https://")):
+                if "." in raw or raw.startswith("localhost"):
+                    self.frontend_url = f"https://{raw}"
+                else:
+                    self.frontend_url = f"https://{raw}.onrender.com"
+            else:
+                self.frontend_url = raw
         
         # Warn if using default secret key in production
         if self.secret_key == "your-secret-key-change-in-production":

@@ -117,11 +117,6 @@ export default function VideoProjectCreatePage() {
       return
     }
 
-    if (project.assets.length === 0) {
-      toast({ title: 'Validation error', description: 'Upload at least one video file to start', variant: 'destructive' })
-      return
-    }
-
     const savedProject: VideoProject = { ...project, status: 'draft', duration: getTotalDuration(project.scenes) }
     
     setSaving(true)
@@ -208,7 +203,7 @@ export default function VideoProjectCreatePage() {
         <Card>
           <CardHeader>
             <CardTitle>Assets</CardTitle>
-            <CardDescription>Upload video, image, and audio clips</CardDescription>
+            <CardDescription>Optional. You can upload later.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -248,7 +243,7 @@ export default function VideoProjectCreatePage() {
             </div>
 
             {project.assets.length === 0 ? (
-              <p className="text-sm text-gray-500">No assets uploaded yet.</p>
+              <p className="text-sm text-gray-500">No assets yet. This is okay—you can add media later.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {project.assets.map((asset) => (

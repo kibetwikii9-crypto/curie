@@ -7,6 +7,7 @@ import json
 import hmac
 import hashlib
 from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Request, HTTPException, Header, Query, status, Depends
 from fastapi.responses import Response, JSONResponse
@@ -15,6 +16,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import ChannelIntegration
 from app.config import settings
+from app.schemas import NormalizedMessage, MessageChannel
+from app.services.processor import process_message
+from app.services.conversation_service import save_conversation_from_normalized
 import httpx
 
 log = logging.getLogger(__name__)
@@ -168,12 +172,24 @@ async def receive_whatsapp_webhook(
                         
                         log.info(f"Processing WhatsApp message: from={from_number}, text={message_text[:50]}")
                         
-                        # TODO: Store message in database
-                        # TODO: Process through AI/rules
-                        # TODO: Send auto-reply
-                        
-                        # For now, send static auto-reply
-                        reply_text = "Thanks for contacting us. A team member will respond shortly."
+                        # Normalize into platform-agnostic message for AI engine
+                        normalized_message = NormalizedMessage(
+                            channel=MessageChannel.WHATSAPP,
+                            user_id=str(from_number),
+                            message_text=message_text,
+                            timestamp=datetime.utcfromtimestamp(timestamp) if timestamp else datetime.utcnow(),
+                            metadata={
+                                "message_id": message_id,
+                                "phone_number_id": phone_number_id,
+                                "integration_id": matching_integration.id,
+                                "source": "whatsapp_webhook",
+                            },
+                        )
+
+                        # Generate AI reply (GPT-4o if configured, fallback otherwise)
+                        reply_text = await process_message(normalized_message, matching_integration.business_id)
+                        if not reply_text or not reply_text.strip():
+                            reply_text = "I'm here to help! How can I assist you today?"
                         
                         # Send reply via WhatsApp API
                         send_url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
@@ -196,6 +212,17 @@ async def receive_whatsapp_webhook(
                             response = await client.post(send_url, json=payload, headers=headers, timeout=10.0)
                             response.raise_for_status()
                             log.info(f"Reply sent to {from_number}")
+
+                        # Save conversation (non-blocking / error-safe)
+                        try:
+                            await save_conversation_from_normalized(
+                                normalized_message=normalized_message,
+                                bot_reply=reply_text,
+                                business_id=matching_integration.business_id,
+                            )
+                        except Exception:
+                            # Never break webhook if saving fails
+                            pass
                         
                         messages_processed += 1
                     

@@ -9,7 +9,7 @@ Your application is now protected with multiple layers of security to handle hig
 - **Purpose**: Prevents host header attacks
 - **Allowed hosts**:
   - localhost / 127.0.0.1 (development)
-  - automify-ai-backend.onrender.com
+  - api.automifyyai.com
   - automifyyai.com
   - www.automifyyai.com
 - **Attack prevented**: Host header injection, DNS rebinding
@@ -48,7 +48,7 @@ All responses include these protective headers:
 - **Whitelisted origins**:
   - localhost:3000 (development)
   - automifyyai.com
-  - automify-ai-frontend.onrender.com
+  - www.automifyyai.com
 - **Credentials**: Allowed only for whitelisted origins
 
 ### 7. **Rate Limiting (Per IP/User)**
@@ -89,7 +89,7 @@ FastAPI's async nature handles thousands of concurrent connections
 ```bash
 # Windows PowerShell
 for ($i=1; $i -le 15; $i++) {
-    Invoke-WebRequest -Uri "https://automify-ai-backend.onrender.com/api/auth/login" `
+    Invoke-WebRequest -Uri "https://api.automifyyai.com/api/auth/login" `
         -Method POST `
         -ContentType "application/json" `
         -Body '{"username":"test","password":"test"}'

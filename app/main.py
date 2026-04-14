@@ -50,8 +50,7 @@ if hasattr(settings, "frontend_url") and settings.frontend_url:
     cors_origins.append(settings.frontend_url.rstrip('/'))
 
 # Add all known frontend URLs
-cors_origins.append("https://curie-frontend-8hvz.onrender.com")
-cors_origins.append("https://automify-ai-frontend.onrender.com")
+# (Keep this list aligned with your deployed frontend domains.)
 cors_origins.append("https://www.automifyyai.com")
 cors_origins.append("https://automifyyai.com")
 

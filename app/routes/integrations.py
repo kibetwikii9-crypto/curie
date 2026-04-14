@@ -358,23 +358,20 @@ async def connect_telegram(
     # Set webhook automatically
     from app.config import settings
     
-    # Normalize PUBLIC_URL - handle common issues
-    # Render's fromService with property:host returns just the hostname (e.g., "automify-ai-backend-xxxx.onrender.com")
-    # We need to ensure it has https:// protocol
+    # Normalize PUBLIC_URL - handle common issues:
+    # - If it's a hostname without scheme (e.g., api.automifyyai.com), add https://
+    # - If it's a Render service name without dots (e.g., automify-ai-backend), append .onrender.com
     public_url = (settings.public_url or "").strip()
     
     # Remove any trailing slashes
     public_url = public_url.rstrip('/')
     
-    # If PUBLIC_URL doesn't start with http:// or https://, add https://
+    # If PUBLIC_URL doesn't start with http:// or https://, normalize it
     if public_url and not public_url.startswith(("http://", "https://")):
-        # If it contains a dot, it's likely a hostname (e.g., "automify-ai-backend-xxxx.onrender.com")
-        if "." in public_url:
+        if "." in public_url or public_url.startswith("localhost"):
             public_url = f"https://{public_url}"
             log.info(f"Auto-added https:// to PUBLIC_URL. Original: {settings.public_url}, Fixed: {public_url}")
-        # If it's just a service name (no dots), construct Render URL
-        elif public_url and "onrender.com" not in public_url:
-            # This shouldn't happen with Render's fromService, but handle it anyway
+        else:
             public_url = f"https://{public_url}.onrender.com"
             log.info(f"Auto-constructed Render URL from service name. Original: {settings.public_url}, Fixed: {public_url}")
     
@@ -383,7 +380,7 @@ async def connect_telegram(
         log.error("PUBLIC_URL is not set or is localhost. Cannot set webhook for production.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Backend URL (PUBLIC_URL) is not configured. Please set PUBLIC_URL environment variable in Render dashboard to your full backend URL (e.g., https://automify-ai-backend-xxxx.onrender.com)."
+            detail="Backend URL (PUBLIC_URL) is not configured. Please set PUBLIC_URL to your public backend URL (e.g., https://api.automifyyai.com)."
         )
     
     # Ensure webhook URL is HTTPS (Telegram requires HTTPS)
@@ -392,7 +389,7 @@ async def connect_telegram(
         log.error(f"Webhook URL must be HTTPS, got: {webhook_url}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Webhook URL must use HTTPS. Current PUBLIC_URL: {settings.public_url}, constructed URL: {webhook_url}. Please set PUBLIC_URL in Render dashboard to your full backend URL with https:// (e.g., https://automify-ai-backend-xxxx.onrender.com)."
+            detail=f"Webhook URL must use HTTPS. Current PUBLIC_URL: {settings.public_url}, constructed URL: {webhook_url}. Please set PUBLIC_URL to an https:// URL."
         )
     
     webhook_secret = secrets.token_urlsafe(24)
@@ -436,7 +433,7 @@ async def connect_telegram(
         log.error(f"Unexpected error setting webhook: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error setting webhook: {str(e)}. Please check Render logs for details."
+            detail=f"Unexpected error setting webhook: {str(e)}. Please check backend logs for details."
         )
     
     # Check if integration already exists for this business and channel

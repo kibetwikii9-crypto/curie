@@ -45,7 +45,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: https:; "
             "font-src 'self' data:; "
-            "connect-src 'self' https://automifyyai.com https://automify-ai-backend.onrender.com; "
+            "connect-src 'self' https://automifyyai.com https://api.automifyyai.com; "
             "frame-ancestors 'none';"
         )
         response.headers["Content-Security-Policy"] = csp

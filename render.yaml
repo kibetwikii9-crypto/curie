@@ -1,3 +1,6 @@
+# If you use a custom domain (e.g. api.automifyyai.com), set PUBLIC_URL / FRONTEND_URL /
+# NEXT_PUBLIC_API_URL in the Render dashboard to the full https URLs instead of relying on
+# fromService host, so OAuth and webhooks match Meta.
 services:
   # Backend API Service (FastAPI)
   - type: web
