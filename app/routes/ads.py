@@ -567,8 +567,9 @@ async def create_video_project_from_template(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    import json
-    template_config = json.loads(template.template_config) if isinstance(template.template_config, str) else template.template_config
+    template_config = _parse_json_field(template.template_config, {})
+    if not isinstance(template_config, dict):
+        template_config = {}
 
     project = VideoProject(
         business_id=business_id,
