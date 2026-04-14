@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { X } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import Image from 'next/image';
 import Toast from './Toast';
 
@@ -30,6 +30,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
   });
   const [signInErrors, setSignInErrors] = useState<Record<string, string>>({});
   const [signInRemember, setSignInRemember] = useState(false);
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
   
   // Sign Up state
   const [signUpData, setSignUpData] = useState({
@@ -40,6 +41,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
   });
   const [signUpErrors, setSignUpErrors] = useState<Record<string, string>>({});
   const [signUpTerms, setSignUpTerms] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  const [showSignUpConfirmPassword, setShowSignUpConfirmPassword] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   
@@ -60,6 +63,9 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
       setSignUpData({ fullName: '', email: '', password: '', confirmPassword: '' });
       setSignInErrors({});
       setSignUpErrors({});
+      setShowSignInPassword(false);
+      setShowSignUpPassword(false);
+      setShowSignUpConfirmPassword(false);
     }
     return () => {
       document.body.style.overflow = '';
@@ -443,28 +449,38 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
                     <label htmlFor="signin-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Password
                     </label>
-                    <input
-                      id="signin-password"
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={signInData.password}
-                      onChange={handleSignInChange}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !isLoading) {
-                          handleSignInSubmit();
-                        }
-                      }}
-                      className={`w-full px-4 py-2.5 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
-                        signInErrors.password
-                          ? 'border-red-300 dark:border-red-700'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
-                      placeholder="••••••••"
-                      aria-invalid={!!signInErrors.password}
-                      aria-describedby={signInErrors.password ? 'signin-password-error' : undefined}
-                    />
+                    <div className="relative">
+                      <input
+                        id="signin-password"
+                        name="password"
+                        type={showSignInPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        required
+                        value={signInData.password}
+                        onChange={handleSignInChange}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !isLoading) {
+                            handleSignInSubmit();
+                          }
+                        }}
+                        className={`w-full px-4 py-2.5 pr-11 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
+                          signInErrors.password
+                            ? 'border-red-300 dark:border-red-700'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                        placeholder="••••••••"
+                        aria-invalid={!!signInErrors.password}
+                        aria-describedby={signInErrors.password ? 'signin-password-error' : undefined}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignInPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showSignInPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                     {signInErrors.password && (
                       <p id="signin-password-error" className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
                         {signInErrors.password}
@@ -597,23 +613,33 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
                     <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Password
                     </label>
-                    <input
-                      id="signup-password"
-                      name="password"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      value={signUpData.password}
-                      onChange={handleSignUpChange}
-                      className={`w-full px-4 py-2.5 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
-                        signUpErrors.password
-                          ? 'border-red-300 dark:border-red-700'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
-                      placeholder="••••••••"
-                      aria-invalid={!!signUpErrors.password}
-                      aria-describedby={signUpErrors.password ? 'signup-password-error' : undefined}
-                    />
+                    <div className="relative">
+                      <input
+                        id="signup-password"
+                        name="password"
+                        type={showSignUpPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        required
+                        value={signUpData.password}
+                        onChange={handleSignUpChange}
+                        className={`w-full px-4 py-2.5 pr-11 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
+                          signUpErrors.password
+                            ? 'border-red-300 dark:border-red-700'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                        placeholder="••••••••"
+                        aria-invalid={!!signUpErrors.password}
+                        aria-describedby={signUpErrors.password ? 'signup-password-error' : undefined}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignUpPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        aria-label={showSignUpPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showSignUpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                     {signUpErrors.password && (
                       <p id="signup-password-error" className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
                         {signUpErrors.password}
@@ -628,23 +654,33 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
                     <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Confirm Password
                     </label>
-                    <input
-                      id="signup-confirm-password"
-                      name="confirmPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      value={signUpData.confirmPassword}
-                      onChange={handleSignUpChange}
-                      className={`w-full px-4 py-2.5 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
-                        signUpErrors.confirmPassword
-                          ? 'border-red-300 dark:border-red-700'
-                          : 'border-gray-300 dark:border-gray-600'
-                      }`}
-                      placeholder="••••••••"
-                      aria-invalid={!!signUpErrors.confirmPassword}
-                      aria-describedby={signUpErrors.confirmPassword ? 'signup-confirm-password-error' : undefined}
-                    />
+                    <div className="relative">
+                      <input
+                        id="signup-confirm-password"
+                        name="confirmPassword"
+                        type={showSignUpConfirmPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        required
+                        value={signUpData.confirmPassword}
+                        onChange={handleSignUpChange}
+                        className={`w-full px-4 py-2.5 pr-11 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007FFF] focus:border-transparent transition-all ${
+                          signUpErrors.confirmPassword
+                            ? 'border-red-300 dark:border-red-700'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                        placeholder="••••••••"
+                        aria-invalid={!!signUpErrors.confirmPassword}
+                        aria-describedby={signUpErrors.confirmPassword ? 'signup-confirm-password-error' : undefined}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignUpConfirmPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        aria-label={showSignUpConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showSignUpConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                     {signUpErrors.confirmPassword && (
                       <p id="signup-confirm-password-error" className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
                         {signUpErrors.confirmPassword}

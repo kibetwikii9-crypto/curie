@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     
     # Billing Configuration
     trial_days: int = 14  # Free trial period in days (set via TRIAL_DAYS env var)
+    subscription_bypass_emails: str = ""  # Comma-separated emails for temporary subscription bypass
     invoice_prefix: str = "INV"  # Invoice number prefix (set via INVOICE_PREFIX env var)
     currency_default: str = "USD"  # Default currency (set via CURRENCY_DEFAULT env var)
     tax_rate: float = 0.00  # Default tax rate (0.16 for Kenya VAT) (set via TAX_RATE env var)

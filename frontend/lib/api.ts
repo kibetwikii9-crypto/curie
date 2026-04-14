@@ -14,6 +14,46 @@ export const api = axios.create({
   },
 });
 
+const redirectToPaywall = (message?: string) => {
+  if (typeof window === 'undefined') return;
+  const redirectFlag = '__subscriptionRedirectInProgress__';
+  const win = window as typeof window & { [key: string]: boolean };
+  if (win[redirectFlag]) return;
+  const currentPath = window.location.pathname;
+  const isBillingPath = currentPath.startsWith('/dashboard/billing');
+  const isPaywallPath = currentPath.startsWith('/dashboard/paywall');
+  if (isBillingPath || isPaywallPath) return;
+  win[redirectFlag] = true;
+
+  const banner = document.createElement('div');
+  banner.textContent = 'Your free plan ended, redirecting to plans...';
+  banner.style.position = 'fixed';
+  banner.style.top = '24px';
+  banner.style.left = '50%';
+  banner.style.transform = 'translateX(-50%)';
+  banner.style.zIndex = '99999';
+  banner.style.background = '#1f2937';
+  banner.style.color = '#ffffff';
+  banner.style.padding = '12px 18px';
+  banner.style.borderRadius = '10px';
+  banner.style.fontSize = '14px';
+  banner.style.fontWeight = '600';
+  banner.style.boxShadow = '0 12px 24px rgba(0,0,0,0.22)';
+  banner.style.maxWidth = '420px';
+  banner.style.width = 'calc(100% - 32px)';
+  banner.style.textAlign = 'center';
+  document.body.appendChild(banner);
+
+  const params = new URLSearchParams();
+  if (message) {
+    params.set('reason', message);
+  }
+  const query = params.toString();
+  window.setTimeout(() => {
+    window.location.href = query ? `/dashboard/paywall?${query}` : '/dashboard/paywall';
+  }, 900);
+};
+
 export async function apiFetch(input: RequestInfo, init: RequestInit = {}) {
   const isBrowser = typeof window !== 'undefined'
   const url = typeof input === 'string' && input.startsWith('/api/')
@@ -34,7 +74,24 @@ export async function apiFetch(input: RequestInfo, init: RequestInit = {}) {
     }
   }
 
-  return fetch(url, { ...init, headers });
+  const response = await fetch(url, { ...init, headers });
+
+  // Mirror axios behavior for subscription-gated endpoints used with apiFetch.
+  if (
+    isBrowser &&
+    response.status === 402
+  ) {
+    try {
+      const payload = await response.clone().json();
+      if (payload?.code === 'SUBSCRIPTION_REQUIRED') {
+        redirectToPaywall(payload?.detail);
+      }
+    } catch {
+      // Keep original response behavior if payload is not JSON.
+    }
+  }
+
+  return response;
 }
 
 
@@ -74,13 +131,7 @@ api.interceptors.response.use(
       error.response?.data?.code === 'SUBSCRIPTION_REQUIRED' &&
       typeof window !== 'undefined'
     ) {
-      const currentPath = window.location.pathname;
-      const isBillingPath = currentPath.startsWith('/dashboard/billing');
-      const isPaywallPath = currentPath.startsWith('/dashboard/paywall');
-
-      if (!isBillingPath && !isPaywallPath) {
-        window.location.href = '/dashboard/paywall';
-      }
+      redirectToPaywall(error.response?.data?.detail);
     }
 
     return Promise.reject(error);

@@ -1,10 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Lock, CreditCard } from 'lucide-react';
 
 export default function PaywallPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get('reason');
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -19,10 +22,15 @@ export default function PaywallPage() {
         </div>
 
         <p className="mb-3 text-gray-700 dark:text-gray-300">
-          Your free credits have ended. To continue using the platform, please subscribe to a plan.
+          Your account needs an active plan to continue using this feature.
         </p>
+        {reason ? (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            {reason}
+          </p>
+        ) : null}
         <p className="mb-8 text-gray-600 dark:text-gray-400">
-          You can unlock access immediately by choosing a monthly plan.
+          Choose a plan to unlock full access immediately. If you think this is a mistake, contact support.
         </p>
 
         <div className="flex flex-wrap gap-3">

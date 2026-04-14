@@ -22,6 +22,12 @@ import httpx
 log = logging.getLogger(__name__)
 router = APIRouter()
 
+SUBSCRIPTION_BYPASS_EMAILS = {
+    email.strip().lower()
+    for email in settings.subscription_bypass_emails.split(",")
+    if email.strip()
+}
+
 
 OAUTH_STATE_TTL_MINUTES = 15
 oauth_states: Dict[str, Dict[str, Any]] = {}
@@ -60,6 +66,11 @@ def _safe_webhook_url(webhook_url: Optional[str]) -> Optional[str]:
         return webhook_url
     # Never expose query params (can include verify tokens).
     return webhook_url.split("?", 1)[0]
+
+
+def _is_subscription_bypass_user(user: Optional[UserModel]) -> bool:
+    email = ((user.email if user else "") or "").strip().lower()
+    return email in SUBSCRIPTION_BYPASS_EMAILS
 
 
 def _integration_response(integration: ChannelIntegration) -> "IntegrationResponse":
@@ -274,7 +285,7 @@ async def connect_telegram(
     
     # Check channel limit (feature gating)
     business_id = get_user_business_id(current_user, db)
-    if business_id:
+    if business_id and not _is_subscription_bypass_user(current_user):
         from app.services.usage_service import UsageService
         subscription_id = _get_subscription_id_for_limits(db, business_id)
         if subscription_id:
@@ -761,7 +772,7 @@ async def initiate_whatsapp_oauth(
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
         subscription_id = _get_subscription_id_for_limits(db, business_id)
-        if subscription_id:
+        if subscription_id and not _is_subscription_bypass_user(current_user):
             can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
@@ -1412,7 +1423,7 @@ async def initiate_instagram_oauth(
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
         subscription_id = _get_subscription_id_for_limits(db, business_id)
-        if subscription_id:
+        if subscription_id and not _is_subscription_bypass_user(current_user):
             can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
@@ -1868,7 +1879,7 @@ async def initiate_messenger_oauth(
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
         subscription_id = _get_subscription_id_for_limits(db, business_id)
-        if subscription_id:
+        if subscription_id and not _is_subscription_bypass_user(current_user):
             can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
@@ -2253,7 +2264,7 @@ async def initiate_email_oauth(
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
         subscription_id = _get_subscription_id_for_limits(db, business_id)
-        if subscription_id:
+        if subscription_id and not _is_subscription_bypass_user(current_user):
             can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(
@@ -2514,7 +2525,7 @@ async def create_webchat_widget(
         # Check channel limit (feature gating)
         from app.services.usage_service import UsageService
         subscription_id = _get_subscription_id_for_limits(db, business_id)
-        if subscription_id:
+        if subscription_id and not _is_subscription_bypass_user(current_user):
             can_add = await UsageService.can_use_resource(db, business_id, subscription_id, "channel")
             if not can_add:
                 raise HTTPException(

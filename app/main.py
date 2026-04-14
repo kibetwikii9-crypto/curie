@@ -63,6 +63,12 @@ import logging
 log = logging.getLogger(__name__)
 log.info(f"🌐 CORS configured for origins: {cors_origins}")
 
+SUBSCRIPTION_BYPASS_EMAILS = {
+    email.strip().lower()
+    for email in settings.subscription_bypass_emails.split(",")
+    if email.strip()
+}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -143,8 +149,9 @@ async def subscription_access_guard(request: Request, call_next):
         if not user:
             return _json_with_cors(request, 401, {"detail": "User not found"})
 
-        # Admin users are never blocked by subscription access guard.
-        if user.role == "admin":
+        # Admin users and explicit test accounts are never blocked by subscription access guard.
+        user_email = (user.email or "").strip().lower()
+        if user.role == "admin" or user_email in SUBSCRIPTION_BYPASS_EMAILS:
             return await call_next(request)
 
         business_id = user.business_id

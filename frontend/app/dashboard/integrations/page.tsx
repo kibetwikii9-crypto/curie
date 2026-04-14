@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
@@ -89,6 +88,42 @@ interface AvailableChannel {
   category: string;
   color: string;
   features: string[];
+}
+
+const getChannelIconPath = (channel: string) => {
+  const iconPath = availableChannels.find((c) => c.id === channel)?.icon;
+  return iconPath || '/chat-icon.png';
+};
+
+function ChannelIcon({
+  channel,
+  alt,
+  size = 56,
+}: {
+  channel: string;
+  alt: string;
+  size?: number;
+}) {
+  const normalized = channel.toLowerCase();
+  const [srcIndex, setSrcIndex] = useState(0);
+
+  const candidates =
+    normalized === 'instagram'
+      ? ['/instagram-icon.png', '/intagram-icon.png', '/chat-icon.png']
+      : [getChannelIconPath(normalized), '/chat-icon.png'];
+
+  const src = candidates[Math.min(srcIndex, candidates.length - 1)];
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      className="object-contain"
+      onError={() => setSrcIndex((prev) => (prev < candidates.length - 1 ? prev + 1 : prev))}
+    />
+  );
 }
 
 const availableChannels: AvailableChannel[] = [
@@ -353,10 +388,7 @@ export default function IntegrationsPage() {
     return channelData?.color || 'from-gray-500 to-gray-600';
   };
 
-  const getChannelIcon = (channel: string) => {
-    const iconPath = availableChannels.find((c) => c.id === channel)?.icon;
-    return iconPath || '/chat-icon.png';
-  };
+  const getChannelIcon = (channel: string) => getChannelIconPath(channel);
 
   const filteredChannels = availableChannels.filter((channel) => {
     if (categoryFilter === 'all') return true;
@@ -751,13 +783,7 @@ export default function IntegrationsPage() {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-4">
                             <div className="flex items-center justify-center">
-                              <Image
-                                src={getChannelIcon(integration.channel)}
-                                alt={integration.channel}
-                                width={56}
-                                height={56}
-                                className="w-14 h-14 object-contain"
-                              />
+                              <ChannelIcon channel={integration.channel} alt={integration.channel} size={56} />
                             </div>
                             <div>
                               <h4 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
@@ -835,13 +861,7 @@ export default function IntegrationsPage() {
                       >
                         <div className="flex items-center gap-4 flex-1">
                           <div className="flex items-center justify-center">
-                            <Image
-                              src={getChannelIcon(integration.channel)}
-                              alt={integration.channel}
-                              width={48}
-                              height={48}
-                              className="w-12 h-12 object-contain"
-                            />
+                            <ChannelIcon channel={integration.channel} alt={integration.channel} size={48} />
                           </div>
                           <div className="flex-1">
                             <h4 className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
@@ -953,13 +973,7 @@ export default function IntegrationsPage() {
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center justify-center">
-                        <Image
-                          src={channel.icon}
-                          alt={channel.name}
-                          width={64}
-                          height={64}
-                          className="w-16 h-16 object-contain"
-                        />
+                        <ChannelIcon channel={channel.id} alt={channel.name} size={64} />
                       </div>
                       {channel.status === 'available' && isConnected && (
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
