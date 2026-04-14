@@ -263,220 +263,291 @@ export default function VideoProjectDetailPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 pb-8 max-w-6xl">
-      <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-4 bg-white/95 backdrop-blur border-b border-gray-200">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 max-w-6xl mx-auto">
+    <div className="container mx-auto px-4 pb-10 max-w-7xl">
+      <div className="pt-6 pb-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Edit Video Project</p>
-            <h1 className="text-xl font-bold text-gray-900 truncate">{project.title}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Edit video project</p>
+              <Badge className={statusClass}>{project.status}</Badge>
+              {isDirty && (
+                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                  Unsaved changes
+                </span>
+              )}
+            </div>
+            <h1 className="mt-1 text-2xl font-bold text-gray-900 truncate">{project.title}</h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Duration <span className="font-medium text-gray-900">{project.duration}</span> • {project.scenes.length} scenes • {project.assets.length} assets
+            </p>
           </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className={statusClass}>{project.status}</Badge>
-            <Button variant="ghost" className="h-9 px-2 sm:px-3" onClick={() => router.push('/dashboard/ads/video')}>
-              <ArrowLeft className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">Back</span>
+            <Button variant="ghost" className="h-9 px-3" onClick={() => router.push('/dashboard/ads/video')}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
             </Button>
-            <Button className="h-9 px-2 sm:px-3" onClick={() => setStatus('rendering')}>
-              <Play className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">Render</span>
+            <Button className="h-9 px-3" onClick={() => setStatus('rendering')}>
+              <Play className="w-4 h-4 mr-2" />
+              Render
             </Button>
-            <Button variant="outline" className="h-9 px-2 sm:px-3" onClick={() => setStatus('published')}>
-              <CheckCircle2 className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">Publish</span>
+            <Button variant="outline" className="h-9 px-3" onClick={() => setStatus('published')}>
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Publish
             </Button>
-            <Button variant="outline" className="h-9 px-2 sm:px-3" onClick={saveAsTemplate} disabled={savingTemplate}>
-              <Share2 className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">{savingTemplate ? 'Saving...' : 'Template'}</span>
+            <Button variant="outline" className="h-9 px-3" onClick={saveAsTemplate} disabled={savingTemplate}>
+              <Share2 className="w-4 h-4 mr-2" />
+              {savingTemplate ? 'Saving...' : 'Save template'}
             </Button>
-            <Button variant="outline" className="h-9 px-2 sm:px-3 text-red-600 border-red-300 hover:bg-red-50" onClick={onDelete}>
-              <Trash2 className="w-4 h-4 sm:mr-1" />
-              <span className="hidden sm:inline">Delete</span>
+            <Button variant="outline" className="h-9 px-3 text-red-600 border-red-300 hover:bg-red-50" onClick={onDelete}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Project Basics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="title">Title</Label>
-              <Input id="title" value={project.title} onChange={(e) => updateField('title', e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={project.description}
-                onChange={(e) => updateField('description', e.target.value)}
-                rows={4}
-              />
-            </div>
-            <div>
-              <Label>Duration</Label>
-              <Input value={project.duration} disabled />
-            </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Project basics</CardTitle>
+              <CardDescription>Update the name and description shown in your library.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-1">
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" value={project.title} onChange={(e) => updateField('title', e.target.value)} />
+              </div>
+              <div className="md:col-span-1">
+                <Label>Duration</Label>
+                <Input value={project.duration} disabled />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={project.description}
+                  onChange={(e) => updateField('description', e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold">Scene timeline</h4>
-              {project.scenes.map((scene) => (
-                <div key={scene.id} className="grid grid-cols-12 gap-2 items-center">
-                  <Input
-                    className="col-span-5"
-                    value={scene.name}
-                    onChange={(e) => updateScene(scene.id, 'name', e.target.value)}
-                  />
-                  <Input
-                    className="col-span-3"
-                    type="number"
-                    min={1}
-                    value={scene.duration}
-                    onChange={(e) => updateScene(scene.id, 'duration', Number(e.target.value))}
-                  />
-                  <Input
-                    className="col-span-3"
-                    value={scene.caption}
-                    onChange={(e) => updateScene(scene.id, 'caption', e.target.value)}
-                  />
-                  <Button variant="outline" className="col-span-1" onClick={async () => {
-                    const scenes = project.scenes.filter((s) => s.id !== scene.id)
-                    const updated = { ...project, scenes, duration: getTotalDuration(scenes) }
-                    setProject(updated)
-                    setIsDirty(true)
-                  }}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Live Preview</CardTitle>
-            <CardDescription>Quick look at your project output</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {previewAsset ? (
-              isPlayableVideo(previewAsset) ? (
-                <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
-                  <video className="w-full h-full object-contain" src={previewAsset!.url} controls />
-                </div>
-              ) : getPreviewImage(previewAsset) ? (
-                <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
-                  <img src={getPreviewImage(previewAsset)!} alt="Project preview thumbnail" className="w-full h-full object-cover" />
+          <Card>
+            <CardHeader>
+              <CardTitle>Scenes</CardTitle>
+              <CardDescription>Fine-tune pacing and captions. Total duration updates automatically.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {project.scenes.length === 0 ? (
+                <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-600">
+                  No scenes yet.
                 </div>
               ) : (
-                <div className="rounded-md border border-dashed border-gray-300 h-[180px] flex items-center justify-center text-gray-500">
-                  <Film className="w-5 h-5 mr-2" /> Preview unavailable
+                <div className="space-y-2">
+                  <div className="hidden md:grid md:grid-cols-12 gap-2 text-xs text-gray-500 px-2">
+                    <div className="col-span-5">Name</div>
+                    <div className="col-span-2">Seconds</div>
+                    <div className="col-span-4">Caption</div>
+                    <div className="col-span-1 text-right"> </div>
+                  </div>
+                  {project.scenes.map((scene) => (
+                    <div key={scene.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-start rounded-md border border-gray-200 p-2">
+                      <div className="md:col-span-5">
+                        <Label className="md:hidden">Name</Label>
+                        <Input value={scene.name} onChange={(e) => updateScene(scene.id, 'name', e.target.value)} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label className="md:hidden">Seconds</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={scene.duration}
+                          onChange={(e) => updateScene(scene.id, 'duration', Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="md:col-span-4">
+                        <Label className="md:hidden">Caption</Label>
+                        <Input value={scene.caption} onChange={(e) => updateScene(scene.id, 'caption', e.target.value)} />
+                      </div>
+                      <div className="md:col-span-1 md:flex md:justify-end">
+                        <Button
+                          variant="outline"
+                          className="w-full md:w-auto"
+                          onClick={() => {
+                            const scenes = project.scenes.filter((s) => s.id !== scene.id)
+                            const updated = { ...project, scenes, duration: getTotalDuration(scenes) }
+                            setProject(updated)
+                            setIsDirty(true)
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )
-            ) : (
-              <div className="rounded-md border border-dashed border-gray-300 h-[180px] flex items-center justify-center text-gray-500">
-                <Film className="w-5 h-5 mr-2" /> No preview yet
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Assets</CardTitle>
+              <CardDescription>Upload media, then select an asset to preview.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center hover:bg-gray-50 transition-colors">
+                  <input type="file" accept="video/*" hidden onChange={(e) => onFileUpload(e.target.files, 'video')} multiple />
+                  <UploadCloud className="mx-auto h-5 w-5 text-gray-500" />
+                  <p className="text-xs text-gray-600 mt-1">Upload video</p>
+                </label>
+                <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center hover:bg-gray-50 transition-colors">
+                  <input type="file" accept="image/*" hidden onChange={(e) => onFileUpload(e.target.files, 'image')} multiple />
+                  <UploadCloud className="mx-auto h-5 w-5 text-gray-500" />
+                  <p className="text-xs text-gray-600 mt-1">Upload images</p>
+                </label>
+                <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center hover:bg-gray-50 transition-colors">
+                  <input type="file" accept="audio/*" hidden onChange={(e) => onFileUpload(e.target.files, 'audio')} multiple />
+                  <UploadCloud className="mx-auto h-5 w-5 text-gray-500" />
+                  <p className="text-xs text-gray-600 mt-1">Upload audio</p>
+                </label>
               </div>
-            )}
-            {previewAsset?.url?.startsWith('blob:') && (
-              <p className="text-xs text-amber-600">
-                This video can play in this browser session, but `blob:` URLs are temporary and may stop working after refresh. Upload to persistent storage for long-term playback.
-              </p>
-            )}
-            <div className="space-y-1 text-sm text-gray-600">
-              <p><strong>Status:</strong> {project.status}</p>
-              <p><strong>Unsaved changes:</strong> {isDirty ? 'Yes' : 'No'}</p>
-              <p><strong>Scenes:</strong> {project.scenes.length}</p>
-              <p><strong>Assets:</strong> {project.assets.length}</p>
-              <p><strong>Duration:</strong> {project.duration}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Assets</CardTitle>
-          <CardDescription>Add video, image, audio clips for timeline</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center">
-              <input type="file" accept="video/*" hidden onChange={(e) => onFileUpload(e.target.files, 'video')} multiple />
-              <UploadCloud className="mx-auto h-5 w-5" />
-              <p className="text-xs">Upload video</p>
-            </label>
-            <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center">
-              <input type="file" accept="image/*" hidden onChange={(e) => onFileUpload(e.target.files, 'image')} multiple />
-              <UploadCloud className="mx-auto h-5 w-5" />
-              <p className="text-xs">Upload images</p>
-            </label>
-            <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center">
-              <input type="file" accept="audio/*" hidden onChange={(e) => onFileUpload(e.target.files, 'audio')} multiple />
-              <UploadCloud className="mx-auto h-5 w-5" />
-              <p className="text-xs">Upload audio</p>
-            </label>
-          </div>
-
-          {project.assets.length > 0 ? (
-            <div className="grid gap-2">
-              {project.assets.map((asset) => (
-                <div key={asset.id} className="flex items-center justify-between rounded border border-gray-200 p-2">
-                  <span className="text-sm">{asset.name}</span>
-                  <Badge>{asset.type}</Badge>
-                  {asset.type === 'video' && (
-                    <Button variant="ghost" onClick={() => setPreviewAsset(asset)}>
-                      Preview
-                    </Button>
-                  )}
+              {project.assets.length === 0 ? (
+                <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-600">
+                  No assets yet. Upload at least one file to start previewing.
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">No assets yet. Upload at least one video file to preview.</p>
-          )}
+              ) : (
+                <div className="grid gap-2">
+                  {project.assets.map((asset) => {
+                    const selected = previewAsset?.id === asset.id
+                    return (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        className={[
+                          'w-full text-left rounded-md border p-2 flex items-center gap-3 transition-colors',
+                          selected ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:bg-gray-50',
+                        ].join(' ')}
+                        onClick={() => setPreviewAsset(asset)}
+                      >
+                        <div className="h-10 w-16 rounded bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center shrink-0">
+                          {asset.thumbnail ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={asset.thumbnail} alt="" className="h-full w-full object-cover" />
+                          ) : asset.type === 'image' && asset.url && !asset.url.startsWith('blob:') ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={asset.url} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <Film className="h-4 w-4 text-gray-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900 truncate">{asset.name}</span>
+                            <Badge className="shrink-0">{asset.type}</Badge>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-0.5 truncate">{asset.url?.startsWith('blob:') ? 'Local file (temporary)' : 'Stored asset'}</p>
+                        </div>
+                        <span className="text-xs text-gray-500">{selected ? 'Previewing' : 'Preview'}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          <p className="text-sm text-gray-500">Select a video asset to update preview on the right.</p>
-        </CardContent>
-      </Card>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-xs text-gray-500">
+              Saving will update the project and return you to the library.
+            </p>
+            <Button
+              variant="default"
+              onClick={async () => {
+                setSaving(true)
+                try {
+                  const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: project.title,
+                      description: project.description,
+                      status: project.status,
+                      duration: project.duration,
+                      scenes: project.scenes,
+                      assets: project.assets,
+                    }),
+                  })
 
-      <div className="flex justify-end gap-2 mt-4">
-        <Button variant="outline" onClick={async () => {
-          setSaving(true)
-          try {
-            const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: project.title,
-                description: project.description,
-                status: project.status,
-                duration: project.duration,
-                scenes: project.scenes,
-                assets: project.assets
-              }),
-            })
-            
-            if (!response.ok) {
-              throw new Error('Failed to save project')
-            }
+                  if (!response.ok) {
+                    throw new Error('Failed to save project')
+                  }
 
-            toast({ title: 'Saved', description: 'Project updates saved successfully.' })
-            setIsDirty(false)
-            // Redirect to project library so saved project is visible immediately
-            router.push('/dashboard/ads/video')
-          } catch (error) {
-            console.error('Error saving project:', error)
-            toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
-            setSaving(false)
-          }
-        }} disabled={saving}>
-          <Save className="w-4 h-4 mr-2" />
-          {saving ? 'Saving...' : 'Save'}
-        </Button>
+                  toast({ title: 'Saved', description: 'Project updates saved successfully.' })
+                  setIsDirty(false)
+                  router.push('/dashboard/ads/video')
+                } catch (error) {
+                  console.error('Error saving project:', error)
+                  toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+                  setSaving(false)
+                }
+              }}
+              disabled={saving}
+              className="h-10"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Preview</CardTitle>
+              <CardDescription>What you’ll render/publish.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {previewAsset ? (
+                isPlayableVideo(previewAsset) ? (
+                  <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
+                    <video className="w-full h-full object-contain" src={previewAsset.url} controls />
+                  </div>
+                ) : getPreviewImage(previewAsset) ? (
+                  <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getPreviewImage(previewAsset)!}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-gray-300 h-[200px] flex items-center justify-center text-gray-500">
+                    <Film className="w-5 h-5 mr-2" /> Preview unavailable
+                  </div>
+                )
+              ) : (
+                <div className="rounded-md border border-dashed border-gray-300 h-[200px] flex items-center justify-center text-gray-500">
+                  <Film className="w-5 h-5 mr-2" /> Select an asset to preview
+                </div>
+              )}
+
+              {previewAsset?.url?.startsWith('blob:') && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
+                  This is a local preview (`blob:`). It will stop working after refresh unless uploaded to persistent storage.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
     </div>
   )
 }
