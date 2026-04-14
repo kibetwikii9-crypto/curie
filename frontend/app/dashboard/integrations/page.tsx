@@ -397,69 +397,13 @@ export default function IntegrationsPage() {
   const activeIntegrations = integrations.filter((integration) => integration.is_active);
 
   const connectWhatsApp = async () => {
-    const width = 600;
-    const height = 700;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    const popup = window.open(
-      'about:blank',
+    await startOAuthPopup(
+      '/api/integrations/whatsapp/connect',
       'WhatsApp OAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      'whatsapp-oauth-success',
+      'whatsapp-oauth-error',
+      'WhatsApp connected successfully!'
     );
-
-    if (!popup) {
-      alert('Please allow popups for this site to connect WhatsApp');
-      return;
-    }
-
-    try {
-      const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
-
-      const handleMessage = (event: MessageEvent) => {
-        const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
-
-        if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-          return;
-        }
-
-        if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
-          return;
-        }
-
-        if (event.data.type === 'whatsapp-oauth-success') {
-          popup.close();
-          fetchIntegrations();
-          queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
-          alert('WhatsApp connected successfully!');
-          window.removeEventListener('message', handleMessage);
-        } else if (event.data.type === 'whatsapp-oauth-error') {
-          popup.close();
-          alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
-          window.removeEventListener('message', handleMessage);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.error('WhatsApp connection error:', error);
-      popup.close();
-      if (error.response?.status === 401) {
-        alert('Please log in first');
-      } else if (error.response?.status === 403) {
-        alert(error.response?.data?.detail || 'You do not have permission');
-      } else {
-        showIntegrationError(error, 'Integration in progress... If this persists, please try again.');
-      }
-    }
   };
 
   const connectWebchat = async () => {
