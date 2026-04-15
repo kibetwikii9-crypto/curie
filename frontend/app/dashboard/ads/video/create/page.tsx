@@ -96,7 +96,7 @@ export default function VideoProjectCreatePage() {
           const formData = new FormData()
           formData.append('file', file)
 
-          const response = await fetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
+          const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
             method: 'POST',
             body: formData,
           })
