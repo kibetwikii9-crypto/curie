@@ -331,25 +331,69 @@ Return ONLY valid JSON in this exact format (no markdown, no extra text):
             timeout=60.0
         )
         
-        result_text = response.choices[0].message.content
-        
-        # Parse JSON response
-        import json
-        try:
-            qa_pairs = json.loads(result_text)
-            log.info(f"✅ AI extracted {len(qa_pairs)} Q&A pairs via {provider}")
-            return qa_pairs
-        except json.JSONDecodeError:
-            # Try to extract JSON from markdown code block if GPT wrapped it
-            import re
-            json_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', result_text, re.DOTALL)
-            if json_match:
-                qa_pairs = json.loads(json_match.group(1))
-                log.info(f"✅ AI extracted {len(qa_pairs)} Q&A pairs via {provider} (from code block)")
-                return qa_pairs
-            else:
-                log.error("Failed to parse GPT response as JSON")
+        result_text = response.choices[0].message.content or ""
+
+        def _normalize_qa_pairs(raw_pairs: object) -> List[Dict[str, any]]:
+            if not isinstance(raw_pairs, list):
                 return []
+
+            normalized: List[Dict[str, any]] = []
+            for item in raw_pairs:
+                if not isinstance(item, dict):
+                    continue
+
+                question = str(item.get("question", "")).strip()
+                answer = str(item.get("answer", "")).strip()
+                if not question or not answer:
+                    continue
+
+                keywords_raw = item.get("keywords", [])
+                if isinstance(keywords_raw, list):
+                    keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
+                elif isinstance(keywords_raw, str):
+                    keywords = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+                else:
+                    keywords = []
+
+                normalized.append({
+                    "question": question,
+                    "answer": answer,
+                    "keywords": keywords,
+                })
+
+            return normalized
+
+        # Parse JSON response with multiple fallbacks for model formatting variations.
+        import json
+        import re
+
+        parse_candidates = [result_text.strip()]
+
+        # Markdown fenced block candidate.
+        code_block_match = re.search(r"```(?:json)?\s*(.*?)\s*```", result_text, re.DOTALL)
+        if code_block_match:
+            parse_candidates.append(code_block_match.group(1).strip())
+
+        # First JSON array candidate anywhere in text.
+        first_bracket = result_text.find("[")
+        last_bracket = result_text.rfind("]")
+        if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
+            parse_candidates.append(result_text[first_bracket:last_bracket + 1].strip())
+
+        for candidate in parse_candidates:
+            if not candidate:
+                continue
+            try:
+                parsed = json.loads(candidate)
+                qa_pairs = _normalize_qa_pairs(parsed)
+                if qa_pairs:
+                    log.info(f"✅ AI extracted {len(qa_pairs)} Q&A pairs via {provider}")
+                    return qa_pairs
+            except json.JSONDecodeError:
+                continue
+
+        log.error("Failed to parse AI extraction response as valid Q&A JSON")
+        return []
     
     except Exception as e:
         log.error(f"Error extracting Q&A with AI: {e}", exc_info=True)

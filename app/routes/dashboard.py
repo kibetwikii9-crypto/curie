@@ -752,14 +752,52 @@ async def get_knowledge_health(
     
     # Intents without knowledge
     intents_without_knowledge = [intent for intent in all_intents if intent not in knowledge_intent_list]
+
+    # Compute real "unused" entries from recent conversation activity.
+    # An entry is considered used if its intent matched recent conversations
+    # or any of its keywords appeared in recent user messages.
+    import json
+    knowledge_entries = db.query(KnowledgeEntry).filter(
+        KnowledgeEntry.business_id == business_id,
+        KnowledgeEntry.is_active == True,
+    ).all()
+
+    unused_entries_count = 0
+    for entry in knowledge_entries:
+        match_conditions = []
+
+        if entry.intent and entry.intent.strip():
+            match_conditions.append(Conversation.intent == entry.intent.strip())
+
+        if entry.keywords:
+            try:
+                keywords = json.loads(entry.keywords) if isinstance(entry.keywords, str) else entry.keywords
+                if isinstance(keywords, list):
+                    for kw in keywords[:3]:
+                        if isinstance(kw, str) and kw.strip():
+                            match_conditions.append(Conversation.user_message.ilike(f"%{kw.strip()}%"))
+            except Exception:
+                pass
+
+        usage_count = 0
+        if match_conditions:
+            usage_filter = and_(
+                Conversation.created_at >= start_date,
+                Conversation.business_id == business_id,
+                or_(*match_conditions),
+            )
+            usage_count = db.query(func.count(Conversation.id)).filter(usage_filter).scalar() or 0
+
+        if usage_count == 0:
+            unused_entries_count += 1
     
     return {
         "total_entries": total_entries,
         "active_entries": active_entries,
         "entries_with_intent": entries_with_intent,
         "intents_without_knowledge": intents_without_knowledge,
-        "unused_entries_count": 0,  # Would need more complex logic
-        "coverage_percentage": round((len(knowledge_intent_list) / max(len(all_intents), 1)) * 100, 1) if all_intents else 100,
+        "unused_entries_count": unused_entries_count,
+        "coverage_percentage": round((len(knowledge_intent_list) / len(all_intents)) * 100, 1) if all_intents else 0.0,
     }
 
 
