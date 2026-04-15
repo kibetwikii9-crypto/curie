@@ -151,24 +151,51 @@ export default function VideoProjectDetailPage() {
   const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
-    const assets = await Promise.all(
-      Array.from(files).map(async (file, idx) => {
-        const url = URL.createObjectURL(file)
-        const thumbnail = type === 'video' ? await generateVideoThumbnail(url) : undefined
-        return {
-          id: Date.now() + idx,
-          name: file.name,
-          type,
-          url,
-          thumbnail: thumbnail || undefined,
-        }
-      })
-    )
+    try {
+      const assets = await Promise.all(
+        Array.from(files).map(async (file, idx) => {
+          // Upload file to backend
+          const formData = new FormData()
+          formData.append('file', file)
 
-    const updated = { ...project, assets: [...project.assets, ...assets] }
-    setProject(updated)
-    setPreviewAsset(assets[0])
-    setIsDirty(true)
+          const response = await fetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
+            method: 'POST',
+            body: formData,
+          })
+
+          if (!response.ok) {
+            throw new Error(`Upload failed: ${response.statusText}`)
+          }
+
+          const uploadedAsset = await response.json()
+
+          // Generate thumbnail for videos
+          let thumbnail: string | undefined
+          if (type === 'video') {
+            const tempUrl = URL.createObjectURL(file)
+            const thumbResult = await generateVideoThumbnail(tempUrl)
+            thumbnail = thumbResult || undefined
+            URL.revokeObjectURL(tempUrl)
+          }
+
+          return {
+            id: uploadedAsset.id,
+            name: uploadedAsset.name,
+            type: uploadedAsset.type,
+            url: uploadedAsset.url,
+            thumbnail: thumbnail,
+          }
+        })
+      )
+
+      const updated = { ...project, assets: [...project.assets, ...assets] }
+      setProject(updated)
+      setPreviewAsset(assets[0])
+      setIsDirty(true)
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast({ title: 'Upload failed', description: 'Failed to upload asset files', variant: 'destructive' })
+    }
   }
 
   const isPlayableVideo = (asset: VideoAsset | null) =>

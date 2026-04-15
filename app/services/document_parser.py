@@ -12,6 +12,7 @@ import io
 import csv
 from typing import Optional, Dict, List
 from pathlib import Path
+import re
 
 log = logging.getLogger(__name__)
 
@@ -398,3 +399,73 @@ Return ONLY valid JSON in this exact format (no markdown, no extra text):
     except Exception as e:
         log.error(f"Error extracting Q&A with AI: {e}", exc_info=True)
         return []
+
+
+def extract_qa_fallback(document_text: str, max_pairs: int = 12) -> List[Dict[str, any]]:
+    """
+    Build Q&A pairs from plain text when AI extraction fails.
+
+    Heuristic strategy:
+    - Split into meaningful paragraphs
+    - Turn each paragraph into a likely customer question + concise answer
+    - Generate basic keywords from paragraph terms
+    """
+    if not document_text or not isinstance(document_text, str):
+        return []
+
+    # Normalize whitespace and split by paragraph breaks.
+    cleaned = re.sub(r"\r\n?", "\n", document_text).strip()
+    blocks = [b.strip() for b in re.split(r"\n\s*\n+", cleaned) if b.strip()]
+    if not blocks:
+        return []
+
+    stopwords = {
+        "the", "and", "for", "with", "that", "this", "from", "your", "you", "are",
+        "our", "can", "will", "into", "about", "have", "has", "was", "were", "how",
+        "what", "when", "where", "which", "their", "them", "more", "than", "just",
+    }
+
+    qa_pairs: List[Dict[str, any]] = []
+    for block in blocks:
+        if len(qa_pairs) >= max_pairs:
+            break
+
+        # Skip tiny fragments.
+        if len(block) < 35:
+            continue
+
+        # Use first sentence as question seed.
+        sentences = re.split(r"(?<=[.!?])\s+", block)
+        first_sentence = (sentences[0] or "").strip()
+        if not first_sentence:
+            continue
+
+        # If sentence is already a question, keep it. Otherwise convert to FAQ style.
+        if first_sentence.endswith("?"):
+            question = first_sentence
+        else:
+            stem = re.sub(r"[^\w\s-]", "", first_sentence).strip()
+            if not stem:
+                continue
+            question = f"What should I know about {stem[:90]}?"
+
+        answer = block[:450].strip()
+        if len(answer) < 30:
+            continue
+
+        words = re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}", block.lower())
+        unique_words: List[str] = []
+        for w in words:
+            if w in stopwords or w in unique_words:
+                continue
+            unique_words.append(w)
+            if len(unique_words) >= 6:
+                break
+
+        qa_pairs.append({
+            "question": question,
+            "answer": answer,
+            "keywords": unique_words,
+        })
+
+    return qa_pairs

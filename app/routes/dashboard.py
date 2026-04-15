@@ -1162,7 +1162,7 @@ async def upload_knowledge_document(
     
     Supports: .docx, .pdf, .txt, .md, .csv, .xlsx
     """
-    from app.services.document_parser import parse_document, extract_qa_with_gpt
+    from app.services.document_parser import parse_document, extract_qa_with_gpt, extract_qa_fallback
     from app.config import settings
     
     business_id = get_user_business_id(current_user, db)
@@ -1243,7 +1243,18 @@ async def upload_knowledge_document(
         )
         
         if not qa_pairs:
-            # Fallback: return raw text
+            # Heuristic fallback: auto-generate Q&A pairs from plain text.
+            qa_pairs = extract_qa_fallback(document_text)
+            if qa_pairs:
+                return {
+                    "success": True,
+                    "mode": "ai_extracted",
+                    "qa_pairs": qa_pairs,
+                    "original_text": document_text[:2000],
+                    "message": f"Automatically generated {len(qa_pairs)} Q&A pairs from document text.",
+                }
+
+            # Last fallback: return raw text
             return {
                 "success": True,
                 "mode": "manual",
@@ -2535,49 +2546,64 @@ async def get_rule_coverage(
     db: Session = Depends(get_db),
 ):
     """Get rule coverage and health overview."""
+    business_id = get_user_business_id(current_user, db)
+    if business_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI rules access requires a business account",
+        )
+
     start_date = datetime.utcnow() - timedelta(days=30)
-    
-    supported_intents = ["greeting", "help", "pricing", "human"]
-    
+
+    active_rules = db.query(AIRule).filter(
+        AIRule.business_id == business_id,
+        AIRule.is_active == True,
+    ).all()
+    supported_intents = sorted({rule.intent for rule in active_rules if rule.intent})
+
     conversation_intents = db.query(Conversation.intent).filter(
-        Conversation.created_at >= start_date
+        Conversation.created_at >= start_date,
+        Conversation.business_id == business_id,
     ).distinct().all()
     all_intents = [intent[0] for intent in conversation_intents if intent[0]]
-    
+
     intents_with_coverage = [intent for intent in all_intents if intent in supported_intents]
     intents_without_coverage = [intent for intent in all_intents if intent not in supported_intents and intent != "unknown"]
-    
+
     fallback_count = db.query(func.count(Conversation.id)).filter(
         Conversation.created_at >= start_date,
-        Conversation.intent == "unknown"
+        Conversation.business_id == business_id,
+        Conversation.intent == "unknown",
     ).scalar() or 0
-    
+
     total_conversations = db.query(func.count(Conversation.id)).filter(
-        Conversation.created_at >= start_date
+        Conversation.created_at >= start_date,
+        Conversation.business_id == business_id,
     ).scalar() or 0
-    
+
     fallback_rate = (fallback_count / max(total_conversations, 1)) * 100
-    
+
     successful_intents = []
     for intent in supported_intents:
         intent_leads = db.query(func.count(Lead.id)).filter(
             Lead.source_intent == intent,
-            Lead.created_at >= start_date
+            Lead.created_at >= start_date,
+            Lead.business_id == business_id,
         ).scalar() or 0
         if intent_leads > 0:
             successful_intents.append({
                 "intent": intent,
                 "leads_generated": intent_leads,
             })
-    
+
     return {
-        "total_active_rules": len(supported_intents),
+        "total_active_rules": len(active_rules),
         "intents_with_coverage": intents_with_coverage,
         "intents_without_coverage": intents_without_coverage,
         "fallback_frequency": fallback_count,
         "fallback_rate": round(fallback_rate, 1),
         "successful_rules": successful_intents,
-        "coverage_percentage": round((len(intents_with_coverage) / max(len(all_intents), 1)) * 100, 1) if all_intents else 100,
+        "coverage_percentage": round((len(intents_with_coverage) / len(all_intents)) * 100, 1) if all_intents else 0.0,
     }
 
 

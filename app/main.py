@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.logging_config import init_logging
@@ -30,6 +31,9 @@ from app.models import (
 init_logging(settings.log_level)
 
 app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
+
+# Mount static files for uploads
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Add CORS middleware
 # Support both local development and production (Render)

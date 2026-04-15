@@ -1,11 +1,13 @@
 """Ads System API routes for campaign management, video editing, and analytics."""
 import json
 import logging
+import os
+import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
@@ -866,6 +868,59 @@ async def delete_video_project(
     db.commit()
 
     return {"message": "Video project deleted successfully"}
+
+# ========== VIDEO ASSET UPLOAD ENDPOINTS ==========
+@router.post("/video-projects/upload-asset")
+async def upload_video_asset(
+    file: UploadFile = File(...),
+    asset_type: str = Query(..., description="Type of asset: video, image, audio"),
+    db: Session = Depends(get_db),
+    business_id: int = Depends(get_user_business_id),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Upload an asset file for video projects."""
+    # Validate asset type
+    allowed_types = {
+        'video': ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'],
+        'image': ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        'audio': ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4']
+    }
+
+    if asset_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Invalid asset type. Allowed: {', '.join(allowed_types.keys())}")
+
+    if file.content_type not in allowed_types[asset_type]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type for {asset_type}. Allowed: {', '.join(allowed_types[asset_type])}"
+        )
+
+    # Create uploads directory if it doesn't exist
+    uploads_dir = f"uploads/video-assets/{business_id}"
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    # Generate unique filename
+    file_extension = os.path.splitext(file.filename)[1] or ""
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(uploads_dir, unique_filename)
+
+    # Save file
+    try:
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
+
+    # Return asset info
+    file_url = f"/uploads/video-assets/{business_id}/{unique_filename}"
+    return {
+        "id": str(uuid.uuid4()),
+        "name": file.filename,
+        "type": asset_type,
+        "url": file_url,
+        "size": len(contents)
+    }
 
 # ========== A/B TEST ENDPOINTS ==========
 @router.get("/ab-tests")

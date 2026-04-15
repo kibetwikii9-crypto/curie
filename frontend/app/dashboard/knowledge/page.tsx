@@ -160,6 +160,23 @@ export default function KnowledgePage() {
   });
 
   // Mutations
+  const stringifyError = (error: any) => {
+    const detail = error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item: any) => {
+          if (typeof item === 'string') return item;
+          if (item?.msg) return item.msg;
+          return JSON.stringify(item);
+        })
+        .join(' | ');
+    }
+    if (typeof detail === 'object' && detail !== null) {
+      return JSON.stringify(detail);
+    }
+    return String(detail ?? 'Unknown error');
+  };
+
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
     setNotification({ type, text });
     window.setTimeout(() => setNotification(null), 5000);
@@ -184,7 +201,7 @@ export default function KnowledgePage() {
       showNotification('Knowledge entry added successfully.', 'success');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.detail || error?.message || 'Failed to add knowledge entry';
+      const message = stringifyError(error) || 'Failed to add knowledge entry';
       showNotification(message, 'error');
     },
   });
@@ -209,7 +226,7 @@ export default function KnowledgePage() {
       showNotification('Knowledge entry updated successfully.', 'success');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.detail || error?.message || 'Failed to update knowledge entry';
+      const message = stringifyError(error) || 'Failed to update knowledge entry';
       showNotification(message, 'error');
     },
   });
@@ -257,7 +274,7 @@ export default function KnowledgePage() {
       showNotification(message, skipped > 0 ? 'error' : 'success');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.detail || error?.message || 'Failed to save entries';
+      const message = stringifyError(error) || 'Failed to save entries';
       showNotification(message, 'error');
     },
   });
@@ -336,11 +353,7 @@ export default function KnowledgePage() {
         setShowDocumentUploadModal(false);
       }
     } catch (error: any) {
-      const message =
-        error?.response?.data?.detail ||
-        error?.response?.data?.message ||
-        error?.message ||
-        'Failed to process document';
+      const message = stringifyError(error) || 'Failed to process document';
       showNotification('Error processing document: ' + message, 'error');
     } finally {
       setIsProcessingDocument(false);

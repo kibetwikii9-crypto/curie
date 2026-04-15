@@ -89,23 +89,50 @@ export default function VideoProjectCreatePage() {
   const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
-    const newAssets = await Promise.all(
-      Array.from(files).map(async (file, index) => {
-        const url = URL.createObjectURL(file)
-        const thumbnail = type === 'video' ? await generateVideoThumbnail(url) : undefined
-        return {
-          id: Date.now() + index,
-          name: file.name,
-          type,
-          url,
-          thumbnail: thumbnail || undefined,
-        }
-      })
-    )
+    try {
+      const newAssets = await Promise.all(
+        Array.from(files).map(async (file, index) => {
+          // Upload file to backend
+          const formData = new FormData()
+          formData.append('file', file)
 
-    setProject((prev) => ({ ...prev, assets: [...prev.assets, ...newAssets], updated_at: new Date().toISOString().slice(0, 10) }))
-    if (newAssets.length > 0) {
-      setPreviewAssetUrl(newAssets[0].url)
+          const response = await fetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
+            method: 'POST',
+            body: formData,
+          })
+
+          if (!response.ok) {
+            throw new Error(`Upload failed: ${response.statusText}`)
+          }
+
+          const uploadedAsset = await response.json()
+
+          // Generate thumbnail for videos
+          let thumbnail: string | undefined
+          if (type === 'video') {
+            const tempUrl = URL.createObjectURL(file)
+            const thumbResult = await generateVideoThumbnail(tempUrl)
+            thumbnail = thumbResult || undefined
+            URL.revokeObjectURL(tempUrl)
+          }
+
+          return {
+            id: uploadedAsset.id,
+            name: uploadedAsset.name,
+            type: uploadedAsset.type,
+            url: uploadedAsset.url,
+            thumbnail: thumbnail,
+          }
+        })
+      )
+
+      setProject((prev) => ({ ...prev, assets: [...prev.assets, ...newAssets], updated_at: new Date().toISOString().slice(0, 10) }))
+      if (newAssets.length > 0) {
+        setPreviewAssetUrl(newAssets[0].url)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast({ title: 'Upload failed', description: 'Failed to upload asset files', variant: 'destructive' })
     }
   }
 
