@@ -89,8 +89,10 @@ export default function KnowledgePage() {
   // Bulk operations
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedEntries, setSelectedEntries] = useState<Set<number>>(new Set());
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importData, setImportData] = useState('');
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   
   // Document upload
   const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(false);
@@ -158,6 +160,11 @@ export default function KnowledgePage() {
   });
 
   // Mutations
+  const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ type, text });
+    window.setTimeout(() => setNotification(null), 5000);
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await api.post('/api/dashboard/knowledge', {
@@ -174,6 +181,11 @@ export default function KnowledgePage() {
       queryClient.invalidateQueries({ queryKey: ['knowledge-health'] });
       setShowCreateModal(false);
       resetForm();
+      showNotification('Knowledge entry added successfully.', 'success');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.detail || error?.message || 'Failed to add knowledge entry';
+      showNotification(message, 'error');
     },
   });
 
@@ -194,6 +206,11 @@ export default function KnowledgePage() {
       setShowEditModal(false);
       setEditingEntry(null);
       resetForm();
+      showNotification('Knowledge entry updated successfully.', 'success');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.detail || error?.message || 'Failed to update knowledge entry';
+      showNotification(message, 'error');
     },
   });
 
@@ -224,11 +241,24 @@ export default function KnowledgePage() {
       const response = await api.post('/api/dashboard/knowledge/bulk/import', { entries });
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['knowledge'] });
       queryClient.invalidateQueries({ queryKey: ['knowledge-health'] });
-      setShowImportModal(false);
-      setImportData('');
+      setShowQAPreview(false);
+      setExtractedQAPairs([]);
+      setUploadedFile(null);
+
+      const imported = result?.imported_count ?? 0;
+      const skipped = result?.skipped_count ?? 0;
+      let message = `Saved ${imported} entries successfully.`;
+      if (skipped > 0) {
+        message += ` ${skipped} entries were skipped during import.`;
+      }
+      showNotification(message, skipped > 0 ? 'error' : 'success');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.detail || error?.message || 'Failed to save entries';
+      showNotification(message, 'error');
     },
   });
 
@@ -272,19 +302,6 @@ export default function KnowledgePage() {
     }
   };
 
-  const handleImport = () => {
-    try {
-      const entries = JSON.parse(importData);
-      if (!Array.isArray(entries)) {
-        alert('Invalid format: Must be a JSON array');
-        return;
-      }
-      bulkImportMutation.mutate(entries);
-    } catch (error) {
-      alert('Invalid JSON format');
-    }
-  };
-  
   // Document upload handler
   const handleDocumentUpload = async () => {
     if (!uploadedFile) {
@@ -314,6 +331,7 @@ export default function KnowledgePage() {
         setShowQAPreview(true);
         setShowDocumentUploadModal(false);
       } else if (result.mode === 'manual') {
+        showNotification(result.message, 'error');
         alert(result.message + '\n\nRaw text:\n' + result.raw_text.substring(0, 500) + '...');
         setShowDocumentUploadModal(false);
       }
@@ -323,7 +341,7 @@ export default function KnowledgePage() {
         error?.response?.data?.message ||
         error?.message ||
         'Failed to process document';
-      alert('Error processing document: ' + message);
+      showNotification('Error processing document: ' + message, 'error');
     } finally {
       setIsProcessingDocument(false);
     }
@@ -402,6 +420,17 @@ export default function KnowledgePage() {
 
   return (
     <div className="space-y-6">
+      {notification && (
+        <div
+          className={`rounded-md px-4 py-3 text-sm ${
+            notification.type === 'success'
+              ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+              : 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+          }`}
+        >
+          {notification.text}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -418,13 +447,6 @@ export default function KnowledgePage() {
           >
             <FileText className="h-4 w-4 mr-2" />
             Upload Document
-          </button>
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Import JSON
           </button>
           <button
             onClick={exportKnowledge}
@@ -1045,81 +1067,6 @@ export default function KnowledgePage() {
       )}
 
       {/* Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Import Knowledge Entries
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setImportData('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    JSON Data (array of entries)
-                  </label>
-                  <textarea
-                    value={importData}
-                    onChange={(e) => setImportData(e.target.value)}
-                    rows={15}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 font-mono text-xs"
-                    placeholder={`[
-  {
-    "question": "What is your pricing?",
-    "answer": "We offer flexible pricing plans...",
-    "keywords": ["price", "cost", "pricing"],
-    "intent": "pricing",
-    "is_active": true
-  }
-]`}
-                  />
-                </div>
-
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-sm text-blue-800 dark:text-blue-400">
-                  <p className="font-medium mb-1">Format Requirements:</p>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Must be a JSON array</li>
-                    <li>Each entry must have "question" and "answer"</li>
-                    <li>"keywords" is optional (array of strings)</li>
-                    <li>"intent" and "is_active" are optional</li>
-                    <li>Duplicate questions will be skipped</li>
-                  </ul>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setShowImportModal(false);
-                      setImportData('');
-                    }}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleImport}
-                    disabled={bulkImportMutation.isPending || !importData.trim()}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
-                  >
-                    {bulkImportMutation.isPending ? 'Importing...' : 'Import Entries'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Entry Detail Modal/Preview */}
       {selectedEntryId && entryDetail && showPreview && (
