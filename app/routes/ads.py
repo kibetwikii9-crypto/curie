@@ -879,17 +879,27 @@ async def upload_video_asset(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Upload an asset file for video projects."""
+    import aiofiles
+    
     # Validate asset type
     allowed_types = {
-        'video': ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'],
-        'image': ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-        'audio': ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4']
+        'video': ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv', '.flv'],
+        'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'],
+        'audio': ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac']
     }
 
     if asset_type not in allowed_types:
-        raise HTTPException(status_code=400, detail=f"Invalid asset type. Allowed: {', '.join(allowed_types.keys())}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid asset type. Allowed: {', '.join(allowed_types.keys())}"
+        )
 
-    if file.content_type not in allowed_types[asset_type]:
+    # Validate by extension (more reliable than content-type)
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File has no name")
+    
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    if file_extension not in allowed_types[asset_type]:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file type for {asset_type}. Allowed: {', '.join(allowed_types[asset_type])}"
@@ -897,30 +907,48 @@ async def upload_video_asset(
 
     # Create uploads directory if it doesn't exist
     uploads_dir = f"uploads/video-assets/{business_id}"
-    os.makedirs(uploads_dir, exist_ok=True)
+    try:
+        os.makedirs(uploads_dir, exist_ok=True)
+    except Exception as e:
+        log.error(f"Failed to create uploads directory: {e}")
+        raise HTTPException(status_code=500, detail="Failed to prepare upload directory")
 
     # Generate unique filename
-    file_extension = os.path.splitext(file.filename)[1] or ""
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(uploads_dir, unique_filename)
 
-    # Save file
+    # Save file with proper async handling
     try:
         contents = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(contents)
+        
+        # Use async file writing when possible
+        try:
+            async with aiofiles.open(file_path, "wb") as f:
+                await f.write(contents)
+        except ImportError:
+            # Fallback to sync write if aiofiles not available
+            with open(file_path, "wb") as f:
+                f.write(contents)
+        
+        file_size = len(contents)
+        file_url = f"/uploads/video-assets/{business_id}/{unique_filename}"
+        
+        return {
+            "id": str(uuid.uuid4()),
+            "name": file.filename,
+            "type": asset_type,
+            "url": file_url,
+            "size": file_size
+        }
     except Exception as e:
+        log.error(f"File upload failed: {e}", exc_info=True)
+        # Clean up partial file if it exists
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except:
+            pass
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
-
-    # Return asset info
-    file_url = f"/uploads/video-assets/{business_id}/{unique_filename}"
-    return {
-        "id": str(uuid.uuid4()),
-        "name": file.filename,
-        "type": asset_type,
-        "url": file_url,
-        "size": len(contents)
-    }
 
 # ========== A/B TEST ENDPOINTS ==========
 @router.get("/ab-tests")

@@ -15,6 +15,7 @@ psycopg[binary]>=3.1.0,<4.0.0  # PostgreSQL driver for SQLAlchemy (psycopg3)
 
 # HTTP Client
 httpx==0.25.1  # Async HTTP client for Meta OAuth and WhatsApp API
+aiofiles>=23.0.0  # Async file operations for upload/download
 
 # Configuration & Validation
 # Using flexible versions to allow pip to select pre-built wheels

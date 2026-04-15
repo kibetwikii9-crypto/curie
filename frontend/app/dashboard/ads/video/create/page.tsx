@@ -80,6 +80,7 @@ export default function VideoProjectCreatePage() {
 
   const [previewAssetUrl, setPreviewAssetUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
 
   const updateField = <K extends keyof VideoProject>(key: K, value: VideoProject[K]) => {
@@ -89,6 +90,7 @@ export default function VideoProjectCreatePage() {
   const onFileUpload = async (files: FileList | null, type: 'video' | 'image' | 'audio') => {
     if (!files) return
 
+    setUploading(true)
     try {
       const newAssets = await Promise.all(
         Array.from(files).map(async (file, index) => {
@@ -102,10 +104,16 @@ export default function VideoProjectCreatePage() {
           })
 
           if (!response.ok) {
-            throw new Error(`Upload failed: ${response.statusText}`)
+            const errorData = await response.text()
+            throw new Error(`Upload failed: ${response.statusText} - ${errorData}`)
           }
 
-          const uploadedAsset = await response.json()
+          let uploadedAsset
+          try {
+            uploadedAsset = await response.json()
+          } catch (e) {
+            throw new Error('Failed to parse upload response')
+          }
 
           // Generate thumbnail for videos
           let thumbnail: string | undefined
@@ -130,9 +138,12 @@ export default function VideoProjectCreatePage() {
       if (newAssets.length > 0) {
         setPreviewAssetUrl(newAssets[0].url)
       }
+      toast({ title: 'Success', description: `${newAssets.length} file(s) uploaded successfully` })
     } catch (error) {
       console.error('Upload error:', error)
-      toast({ title: 'Upload failed', description: 'Failed to upload asset files', variant: 'destructive' })
+      toast({ title: 'Upload failed', description: error instanceof Error ? error.message : 'Failed to upload asset files', variant: 'destructive' })
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -230,42 +241,45 @@ export default function VideoProjectCreatePage() {
         <Card>
           <CardHeader>
             <CardTitle>Assets</CardTitle>
-            <CardDescription>Optional. You can upload later.</CardDescription>
+            <CardDescription>Upload media files (optional, can add later)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center">
+              <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center hover:border-gray-400 transition-colors">
                 <input
                   type="file"
                   accept="video/*"
                   className="hidden"
                   onChange={(e) => onFileUpload(e.target.files, 'video')}
                   multiple
+                  disabled={uploading}
                 />
                 <UploadCloud className="mx-auto h-5 w-5 text-gray-500" />
-                <p className="text-xs text-gray-500">Upload video</p>
+                <p className="text-xs text-gray-500 mt-1">{uploading ? 'Uploading...' : 'Upload video'}</p>
               </label>
-              <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center">
+              <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center hover:border-gray-400 transition-colors">
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={(e) => onFileUpload(e.target.files, 'image')}
                   multiple
+                  disabled={uploading}
                 />
                 <UploadCloud className="mx-auto h-5 w-5 text-gray-500" />
-                <p className="text-xs text-gray-500">Upload images</p>
+                <p className="text-xs text-gray-500 mt-1">{uploading ? 'Uploading...' : 'Upload images'}</p>
               </label>
-              <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center">
+              <label className="cursor-pointer rounded-md border border-dashed border-gray-300 p-3 text-center hover:border-gray-400 transition-colors">
                 <input
                   type="file"
                   accept="audio/*"
                   className="hidden"
                   onChange={(e) => onFileUpload(e.target.files, 'audio')}
                   multiple
+                  disabled={uploading}
                 />
                 <UploadCloud className="mx-auto h-5 w-5 text-gray-500" />
-                <p className="text-xs text-gray-500">Upload audio</p>
+                <p className="text-xs text-gray-500 mt-1">{uploading ? 'Uploading...' : 'Upload audio'}</p>
               </label>
             </div>
 
@@ -275,8 +289,8 @@ export default function VideoProjectCreatePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {project.assets.map((asset) => (
                   <div key={asset.id} className="flex items-center justify-between rounded border border-gray-200 p-2">
-                    <span className="text-sm">{asset.name}</span>
-                    <Badge>{asset.type}</Badge>
+                    <span className="text-sm truncate">{asset.name}</span>
+                    <Badge className="bg-blue-100 text-blue-800">{asset.type}</Badge>
                   </div>
                 ))}
               </div>
@@ -288,6 +302,7 @@ export default function VideoProjectCreatePage() {
                   <h4 className="text-sm font-medium">Preview</h4>
                   <Button
                     variant="outline"
+                    className="px-3 py-1 text-sm"
                     onClick={() => setIsPreviewFullscreen((prev) => !prev)}
                   >
                     {isPreviewFullscreen ? 'Compact' : 'Fullscreen'}
@@ -307,7 +322,7 @@ export default function VideoProjectCreatePage() {
           <Button type="button" variant="ghost" onClick={() => router.push('/dashboard/ads/video')}>
             Cancel
           </Button>
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving || uploading}>
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Saving...' : 'Save Project'}
           </Button>

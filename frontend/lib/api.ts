@@ -57,9 +57,7 @@ const redirectToPaywall = (message?: string) => {
 export async function apiFetch(input: RequestInfo, init: RequestInit = {}) {
   const isBrowser = typeof window !== 'undefined'
   const url = typeof input === 'string' && input.startsWith('/api/')
-    ? (process.env.NEXT_PUBLIC_API_URL || !isBrowser
-        ? `${normalizedApiBaseUrl}${input}`
-        : input)
+    ? (normalizedApiBaseUrl ? `${normalizedApiBaseUrl}${input}` : input)
     : input;
 
   const headers = new Headers(init.headers || {});
