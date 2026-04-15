@@ -297,21 +297,16 @@ export default function KnowledgePage() {
     try {
       const formData = new FormData();
       formData.append('file', uploadedFile);
-      
-      const response = await fetch('/api/dashboard/knowledge/upload/document', {
-        method: 'POST',
+
+      // Use shared API client so requests always go to configured backend URL
+      // in production (instead of current frontend origin).
+      const response = await api.post('/api/dashboard/knowledge/upload/document', formData, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'multipart/form-data',
         },
-        body: formData,
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to process document');
-      }
-      
-      const result = await response.json();
+
+      const result = response.data;
       
       if (result.mode === 'ai_extracted' && result.qa_pairs) {
         // Show preview of extracted Q&A pairs
@@ -323,7 +318,12 @@ export default function KnowledgePage() {
         setShowDocumentUploadModal(false);
       }
     } catch (error: any) {
-      alert('Error processing document: ' + error.message);
+      const message =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to process document';
+      alert('Error processing document: ' + message);
     } finally {
       setIsProcessingDocument(false);
     }
