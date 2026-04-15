@@ -34,25 +34,52 @@ log = logging.getLogger(__name__)
 # Initialize OpenAI client (lazy load to handle missing API key gracefully)
 _openai_client: Optional[AsyncOpenAI] = None
 _gpt_enabled: bool = False
+_llm_provider: str = "openai"
+_llm_model: str = "gpt-4o"
 
 
 def _init_openai_client():
     """Initialize OpenAI client if API key is available."""
-    global _openai_client, _gpt_enabled
+    global _openai_client, _gpt_enabled, _llm_provider, _llm_model
     
     if _openai_client is not None:
         return  # Already initialized
     
     try:
-        if settings.openai_api_key and settings.openai_api_key.strip():
-            _openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        provider = (settings.llm_provider or "openai").strip().lower()
+        openai_key = (settings.openai_api_key or "").strip()
+        gemini_key = (settings.gemini_api_key or "").strip()
+
+        if provider == "gemini" and gemini_key:
+            _openai_client = AsyncOpenAI(
+                api_key=gemini_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            _llm_provider = "gemini"
+            _llm_model = (settings.llm_model or "gemini-2.0-flash").strip()
             _gpt_enabled = True
-            log.info("✅ OpenAI GPT client initialized successfully")
+            log.info("✅ Gemini client initialized successfully")
+        elif openai_key:
+            _openai_client = AsyncOpenAI(api_key=openai_key)
+            _llm_provider = "openai"
+            _llm_model = (settings.llm_model or "gpt-4o").strip()
+            _gpt_enabled = True
+            log.info("✅ OpenAI client initialized successfully")
+        elif gemini_key:
+            # Automatic fallback to Gemini if OpenAI key is not provided.
+            _openai_client = AsyncOpenAI(
+                api_key=gemini_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            _llm_provider = "gemini"
+            _llm_model = (settings.llm_model or "gemini-2.0-flash").strip()
+            _gpt_enabled = True
+            log.info("✅ Gemini client initialized as fallback")
         else:
-            log.warning("⚠️ OpenAI API key not configured - using fallback rule-based responses")
+            log.warning("⚠️ No LLM API key configured - using fallback rule-based responses")
             _gpt_enabled = False
     except Exception as e:
-        log.error(f"❌ Failed to initialize OpenAI client: {e}")
+        log.error(f"❌ Failed to initialize LLM client: {e}")
         _gpt_enabled = False
 
 
@@ -367,15 +394,15 @@ async def process_message_with_gpt(
         memory = _get_conversation_memory(db, business_id, message.user_id, message.channel)
         log.debug(f"memory_retrieved user_id={message.user_id} exists={memory is not None}")
         
-        # Step 4: Try GPT-4o if enabled
+        # Step 4: Try configured LLM provider if enabled
         if _gpt_enabled and _openai_client:
             try:
                 # Build system prompt with knowledge, rules, and memory
                 system_prompt = _build_system_prompt(ai_rules, knowledge_context, memory)
                 
-                # Call GPT-4o
+                # Call configured LLM model
                 completion = await _openai_client.chat.completions.create(
-                    model="gpt-4o",  # Use GPT-4o (latest, fastest, cheapest)
+                    model=_llm_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": message.message_text}
@@ -389,7 +416,9 @@ async def process_message_with_gpt(
                 
                 if response and response.strip():
                     tokens_used = completion.usage.total_tokens
-                    log.info(f"✅ gpt_response_generated user_id={message.user_id} model=gpt-4o tokens={tokens_used}")
+                    log.info(
+                        f"✅ llm_response_generated user_id={message.user_id} provider={_llm_provider} model={_llm_model} tokens={tokens_used}"
+                    )
                     
                     # Track AI token usage for billing
                     try:
@@ -420,12 +449,14 @@ async def process_message_with_gpt(
                     log.warning("GPT returned empty response - using fallback")
             
             except OpenAIError as e:
-                log.error(f"OpenAI API error: {e} - falling back to rule-based")
+                log.error(f"LLM API error: {e} - falling back to rule-based")
             except Exception as e:
-                log.error(f"GPT processing error: {e} - falling back to rule-based")
+                log.error(f"LLM processing error: {e} - falling back to rule-based")
         
         # Step 5: Fallback to rule-based brain
-        log.info(f"using_fallback_brain user_id={message.user_id} reason={'gpt_disabled' if not _gpt_enabled else 'gpt_failed'}")
+        log.info(
+            f"using_fallback_brain user_id={message.user_id} reason={'llm_disabled' if not _gpt_enabled else 'llm_failed'}"
+        )
         response = await fallback_process(message)
         
         # Update memory

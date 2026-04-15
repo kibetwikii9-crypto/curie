@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     frontend_url: str = ""  # Frontend URL for CORS (optional)
     log_level: str = "INFO"
     openai_api_key: str = ""
+    gemini_api_key: str = ""  # Gemini API key (set via GEMINI_API_KEY env var)
+    llm_provider: str = "openai"  # openai or gemini (set via LLM_PROVIDER env var)
+    llm_model: str = ""  # Optional override for model name (set via LLM_MODEL env var)
     database_url: str  # Required: Supabase PostgreSQL connection string
     secret_key: str = "your-secret-key-change-in-production"  # JWT secret key (set via SECRET_KEY env var)
     maintenance_mode: bool = False  # Maintenance mode - blocks all access when True (set via MAINTENANCE_MODE env var)

@@ -251,21 +251,44 @@ def parse_spreadsheet(file_content: bytes, extension: str) -> Optional[str]:
         return None
 
 
-def extract_qa_with_gpt(document_text: str, openai_api_key: str) -> List[Dict[str, any]]:
+def extract_qa_with_gpt(
+    document_text: str,
+    openai_api_key: str = "",
+    gemini_api_key: str = "",
+    model_override: Optional[str] = None,
+) -> List[Dict[str, any]]:
     """
-    Use GPT-4o to intelligently extract Q&A pairs from document text.
+    Use configured LLM to intelligently extract Q&A pairs from document text.
     
     Args:
         document_text: Raw text extracted from document
         openai_api_key: OpenAI API key
+        gemini_api_key: Gemini API key (uses OpenAI-compatible endpoint)
+        model_override: Optional model name override
     
     Returns:
         List of dictionaries with question, answer, and keywords
     """
     try:
         from openai import OpenAI
-        
-        client = OpenAI(api_key=openai_api_key)
+
+        openai_api_key = (openai_api_key or "").strip()
+        gemini_api_key = (gemini_api_key or "").strip()
+
+        if gemini_api_key:
+            client = OpenAI(
+                api_key=gemini_api_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            model_name = model_override or "gemini-2.0-flash"
+            provider = "gemini"
+        elif openai_api_key:
+            client = OpenAI(api_key=openai_api_key)
+            model_name = model_override or "gpt-4o"
+            provider = "openai"
+        else:
+            log.warning("No AI API key configured for document extraction")
+            return []
         
         # Truncate if too long (GPT-4o has 128k context, but we'll be conservative)
         max_chars = 50000  # ~12,500 tokens
@@ -298,7 +321,7 @@ Return ONLY valid JSON in this exact format (no markdown, no extra text):
 ]"""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Extract Q&A pairs from this document:\n\n{document_text}"}
@@ -314,7 +337,7 @@ Return ONLY valid JSON in this exact format (no markdown, no extra text):
         import json
         try:
             qa_pairs = json.loads(result_text)
-            log.info(f"✅ GPT extracted {len(qa_pairs)} Q&A pairs")
+            log.info(f"✅ AI extracted {len(qa_pairs)} Q&A pairs via {provider}")
             return qa_pairs
         except json.JSONDecodeError:
             # Try to extract JSON from markdown code block if GPT wrapped it
@@ -322,12 +345,12 @@ Return ONLY valid JSON in this exact format (no markdown, no extra text):
             json_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', result_text, re.DOTALL)
             if json_match:
                 qa_pairs = json.loads(json_match.group(1))
-                log.info(f"✅ GPT extracted {len(qa_pairs)} Q&A pairs (from code block)")
+                log.info(f"✅ AI extracted {len(qa_pairs)} Q&A pairs via {provider} (from code block)")
                 return qa_pairs
             else:
                 log.error("Failed to parse GPT response as JSON")
                 return []
     
     except Exception as e:
-        log.error(f"Error extracting Q&A with GPT: {e}", exc_info=True)
+        log.error(f"Error extracting Q&A with AI: {e}", exc_info=True)
         return []

@@ -1034,7 +1034,7 @@ async def delete_knowledge_entry(
 
 @router.post("/knowledge/bulk/import")
 async def bulk_import_knowledge(
-    entries: List[dict],
+    payload: dict,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1049,6 +1049,8 @@ async def bulk_import_knowledge(
             detail="Knowledge base access requires a business account"
         )
     
+    entries = payload.get("entries") if isinstance(payload, dict) else payload
+
     if not entries or not isinstance(entries, list):
         raise HTTPException(status_code=400, detail="Invalid entries format")
     
@@ -1180,18 +1182,27 @@ async def upload_knowledge_document(
         
         log.info(f"✅ Extracted {len(document_text)} characters from {filename}")
         
-        # Use GPT-4o to extract Q&A pairs
-        if not settings.openai_api_key or not settings.openai_api_key.strip():
+        # Use configured AI provider to extract Q&A pairs
+        has_openai = bool((settings.openai_api_key or "").strip())
+        has_gemini = bool((settings.gemini_api_key or "").strip())
+
+        if not has_openai and not has_gemini:
             # Fallback: return raw text for manual processing
             return {
                 "success": True,
                 "mode": "manual",
                 "raw_text": document_text[:5000],  # Limit to 5000 chars for preview
-                "message": "OpenAI API key not configured. Please manually create Q&A pairs from the text above."
+                "message": "No AI API key configured. Please manually create Q&A pairs from the text above."
             }
         
-        log.info("Using GPT-4o to extract Q&A pairs...")
-        qa_pairs = extract_qa_with_gpt(document_text, settings.openai_api_key)
+        provider_name = "Gemini" if has_gemini else "OpenAI"
+        log.info(f"Using {provider_name} to extract Q&A pairs...")
+        qa_pairs = extract_qa_with_gpt(
+            document_text=document_text,
+            openai_api_key=settings.openai_api_key,
+            gemini_api_key=settings.gemini_api_key,
+            model_override=settings.llm_model or None,
+        )
         
         if not qa_pairs:
             # Fallback: return raw text

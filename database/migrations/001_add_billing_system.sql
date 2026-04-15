@@ -151,8 +151,19 @@ CREATE INDEX IF NOT EXISTS idx_payment_methods_business_id ON payment_methods(bu
 CREATE INDEX IF NOT EXISTS idx_payment_methods_stripe_payment_method_id ON payment_methods(stripe_payment_method_id);
 
 -- Add FK constraint for payment_method_id in payments table
-ALTER TABLE payments ADD CONSTRAINT fk_payments_payment_method 
-    FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_payments_payment_method'
+    ) THEN
+        ALTER TABLE payments
+            ADD CONSTRAINT fk_payments_payment_method
+            FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id);
+    END IF;
+END
+$$;
 
 -- Usage Records table
 CREATE TABLE IF NOT EXISTS usage_records (
