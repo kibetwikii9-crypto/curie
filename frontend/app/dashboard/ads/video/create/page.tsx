@@ -94,42 +94,57 @@ export default function VideoProjectCreatePage() {
     try {
       const newAssets = await Promise.all(
         Array.from(files).map(async (file, index) => {
-          // Upload file to backend
+          // Upload file to backend with timeout
           const formData = new FormData()
           formData.append('file', file)
 
-          const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
-            method: 'POST',
-            body: formData,
-          })
+          // Create AbortController for timeout
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-          if (!response.ok) {
-            const errorData = await response.text()
-            throw new Error(`Upload failed: ${response.statusText} - ${errorData}`)
-          }
-
-          let uploadedAsset
           try {
-            uploadedAsset = await response.json()
-          } catch (e) {
-            throw new Error('Failed to parse upload response')
-          }
+            const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
+              method: 'POST',
+              body: formData,
+              signal: controller.signal,
+            })
 
-          // Generate thumbnail for videos
-          let thumbnail: string | undefined
-          if (type === 'video') {
-            const tempUrl = URL.createObjectURL(file)
-            const thumbResult = await generateVideoThumbnail(tempUrl)
-            thumbnail = thumbResult || undefined
-            URL.revokeObjectURL(tempUrl)
-          }
+            clearTimeout(timeoutId)
 
-          return {
-            id: uploadedAsset.id,
-            name: uploadedAsset.name,
-            type: uploadedAsset.type,
-            url: uploadedAsset.url,
-            thumbnail: thumbnail,
+            if (!response.ok) {
+              const errorData = await response.text()
+              throw new Error(`Upload failed: ${response.statusText} - ${errorData}`)
+            }
+
+            let uploadedAsset
+            try {
+              uploadedAsset = await response.json()
+            } catch (e) {
+              throw new Error('Failed to parse upload response')
+            }
+
+            // Generate thumbnail for videos
+            let thumbnail: string | undefined
+            if (type === 'video') {
+              const tempUrl = URL.createObjectURL(file)
+              const thumbResult = await generateVideoThumbnail(tempUrl)
+              thumbnail = thumbResult || undefined
+              URL.revokeObjectURL(tempUrl)
+            }
+
+            return {
+              id: uploadedAsset.id,
+              name: uploadedAsset.name,
+              type: uploadedAsset.type,
+              url: uploadedAsset.url,
+              thumbnail: thumbnail,
+            }
+          } catch (error) {
+            clearTimeout(timeoutId)
+            if (error instanceof Error && error.name === 'AbortError') {
+              throw new Error('Upload timed out. Please try again.')
+            }
+            throw error
           }
         })
       )
