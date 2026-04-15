@@ -519,11 +519,6 @@ export default function VideoProjectDetailPage() {
                 </div>
               )}
 
-              {previewAsset?.url?.startsWith('blob:') && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
-                  This is a local preview (`blob:`). It will stop working after refresh unless uploaded to persistent storage.
-                </p>
-              )}
             </CardContent>
           </Card>
         </div>
