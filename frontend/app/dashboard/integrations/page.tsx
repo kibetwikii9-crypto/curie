@@ -298,6 +298,9 @@ export default function IntegrationsPage() {
       fetchIntegrations();
       setShowEditModal(false);
     },
+    onError: (error: any) => {
+      alert(error?.response?.data?.detail || 'Failed to update integration');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -308,6 +311,9 @@ export default function IntegrationsPage() {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
       fetchIntegrations();
     },
+    onError: (error: any) => {
+      alert(error?.response?.data?.detail || 'Failed to delete integration');
+    },
   });
 
   const toggleMutation = useMutation({
@@ -317,6 +323,9 @@ export default function IntegrationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
       fetchIntegrations();
+    },
+    onError: (error: any) => {
+      alert(error?.response?.data?.detail || 'Failed to update integration status');
     },
   });
 
@@ -394,7 +403,7 @@ export default function IntegrationsPage() {
     if (categoryFilter === 'all') return true;
     return channel.category === categoryFilter;
   });
-  const activeIntegrations = integrations.filter((integration) => integration.is_active);
+  const connectedIntegrations = integrations;
 
   const connectWhatsApp = async () => {
     await startOAuthPopup(
@@ -719,7 +728,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div>
             </div>
-          ) : activeIntegrations.length > 0 ? (
+          ) : connectedIntegrations.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="px-6 py-5">
                 <div className="flex items-center justify-between mb-6">
@@ -750,7 +759,7 @@ export default function IntegrationsPage() {
 
                 {viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {activeIntegrations.map((integration) => (
+                    {connectedIntegrations.map((integration) => (
                       <div
                         key={integration.id}
                         className="group relative p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-xl transition-all transform hover:-translate-y-1"
@@ -797,7 +806,7 @@ export default function IntegrationsPage() {
                           </div>
                         </div>
 
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() =>
                               toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })
@@ -829,7 +838,7 @@ export default function IntegrationsPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {activeIntegrations.map((integration) => (
+                    {connectedIntegrations.map((integration) => (
                       <div
                         key={integration.id}
                         className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50"
