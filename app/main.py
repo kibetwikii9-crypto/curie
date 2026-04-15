@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import os
 
 from app.config import settings
 from app.logging_config import init_logging
@@ -31,6 +32,11 @@ from app.models import (
 init_logging(settings.log_level)
 
 app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
+
+# Create uploads directory if it doesn't exist
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/video-assets", exist_ok=True)
+os.makedirs("uploads/brand-assets", exist_ok=True)
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
