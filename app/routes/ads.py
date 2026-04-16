@@ -928,6 +928,7 @@ async def upload_video_asset(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Upload an asset file for video projects."""
+    log.info(f"Starting upload for asset_type={asset_type}, filename={file.filename}, size={file.size}")
     import aiofiles
     
     # Validate asset type
