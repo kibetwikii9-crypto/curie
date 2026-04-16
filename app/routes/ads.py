@@ -987,37 +987,45 @@ async def upload_video_asset(
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(uploads_dir, unique_filename)
 
-    # Save file with proper async handling
+    # Save file with proper async handling (stream to avoid memory issues)
     try:
-        contents = await file.read()
-        
-        # Validate file size after reading
-        if len(contents) > max_file_sizes[asset_type]:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
-            )
-        
-        # Validate file magic bytes (actual file content)
-        # Skip magic byte validation for videos as headers can vary widely
-        if asset_type != 'video':
-            is_valid_content = _validate_file_content(contents, asset_type)
-            if not is_valid_content:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File content does not match {asset_type} type. File appears to be corrupted or of incorrect type."
-                )
-        
-        # Use async file writing when possible
+        file_size = 0
+        # Use async file writing to stream the file
         try:
             async with aiofiles.open(file_path, "wb") as f:
-                await f.write(contents)
+                chunk_size = 1024 * 1024  # 1 MB chunks
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    await f.write(chunk)
+                    file_size += len(chunk)
+                    
+                    # Check size limit during streaming
+                    if file_size > max_file_sizes[asset_type]:
+                        await f.close()
+                        os.remove(file_path)
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
+                        )
         except ImportError:
             # Fallback to sync write if aiofiles not available
             with open(file_path, "wb") as f:
-                f.write(contents)
-        
-        file_size = len(contents)
+                chunk_size = 1024 * 1024
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    file_size += len(chunk)
+                    if file_size > max_file_sizes[asset_type]:
+                        f.close()
+                        os.remove(file_path)
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
+                        )
         file_url = f"/uploads/video-assets/{business_id}/{unique_filename}"
         
         return {
