@@ -33,6 +33,75 @@ const getTotalDuration = (scenes: VideoScene[]) => {
   return `${Math.floor(total / 60).toString().padStart(2, '0')}:${(total % 60).toString().padStart(2, '0')}`
 }
 
+const generateVideoThumbnail = (url: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.src = url
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'metadata'
+
+    const cleanup = () => {
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    const generate = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth || 640
+        canvas.height = video.videoHeight || 360
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return resolve(null)
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.75))
+      } catch {
+        resolve(null)
+      } finally {
+        cleanup()
+      }
+    }
+
+    video.addEventListener('loadeddata', () => generate(), { once: true })
+    video.addEventListener('error', () => {
+      resolve(null)
+      cleanup()
+    }, { once: true })
+
+    video.currentTime = 0.1
+  })
+}
+
+const generateImageThumbnail = (file: File): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const image = new Image()
+      image.src = reader.result as string
+      image.onload = () => {
+        const maxWidth = 320
+        const maxHeight = 180
+        let width = image.width
+        let height = image.height
+        const ratio = Math.min(maxWidth / width, maxHeight / height, 1)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return resolve(null)
+        ctx.drawImage(image, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.75))
+      }
+      image.onerror = () => resolve(null)
+    }
+    reader.onerror = () => resolve(null)
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function VideoProjectDetailPage() {
   const params = useParams() as { id: string }
   const router = useRouter()
@@ -646,7 +715,7 @@ export default function VideoProjectDetailPage() {
                     <img
                       src={getPreviewImage(previewAsset)!}
                       alt="Preview"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   </div>
                 ) : (

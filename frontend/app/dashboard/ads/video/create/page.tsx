@@ -51,8 +51,14 @@ const generateVideoThumbnail = (url: string): Promise<string | null> => {
     video.src = url
     video.muted = true
     video.playsInline = true
-    video.currentTime = 0.1
-    video.onloadeddata = () => {
+    video.preload = 'metadata'
+
+    const cleanup = () => {
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    const generate = () => {
       try {
         const canvas = document.createElement('canvas')
         canvas.width = video.videoWidth || 640
@@ -63,9 +69,48 @@ const generateVideoThumbnail = (url: string): Promise<string | null> => {
         resolve(canvas.toDataURL('image/jpeg', 0.75))
       } catch {
         resolve(null)
+      } finally {
+        cleanup()
       }
     }
-    video.onerror = () => resolve(null)
+
+    video.addEventListener('loadeddata', () => generate(), { once: true })
+    video.addEventListener('error', () => {
+      resolve(null)
+      cleanup()
+    }, { once: true })
+
+    video.currentTime = 0.1
+  })
+}
+
+const generateImageThumbnail = (file: File): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const image = new Image()
+      image.src = reader.result as string
+      image.onload = () => {
+        const maxWidth = 320
+        const maxHeight = 180
+        let width = image.width
+        let height = image.height
+        const ratio = Math.min(maxWidth / width, maxHeight / height, 1)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return resolve(null)
+        ctx.drawImage(image, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.75))
+      }
+      image.onerror = () => resolve(null)
+    }
+    reader.onerror = () => resolve(null)
+    reader.readAsDataURL(file)
   })
 }
 
@@ -98,6 +143,15 @@ export default function VideoProjectCreatePage() {
         if (file.size > MAX_ASSET_SIZE_BYTES) {
           throw new Error(`${file.name} is too large. Maximum file size is 500 MB.`)
         }
+
+        const tempUrl = URL.createObjectURL(file)
+        let thumbnail: string | undefined
+        if (type === 'video') {
+          thumbnail = (await generateVideoThumbnail(tempUrl)) || undefined
+        } else if (type === 'image') {
+          thumbnail = (await generateImageThumbnail(file)) || undefined
+        }
+        URL.revokeObjectURL(tempUrl)
 
         // Upload file to backend with timeout
         const formData = new FormData()
@@ -435,11 +489,13 @@ export default function VideoProjectCreatePage() {
                     className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'} object-contain bg-black`}
                   />
                 ) : previewAsset.type === 'video' ? (
-                  <video
-                    className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'}`}
-                    src={previewAsset.url}
-                    controls
-                  />
+                  <div className={`w-full ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'} rounded-md bg-black overflow-hidden`}>
+                    <video
+                      className="w-full h-full object-contain"
+                      src={previewAsset.url}
+                      controls
+                    />
+                  </div>
                 ) : (
                   <div className="rounded-md border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
                     Audio preview is not available.
