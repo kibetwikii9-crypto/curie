@@ -24,6 +24,8 @@ type VideoProject = {
   assets: Array<{ id: number; name: string; type: 'video' | 'image' | 'audio'; url: string; thumbnail?: string }>
 }
 
+const MAX_ASSET_SIZE_BYTES = 500 * 1024 * 1024
+
 const defaultProject: Omit<VideoProject, 'id' | 'created_at' | 'updated_at'> = {
   name: '',
   description: '',
@@ -78,7 +80,7 @@ export default function VideoProjectCreatePage() {
     duration: getTotalDuration(defaultProject.scenes)
   })
 
-  const [previewAssetUrl, setPreviewAssetUrl] = useState<string | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<VideoProject['assets'][number] | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
@@ -93,6 +95,10 @@ export default function VideoProjectCreatePage() {
     setUploading(true)
     try {
       const uploadPromises = Array.from(files).map(async (file, index) => {
+        if (file.size > MAX_ASSET_SIZE_BYTES) {
+          throw new Error(`${file.name} is too large. Maximum file size is 500 MB.`)
+        }
+
         // Upload file to backend with timeout
         const formData = new FormData()
         formData.append('file', file)
@@ -180,7 +186,7 @@ export default function VideoProjectCreatePage() {
 
       if (newAssets.length > 0) {
         setProject((prev) => ({ ...prev, assets: [...prev.assets, ...newAssets], updated_at: new Date().toISOString().slice(0, 10) }))
-        setPreviewAssetUrl(newAssets[0].url)
+        setPreviewAsset(newAssets[0])
       }
 
       // Show appropriate toast message
@@ -367,21 +373,49 @@ export default function VideoProjectCreatePage() {
                 <p className="text-xs text-gray-500 mt-1">{uploading ? 'Uploading...' : 'Upload audio'}</p>
               </label>
             </div>
+            <p className="text-xs text-gray-500 mt-2">Video files must be 500 MB or smaller. Larger files may fail to upload or take longer.</p>
 
             {project.assets.length === 0 ? (
               <p className="text-sm text-gray-500">No assets yet. This is okay—you can add media later.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {project.assets.map((asset) => (
-                  <div key={asset.id} className="flex items-center justify-between rounded border border-gray-200 p-2">
-                    <span className="text-sm truncate">{asset.name}</span>
-                    <Badge className="bg-blue-100 text-blue-800">{asset.type}</Badge>
-                  </div>
-                ))}
+                {project.assets.map((asset) => {
+                  const isSelected = previewAsset?.id === asset.id
+                  return (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => setPreviewAsset(asset)}
+                      className={[
+                        'group flex items-center gap-3 rounded border p-2 text-left transition-colors',
+                        isSelected ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:bg-gray-50',
+                      ].join(' ')}
+                    >
+                      <div className="h-12 w-20 overflow-hidden rounded bg-gray-100 border border-gray-200 flex items-center justify-center">
+                        {asset.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={asset.thumbnail} alt={asset.name} className="h-full w-full object-cover" />
+                        ) : asset.type === 'image' && asset.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={asset.url} alt={asset.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <UploadCloud className="h-5 w-5 text-gray-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium text-gray-900">{asset.name}</span>
+                          <Badge className="shrink-0">{asset.type}</Badge>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{asset.url?.startsWith('blob:') ? 'Local file' : 'Stored asset'}</p>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
 
-            {previewAssetUrl && (
+            {previewAsset && (
               <div className="mt-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">Preview</h4>
@@ -393,11 +427,24 @@ export default function VideoProjectCreatePage() {
                     {isPreviewFullscreen ? 'Compact' : 'Fullscreen'}
                   </Button>
                 </div>
-                <video
-                  className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'}`}
-                  src={previewAssetUrl}
-                  controls
-                />
+                {previewAsset.type === 'image' ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewAsset.thumbnail || previewAsset.url}
+                    alt={previewAsset.name}
+                    className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'} object-contain bg-black`}
+                  />
+                ) : previewAsset.type === 'video' ? (
+                  <video
+                    className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'}`}
+                    src={previewAsset.url}
+                    controls
+                  />
+                ) : (
+                  <div className="rounded-md border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+                    Audio preview is not available.
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

@@ -26,6 +26,8 @@ type VideoProject = {
   assets: VideoAsset[]
 }
 
+const MAX_ASSET_SIZE_BYTES = 500 * 1024 * 1024
+
 const getTotalDuration = (scenes: VideoScene[]) => {
   const total = scenes.reduce((sum, scene) => sum + scene.duration, 0)
   return `${Math.floor(total / 60).toString().padStart(2, '0')}:${(total % 60).toString().padStart(2, '0')}`
@@ -153,6 +155,10 @@ export default function VideoProjectDetailPage() {
 
     try {
       const uploadPromises = Array.from(files).map(async (file, idx) => {
+        if (file.size > MAX_ASSET_SIZE_BYTES) {
+          throw new Error(`${file.name} is too large. Maximum file size is 500 MB.`)
+        }
+
         // Upload file to backend
         const formData = new FormData()
         formData.append('file', file)
@@ -542,6 +548,7 @@ export default function VideoProjectDetailPage() {
                   <p className="text-xs text-gray-600 mt-1">Upload audio</p>
                 </label>
               </div>
+              <p className="text-xs text-gray-500 mt-2">Each file must be 500 MB or smaller. Large files can take longer to upload.</p>
 
               {project.assets.length === 0 ? (
                 <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-600">
