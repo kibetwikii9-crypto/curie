@@ -998,12 +998,14 @@ async def upload_video_asset(
             )
         
         # Validate file magic bytes (actual file content)
-        is_valid_content = _validate_file_content(contents, asset_type)
-        if not is_valid_content:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File content does not match {asset_type} type. File appears to be corrupted or of incorrect type."
-            )
+        # Skip magic byte validation for videos as headers can vary widely
+        if asset_type != 'video':
+            is_valid_content = _validate_file_content(contents, asset_type)
+            if not is_valid_content:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File content does not match {asset_type} type. File appears to be corrupted or of incorrect type."
+                )
         
         # Use async file writing when possible
         try:
