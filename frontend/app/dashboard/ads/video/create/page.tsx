@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { apiFetch } from '@/lib/api'
+import { apiFetch, API_BASE_URL } from '@/lib/api'
 import { ArrowLeft, Plus, Save, UploadCloud } from 'lucide-react'
 
 type VideoProject = {
@@ -43,6 +43,13 @@ const getTotalDuration = (scenes: VideoProject['scenes']) => {
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+const resolveAssetUrl = (url: string) => {
+  if (url.startsWith('/uploads')) {
+    return `${API_BASE_URL.replace(/\/$/, '')}${url}`
+  }
+  return url
 }
 
 const generateVideoThumbnail = (url: string): Promise<string | null> => {
@@ -448,10 +455,10 @@ export default function VideoProjectCreatePage() {
                       <div className="h-12 w-20 overflow-hidden rounded bg-gray-100 border border-gray-200 flex items-center justify-center">
                         {asset.thumbnail ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={asset.thumbnail} alt={asset.name} className="h-full w-full object-cover" />
+                          <img src={resolveAssetUrl(asset.thumbnail)} alt={asset.name} className="h-full w-full object-contain" />
                         ) : asset.type === 'image' && asset.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={asset.url} alt={asset.name} className="h-full w-full object-cover" />
+                          <img src={resolveAssetUrl(asset.url)} alt={asset.name} className="h-full w-full object-contain" />
                         ) : (
                           <UploadCloud className="h-5 w-5 text-gray-500" />
                         )}
@@ -484,7 +491,7 @@ export default function VideoProjectCreatePage() {
                 {previewAsset.type === 'image' ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={previewAsset.thumbnail || previewAsset.url}
+                    src={resolveAssetUrl(previewAsset.thumbnail || previewAsset.url)}
                     alt={previewAsset.name}
                     className={`w-full rounded-md ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'} object-contain bg-black`}
                   />
@@ -492,7 +499,7 @@ export default function VideoProjectCreatePage() {
                   <div className={`w-full ${isPreviewFullscreen ? 'h-[70vh]' : 'max-h-[300px]'} rounded-md bg-black overflow-hidden`}>
                     <video
                       className="w-full h-full object-contain"
-                      src={previewAsset.url}
+                      src={resolveAssetUrl(previewAsset.url)}
                       controls
                     />
                   </div>

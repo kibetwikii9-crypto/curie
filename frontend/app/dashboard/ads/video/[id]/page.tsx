@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { apiFetch } from '@/lib/api'
+import { apiFetch, API_BASE_URL } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +31,13 @@ const MAX_ASSET_SIZE_BYTES = 500 * 1024 * 1024
 const getTotalDuration = (scenes: VideoScene[]) => {
   const total = scenes.reduce((sum, scene) => sum + scene.duration, 0)
   return `${Math.floor(total / 60).toString().padStart(2, '0')}:${(total % 60).toString().padStart(2, '0')}`
+}
+
+const resolveAssetUrl = (url: string) => {
+  if (url.startsWith('/uploads')) {
+    return `${API_BASE_URL.replace(/\/$/, '')}${url}`
+  }
+  return url
 }
 
 const generateVideoThumbnail = (url: string): Promise<string | null> => {
@@ -640,10 +647,10 @@ export default function VideoProjectDetailPage() {
                         <div className="h-10 w-16 rounded bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center shrink-0">
                           {asset.thumbnail ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={asset.thumbnail} alt="" className="h-full w-full object-cover" />
+                            <img src={resolveAssetUrl(asset.thumbnail)} alt="" className="h-full w-full object-contain" />
                           ) : asset.type === 'image' && asset.url && !asset.url.startsWith('blob:') ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={asset.url} alt="" className="h-full w-full object-cover" />
+                            <img src={resolveAssetUrl(asset.url)} alt="" className="h-full w-full object-contain" />
                           ) : (
                             <Film className="h-4 w-4 text-gray-500" />
                           )}
@@ -692,7 +699,7 @@ export default function VideoProjectDetailPage() {
                   <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
                     <video
                       className="w-full h-full object-contain"
-                      src={previewAsset.url}
+                      src={resolveAssetUrl(previewAsset.url)}
                       controls
                       playsInline
                       preload="metadata"
@@ -713,7 +720,7 @@ export default function VideoProjectDetailPage() {
                   <div className="w-full aspect-video rounded-md bg-black overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={getPreviewImage(previewAsset)!}
+                      src={resolveAssetUrl(getPreviewImage(previewAsset)!)}
                       alt="Preview"
                       className="w-full h-full object-contain"
                     />

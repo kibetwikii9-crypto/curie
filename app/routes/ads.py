@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import Campaign, VideoProject, ABTest, CampaignPerformance, VideoTemplate, User as UserModel
 from app.routes.auth import get_user_business_id, get_current_user
@@ -993,7 +994,7 @@ async def upload_video_asset(
         # Use async file writing to stream the file
         try:
             async with aiofiles.open(file_path, "wb") as f:
-                chunk_size = 1024 * 1024  # 1 MB chunks
+                chunk_size = 8 * 1024 * 1024  # 8 MB chunks
                 while True:
                     chunk = await file.read(chunk_size)
                     if not chunk:
@@ -1012,7 +1013,7 @@ async def upload_video_asset(
         except ImportError:
             # Fallback to sync write if aiofiles not available
             with open(file_path, "wb") as f:
-                chunk_size = 1024 * 1024
+                chunk_size = 8 * 1024 * 1024
                 while True:
                     chunk = await file.read(chunk_size)
                     if not chunk:
@@ -1027,6 +1028,8 @@ async def upload_video_asset(
                             detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
                         )
         file_url = f"/uploads/video-assets/{business_id}/{unique_filename}"
+        if settings.public_url:
+            file_url = f"{settings.public_url.rstrip('/')}{file_url}"
         
         return {
             "id": str(uuid.uuid4()),
