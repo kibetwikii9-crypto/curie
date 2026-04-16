@@ -310,6 +310,16 @@ export default function VideoProjectCreatePage() {
                 rows={3}
               />
             </div>
+
+            <div>
+              <Label htmlFor="duration">Duration (MM:SS)</Label>
+              <Input
+                id="duration"
+                value={project.duration}
+                onChange={(e) => updateField('duration', e.target.value)}
+                placeholder="00:30"
+              />
+            </div>
           </CardContent>
         </Card>
 
