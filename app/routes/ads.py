@@ -968,13 +968,6 @@ async def upload_video_asset(
             detail=f"Invalid file type for {asset_type}. Allowed: {', '.join(allowed_types[asset_type])}"
         )
     
-    # Check file size before processing
-    if file.size and file.size > max_file_sizes[asset_type]:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
-        )
-    
     # Validate MIME type (check Content-Type header)
     file_mime_type = file.content_type or ''
     if file_mime_type and file_mime_type not in allowed_mime_types[asset_type]:
