@@ -14,7 +14,7 @@ import { ArrowLeft, Plus, Save, UploadCloud } from 'lucide-react'
 
 type VideoProject = {
   id: number
-  title: string
+  name: string
   description: string
   status: 'draft' | 'rendering' | 'published' | 'failed'
   duration: string
@@ -25,7 +25,7 @@ type VideoProject = {
 }
 
 const defaultProject: Omit<VideoProject, 'id' | 'created_at' | 'updated_at'> = {
-  title: '',
+  name: '',
   description: '',
   status: 'draft',
   duration: '00:00',
@@ -92,68 +92,113 @@ export default function VideoProjectCreatePage() {
 
     setUploading(true)
     try {
-      const newAssets = await Promise.all(
-        Array.from(files).map(async (file, index) => {
-          // Upload file to backend with timeout
-          const formData = new FormData()
-          formData.append('file', file)
+      const uploadPromises = Array.from(files).map(async (file, index) => {
+        // Upload file to backend with timeout
+        const formData = new FormData()
+        formData.append('file', file)
 
-          // Create AbortController for timeout
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+        // Create AbortController for timeout (10 minutes)
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 600000) // 10 minute timeout
 
-          try {
-            const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
-              method: 'POST',
-              body: formData,
-              signal: controller.signal,
-            })
+        try {
+          const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          })
 
-            clearTimeout(timeoutId)
+          clearTimeout(timeoutId)
 
-            if (!response.ok) {
-              const errorData = await response.text()
-              throw new Error(`Upload failed: ${response.statusText} - ${errorData}`)
-            }
-
-            let uploadedAsset
+          if (!response.ok) {
+            let errorMessage = `Upload failed: ${response.statusText}`
             try {
-              uploadedAsset = await response.json()
-            } catch (e) {
-              throw new Error('Failed to parse upload response')
+              const contentType = response.headers.get('content-type')
+              if (contentType?.includes('application/json')) {
+                const errorData = await response.json()
+                errorMessage = errorData.detail || errorData.message || errorMessage
+              } else {
+                const textData = await response.text()
+                // Extract first line or first 100 chars if it's plain text
+                if (textData && !textData.includes('<')) {
+                  errorMessage = textData.substring(0, 100)
+                }
+              }
+            } catch (parseErr) {
+              // If we can't parse error details, use status message
+              errorMessage = `Upload failed: ${response.statusText}`
             }
-
-            // Generate thumbnail for videos
-            let thumbnail: string | undefined
-            if (type === 'video') {
-              const tempUrl = URL.createObjectURL(file)
-              const thumbResult = await generateVideoThumbnail(tempUrl)
-              thumbnail = thumbResult || undefined
-              URL.revokeObjectURL(tempUrl)
-            }
-
-            return {
-              id: uploadedAsset.id,
-              name: uploadedAsset.name,
-              type: uploadedAsset.type,
-              url: uploadedAsset.url,
-              thumbnail: thumbnail,
-            }
-          } catch (error) {
-            clearTimeout(timeoutId)
-            if (error instanceof Error && error.name === 'AbortError') {
-              throw new Error('Upload timed out. Please try again.')
-            }
-            throw error
+            throw new Error(errorMessage)
           }
-        })
-      )
 
-      setProject((prev) => ({ ...prev, assets: [...prev.assets, ...newAssets], updated_at: new Date().toISOString().slice(0, 10) }))
+          let uploadedAsset
+          try {
+            uploadedAsset = await response.json()
+          } catch (e) {
+            throw new Error('Failed to parse upload response')
+          }
+
+          // Generate thumbnail for videos
+          let thumbnail: string | undefined
+          if (type === 'video') {
+            const tempUrl = URL.createObjectURL(file)
+            const thumbResult = await generateVideoThumbnail(tempUrl)
+            thumbnail = thumbResult || undefined
+            URL.revokeObjectURL(tempUrl)
+          }
+
+          return {
+            id: uploadedAsset.id,
+            name: uploadedAsset.name,
+            type: uploadedAsset.type,
+            url: uploadedAsset.url,
+            thumbnail: thumbnail,
+          }
+        } catch (error) {
+          clearTimeout(timeoutId)
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error(`${file.name}: Upload timed out`)
+          }
+          throw error
+        }
+      })
+
+      // Use allSettled to allow partial success
+      const results = await Promise.allSettled(uploadPromises)
+      
+      const newAssets: typeof project.assets = []
+      const failedFiles: string[] = []
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          newAssets.push(result.value)
+        } else {
+          const fileName = Array.from(files)[index].name
+          failedFiles.push(`${fileName}: ${result.reason?.message || 'Unknown error'}`)
+        }
+      })
+
       if (newAssets.length > 0) {
+        setProject((prev) => ({ ...prev, assets: [...prev.assets, ...newAssets], updated_at: new Date().toISOString().slice(0, 10) }))
         setPreviewAssetUrl(newAssets[0].url)
       }
-      toast({ title: 'Success', description: `${newAssets.length} file(s) uploaded successfully` })
+
+      // Show appropriate toast message
+      if (failedFiles.length === 0) {
+        toast({ title: 'Success', description: `${newAssets.length} file(s) uploaded successfully` })
+      } else if (newAssets.length > 0) {
+        toast({
+          title: 'Partial upload',
+          description: `${newAssets.length} succeeded, ${failedFiles.length} failed:\n${failedFiles.slice(0, 3).join('\n')}${failedFiles.length > 3 ? '\n...' : ''}`,
+          variant: 'destructive'
+        })
+      } else {
+        toast({
+          title: 'Upload failed',
+          description: `All files failed:\n${failedFiles.slice(0, 3).join('\n')}${failedFiles.length > 3 ? '\n...' : ''}`,
+          variant: 'destructive'
+        })
+      }
     } catch (error) {
       console.error('Upload error:', error)
       toast({ title: 'Upload failed', description: error instanceof Error ? error.message : 'Failed to upload asset files', variant: 'destructive' })
@@ -165,8 +210,8 @@ export default function VideoProjectCreatePage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!project.title.trim()) {
-      toast({ title: 'Validation error', description: 'Project title is required', variant: 'destructive' })
+    if (!project.name.trim()) {
+      toast({ title: 'Validation error', description: 'Project name is required', variant: 'destructive' })
       return
     }
 
@@ -180,7 +225,7 @@ export default function VideoProjectCreatePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: savedProject.title,
+          name: savedProject.name,
           description: savedProject.description,
           status: savedProject.status,
           duration: savedProject.duration,
@@ -190,7 +235,22 @@ export default function VideoProjectCreatePage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save project')
+        let errorMessage = 'Failed to save project'
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } else {
+            const textData = await response.text()
+            if (textData && !textData.includes('<')) {
+              errorMessage = textData.substring(0, 100)
+            }
+          }
+        } catch (parseErr) {
+          // Use default error message
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -225,11 +285,11 @@ export default function VideoProjectCreatePage() {
           <CardContent className="grid gap-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="name">Project Name</Label>
                 <Input
-                  id="title"
-                  value={project.title}
-                  onChange={(e) => updateField('title', e.target.value)}
+                  id="name"
+                  value={project.name}
+                  onChange={(e) => updateField('name', e.target.value)}
                   placeholder="Spring sale video"
                   required
                 />

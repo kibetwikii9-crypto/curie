@@ -16,7 +16,7 @@ type VideoScene = { id: number; name: string; duration: number; caption: string 
 
 type VideoProject = {
   id: number
-  title: string
+  name: string
   description: string
   status: 'draft' | 'rendering' | 'published' | 'failed'
   duration: string
@@ -53,7 +53,7 @@ export default function VideoProjectDetailPage() {
         const data = await response.json()
         const loadedProject: VideoProject = {
           id: data.id,
-          title: data.name,
+          name: data.name,
           description: data.description || '',
           status: data.status,
           duration: data.duration,
@@ -152,46 +152,95 @@ export default function VideoProjectDetailPage() {
     if (!files) return
 
     try {
-      const assets = await Promise.all(
-        Array.from(files).map(async (file, idx) => {
-          // Upload file to backend
-          const formData = new FormData()
-          formData.append('file', file)
+      const uploadPromises = Array.from(files).map(async (file, idx) => {
+        // Upload file to backend
+        const formData = new FormData()
+        formData.append('file', file)
 
-          const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
-            method: 'POST',
-            body: formData,
-          })
-
-          if (!response.ok) {
-            throw new Error(`Upload failed: ${response.statusText}`)
-          }
-
-          const uploadedAsset = await response.json()
-
-          // Generate thumbnail for videos
-          let thumbnail: string | undefined
-          if (type === 'video') {
-            const tempUrl = URL.createObjectURL(file)
-            const thumbResult = await generateVideoThumbnail(tempUrl)
-            thumbnail = thumbResult || undefined
-            URL.revokeObjectURL(tempUrl)
-          }
-
-          return {
-            id: uploadedAsset.id,
-            name: uploadedAsset.name,
-            type: uploadedAsset.type,
-            url: uploadedAsset.url,
-            thumbnail: thumbnail,
-          }
+        const response = await apiFetch(`/api/ads/video-projects/upload-asset?asset_type=${type}`, {
+          method: 'POST',
+          body: formData,
         })
-      )
 
-      const updated = { ...project, assets: [...project.assets, ...assets] }
-      setProject(updated)
-      setPreviewAsset(assets[0])
-      setIsDirty(true)
+        if (!response.ok) {
+          let errorMessage = `Upload failed: ${response.statusText}`
+          try {
+            const contentType = response.headers.get('content-type')
+            if (contentType?.includes('application/json')) {
+              const errorData = await response.json()
+              errorMessage = errorData.detail || errorData.message || errorMessage
+            } else {
+              const textData = await response.text()
+              // Extract first line or first 100 chars if it's plain text
+              if (textData && !textData.includes('<')) {
+                errorMessage = textData.substring(0, 100)
+              }
+            }
+          } catch (parseErr) {
+            // If we can't parse error details, use status message
+            errorMessage = `Upload failed: ${response.statusText}`
+          }
+          throw new Error(errorMessage)
+        }
+
+        const uploadedAsset = await response.json()
+
+        // Generate thumbnail for videos
+        let thumbnail: string | undefined
+        if (type === 'video') {
+          const tempUrl = URL.createObjectURL(file)
+          const thumbResult = await generateVideoThumbnail(tempUrl)
+          thumbnail = thumbResult || undefined
+          URL.revokeObjectURL(tempUrl)
+        }
+
+        return {
+          id: uploadedAsset.id,
+          name: uploadedAsset.name,
+          type: uploadedAsset.type,
+          url: uploadedAsset.url,
+          thumbnail: thumbnail,
+        }
+      })
+
+      // Use allSettled to allow partial success
+      const results = await Promise.allSettled(uploadPromises)
+      
+      const newAssets: typeof project.assets = []
+      const failedFiles: string[] = []
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          newAssets.push(result.value)
+        } else {
+          const fileName = Array.from(files)[index].name
+          failedFiles.push(`${fileName}: ${result.reason?.message || 'Unknown error'}`)
+        }
+      })
+
+      if (newAssets.length > 0) {
+        const updated = { ...project, assets: [...project.assets, ...newAssets] }
+        setProject(updated)
+        setPreviewAsset(newAssets[0])
+        setIsDirty(true)
+      }
+
+      // Show appropriate toast message
+      if (failedFiles.length === 0) {
+        toast({ title: 'Success', description: `${newAssets.length} file(s) uploaded successfully` })
+      } else if (newAssets.length > 0) {
+        toast({
+          title: 'Partial upload',
+          description: `${newAssets.length} succeeded, ${failedFiles.length} failed:\n${failedFiles.slice(0, 3).join('\n')}${failedFiles.length > 3 ? '\n...' : ''}`,
+          variant: 'destructive'
+        })
+      } else {
+        toast({
+          title: 'Upload failed',
+          description: `All files failed:\n${failedFiles.slice(0, 3).join('\n')}${failedFiles.length > 3 ? '\n...' : ''}`,
+          variant: 'destructive'
+        })
+      }
     } catch (error) {
       console.error('Upload error:', error)
       toast({ title: 'Upload failed', description: 'Failed to upload asset files', variant: 'destructive' })
@@ -213,11 +262,11 @@ export default function VideoProjectDetailPage() {
     setProject(updated)
     
     try {
-      await apiFetch(`/api/ads/video-projects/${project.id}`, {
+      const response = await apiFetch(`/api/ads/video-projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: updated.title,
+          name: updated.name,
           description: updated.description,
           status: updated.status,
           duration: updated.duration,
@@ -225,10 +274,30 @@ export default function VideoProjectDetailPage() {
           assets: updated.assets
         }),
       })
+      
+      if (!response.ok) {
+        let errorMessage = 'Failed to update status'
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } else {
+            const textData = await response.text()
+            if (textData && !textData.includes('<')) {
+              errorMessage = textData.substring(0, 100)
+            }
+          }
+        } catch (parseErr) {
+          // Use default error message
+        }
+        throw new Error(errorMessage)
+      }
+      
       toast({ title: `Status changed to ${status}`, description: 'Project status was updated.' })
     } catch (error) {
       console.error('Error updating status:', error)
-      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to update status', variant: 'destructive' })
     }
   }
 
@@ -244,17 +313,32 @@ export default function VideoProjectDetailPage() {
         toast({ title: 'Deleted', description: 'Project removed from your library.' })
         router.push('/dashboard/ads/video')
       } else {
-        throw new Error('Failed to delete')
+        let errorMessage = 'Failed to delete project'
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } else {
+            const textData = await response.text()
+            if (textData && !textData.includes('<')) {
+              errorMessage = textData.substring(0, 100)
+            }
+          }
+        } catch (parseErr) {
+          // Use default error message
+        }
+        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error('Error deleting project:', error)
-      toast({ title: 'Error', description: 'Failed to delete project', variant: 'destructive' })
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to delete project', variant: 'destructive' })
     }
   }
 
   const saveAsTemplate = async () => {
     if (savingTemplate) return
-    const templateName = prompt('Template name:', `${project.title} Template`)
+    const templateName = prompt('Template name:', `${project.name} Template`)
     if (!templateName) return
 
     try {
@@ -271,10 +355,18 @@ export default function VideoProjectDetailPage() {
       } else {
         let errorMessage = 'Failed to save template'
         try {
-          const payload = await response.json()
-          errorMessage = payload?.detail || errorMessage
-        } catch {
-          // Keep fallback error message
+          const contentType = response.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } else {
+            const textData = await response.text()
+            if (textData && !textData.includes('<')) {
+              errorMessage = textData.substring(0, 100)
+            }
+          }
+        } catch (parseErr) {
+          // Use default error message
         }
         throw new Error(errorMessage)
       }
@@ -298,7 +390,7 @@ export default function VideoProjectDetailPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: project.title,
+          name: project.name,
           description: project.description,
           status: project.status,
           duration: displayedDuration,
@@ -308,7 +400,22 @@ export default function VideoProjectDetailPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save project')
+        let errorMessage = 'Failed to save project'
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorData.message || errorMessage
+          } else {
+            const textData = await response.text()
+            if (textData && !textData.includes('<')) {
+              errorMessage = textData.substring(0, 100)
+            }
+          }
+        } catch (parseErr) {
+          // Use default error message
+        }
+        throw new Error(errorMessage)
       }
 
       toast({ title: 'Saved', description: 'Project updates saved successfully.' })
@@ -316,7 +423,7 @@ export default function VideoProjectDetailPage() {
       await loadProject()
     } catch (error) {
       console.error('Error saving project:', error)
-      toast({ title: 'Error', description: 'Failed to save changes', variant: 'destructive' })
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to save changes', variant: 'destructive' })
     } finally {
       setSaving(false)
     }
@@ -336,7 +443,7 @@ export default function VideoProjectDetailPage() {
                 </span>
               )}
             </div>
-            <h1 className="mt-1 text-2xl font-bold text-gray-900 truncate">{project.title}</h1>
+            <h1 className="mt-1 text-2xl font-bold text-gray-900 truncate">{project.name}</h1>
             <p className="mt-1 text-sm text-gray-600">
               Duration <span className="font-medium text-gray-900">{displayedDuration}</span> • {project.assets.length} assets
             </p>
@@ -372,15 +479,15 @@ export default function VideoProjectDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="title" className="text-xs text-gray-500">
-                  Title
+                <Label htmlFor="name" className="text-xs text-gray-500">
+                  Project Name
                 </Label>
                 <input
-                  id="title"
-                  value={project.title}
-                  onChange={(e) => updateField('title', e.target.value)}
+                  id="name"
+                  value={project.name}
+                  onChange={(e) => updateField('name', e.target.value)}
                   className="mt-1 w-full bg-transparent text-lg font-semibold text-gray-900 outline-none border-0 p-0"
-                  placeholder="Project title"
+                  placeholder="Project name"
                 />
                 <div className="mt-2 h-px w-full bg-gray-100" />
               </div>

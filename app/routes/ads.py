@@ -189,6 +189,55 @@ def _autogen_template_thumbnail(template_name: str, assets: Any) -> str:
     import urllib.parse
     return "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
 
+
+def _validate_file_content(content: bytes, asset_type: str) -> bool:
+    """Validate file content by checking magic bytes (file signatures)."""
+    if len(content) < 4:
+        return False
+    
+    # Magic byte signatures for different file types
+    signatures = {
+        'video': [
+            (b'\x00\x00\x00\x20ftypisom', 'MP4/MOV'),      # MP4/MOV
+            (b'\x00\x00\x00\x18ftyp', 'MP4 variant'),       # MP4 variant
+            (b'\xff\xfb', 'MP3 Audio'),                      # MP3 (also audio)
+            (b'ftyp', 'ISOM video'),                         # ISO Base Media File
+            (b'RIFF', 'AVI/WEBM'),                          # AVI/WAV/WEBM container
+            (b'\x1a\x45\xdf\xa3', 'Matroska'),              # MKV/Matroska
+            (b'\x00\x00\x00\x0cjP', 'JPEG2000'),            # JPEG2000
+        ],
+        'image': [
+            (b'\xff\xd8\xff', 'JPEG'),                      # JPEG
+            (b'\x89PNG\r\n\x1a\n', 'PNG'),                  # PNG
+            (b'GIF87a', 'GIF87'),                           # GIF87a
+            (b'GIF89a', 'GIF89'),                           # GIF89a
+            (b'RIFF', 'WEBP/WAV'),                         # WebP/WAV
+            (b'<?xml', 'SVG/XML'),                          # SVG (XML-based)
+            (b'<svg', 'SVG text'),                          # SVG text format
+        ],
+        'audio': [
+            (b'ID3', 'MP3 with ID3'),                       # MP3 with ID3 tag
+            (b'\xff\xfb', 'MP3 without ID3'),               # MP3 without ID3
+            (b'RIFF', 'WAV/WEBM'),                         # WAV/WEBM
+            (b'fLaC', 'FLAC'),                              # FLAC
+            (b'OggS', 'Ogg Vorbis/Opus'),                   # Ogg container
+            (b'\xff\xf1', 'AAC'),                           # AAC
+            (b'\xff\xf9', 'AAC'),                           # AAC variant
+        ]
+    }
+    
+    # Check if file matches any expected signature for its type
+    if asset_type in signatures:
+        for signature, format_name in signatures[asset_type]:
+            if content.startswith(signature):
+                return True
+        # If no signature matched, reject the file
+        log.warning(f"File content does not match any valid {asset_type} signature")
+        return False
+    
+    return True  # Unknown type, allow
+
+
 # ========== CAMPAIGN ENDPOINTS ==========
 @router.get("/campaigns", response_model=None)
 async def get_campaigns(
@@ -887,6 +936,20 @@ async def upload_video_asset(
         'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'],
         'audio': ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac']
     }
+    
+    # MIME type mapping for content validation
+    allowed_mime_types = {
+        'video': ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/x-flv', 'application/x-matroska'],
+        'image': ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/svg'],
+        'audio': ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/flac', 'audio/aac', 'audio/x-aac']
+    }
+    
+    # File size limits (in bytes)
+    max_file_sizes = {
+        'video': 500 * 1024 * 1024,  # 500 MB
+        'image': 50 * 1024 * 1024,   # 50 MB
+        'audio': 100 * 1024 * 1024   # 100 MB
+    }
 
     if asset_type not in allowed_types:
         raise HTTPException(
@@ -904,6 +967,19 @@ async def upload_video_asset(
             status_code=400,
             detail=f"Invalid file type for {asset_type}. Allowed: {', '.join(allowed_types[asset_type])}"
         )
+    
+    # Check file size before processing
+    if file.size and file.size > max_file_sizes[asset_type]:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
+        )
+    
+    # Validate MIME type (check Content-Type header)
+    file_mime_type = file.content_type or ''
+    if file_mime_type and file_mime_type not in allowed_mime_types[asset_type]:
+        log.warning(f"MIME type mismatch: {file_mime_type} for asset_type {asset_type}")
+        # Allow but log - some browsers may send generic MIME types
 
     # Create uploads directory if it doesn't exist
     uploads_dir = f"uploads/video-assets/{business_id}"
@@ -920,6 +996,21 @@ async def upload_video_asset(
     # Save file with proper async handling
     try:
         contents = await file.read()
+        
+        # Validate file size after reading
+        if len(contents) > max_file_sizes[asset_type]:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
+            )
+        
+        # Validate file magic bytes (actual file content)
+        is_valid_content = _validate_file_content(contents, asset_type)
+        if not is_valid_content:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File content does not match {asset_type} type. File appears to be corrupted or of incorrect type."
+            )
         
         # Use async file writing when possible
         try:
@@ -940,14 +1031,17 @@ async def upload_video_asset(
             "url": file_url,
             "size": file_size
         }
+    except HTTPException:
+        # Re-raise HTTP exceptions (like file size exceeded)
+        raise
     except Exception as e:
         log.error(f"File upload failed: {e}", exc_info=True)
         # Clean up partial file if it exists
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-        except:
-            pass
+        except OSError as cleanup_err:
+            log.warning(f"Failed to clean up partial file: {cleanup_err}")
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
 # ========== A/B TEST ENDPOINTS ==========
