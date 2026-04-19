@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.automifyyai.com';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://76.13.48.35:8000';
 
 // Fix for Render: if URL is missing protocol, add https://
 const normalizedApiBaseUrl = (API_BASE_URL && !API_BASE_URL.startsWith('http://') && !API_BASE_URL.startsWith('https://'))
