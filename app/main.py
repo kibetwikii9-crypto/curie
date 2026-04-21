@@ -110,7 +110,7 @@ def _is_public_or_billing_path(path: str) -> bool:
         "/api/billing/",
         "/api/webhooks/",
         "/api/integrations/",
-        "/api/ads/",  # Allow free access to ads section
+        "/api/ads/",  # Allow free access to ads section and all sub-paths
     )
     return any(path.startswith(prefix) for prefix in public_prefixes)
 
