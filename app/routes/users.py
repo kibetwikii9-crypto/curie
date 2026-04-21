@@ -134,19 +134,19 @@ async def create_user(
             detail="Insufficient permissions"
         )
     
-    # Check user limit (feature gating)
-    from app.services.usage_service import UsageService
-    # Get active subscription
-    subscription = db.query(Subscription).filter(
-        Subscription.business_id == business_id
-    ).first()
-    if subscription:
-        can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "user")
-        if not can_add:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Team member limit reached. Please upgrade your plan to add more team members."
-            )
+    # Check user limit (feature gating) - DISABLED FOR FREE ACCESS
+    # from app.services.usage_service import UsageService
+    # # Get active subscription
+    # subscription = db.query(Subscription).filter(
+    #     Subscription.business_id == business_id
+    # ).first()
+    # if subscription:
+    #     can_add = await UsageService.can_use_resource(db, business_id, subscription.id, "user")
+    #     if not can_add:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_402_PAYMENT_REQUIRED,
+    #             detail=f"Team member limit reached. Please upgrade your plan to add more team members."
+    #         )
     
     # Check if user already exists
     existing_user = db.query(UserModel).filter(UserModel.email == user_data.email).first()

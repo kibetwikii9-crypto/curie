@@ -199,9 +199,18 @@ async def require_active_subscription(
 ):
     """Dependency to require active subscription."""
     from app.routes.auth import get_user_business_id
+    from app.config import settings
     
     business_id = get_user_business_id(current_user, db)
     if business_id:
+        # Check if user email is in bypass list
+        bypass_emails = getattr(settings, 'subscription_bypass_emails', '').split(',')
+        bypass_emails = [email.strip().lower() for email in bypass_emails if email.strip()]
+        
+        if current_user.email.lower() in bypass_emails:
+            logger.info(f"Subscription bypassed for user: {current_user.email}")
+            return  # Skip subscription check
+        
         await SubscriptionMiddleware.require_subscription(db, business_id)
 
 
