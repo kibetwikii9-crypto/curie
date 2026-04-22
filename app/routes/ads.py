@@ -920,7 +920,7 @@ async def delete_video_project(
     return {"message": "Video project deleted successfully"}
 
 # ========== VIDEO ASSET UPLOAD ENDPOINTS ==========
-@router.post("/upload-asset", timeout=600)  # 10 minute timeout for large uploads
+@router.post("/upload-asset")  # 10 minute timeout for large uploads
 async def upload_video_asset(
     file: UploadFile = File(...),
     asset_type: str = Query(..., description="Type of asset: video, image, audio"),
