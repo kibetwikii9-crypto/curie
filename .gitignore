@@ -38,6 +38,10 @@ dist/
 build/
 *.egg-info/
 
+# Build artifacts
+frontend-build.tar.gz
+frontend-build.zip
+
 # Old documentation (outdated, references deleted src/ structure)
 ARCHITECTURE.md
 PHASE_1_SUMMARY.md
