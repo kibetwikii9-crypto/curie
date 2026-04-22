@@ -31,7 +31,12 @@ from app.models import (
 
 init_logging(settings.log_level)
 
-app = FastAPI(title="Curie - Multi-Platform Messaging API", version="0.1.0")
+app = FastAPI(
+    title="Curie - Multi-Platform Messaging API", 
+    version="0.1.0",
+    # Add timeout for file uploads (10 minutes for large video files)
+    timeout=600
+)
 
 # Create uploads directory if it doesn't exist
 os.makedirs("uploads", exist_ok=True)

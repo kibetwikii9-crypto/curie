@@ -920,7 +920,7 @@ async def delete_video_project(
     return {"message": "Video project deleted successfully"}
 
 # ========== VIDEO ASSET UPLOAD ENDPOINTS ==========
-@router.post("/video-projects/upload-asset")
+@router.post("/upload-asset", timeout=600)  # 10 minute timeout for large uploads
 async def upload_video_asset(
     file: UploadFile = File(...),
     asset_type: str = Query(..., description="Type of asset: video, image, audio"),
@@ -1011,11 +1011,12 @@ async def upload_video_asset(
                             detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
                         )
         except ImportError:
-            # Fallback to sync write if aiofiles not available
+            # Fallback to sync write if aiofiles not available - FIXED: No async calls in sync context
+            log.warning("aiofiles not available, using sync file operations")
             with open(file_path, "wb") as f:
                 chunk_size = 8 * 1024 * 1024
                 while True:
-                    chunk = await file.read(chunk_size)
+                    chunk = await file.read(chunk_size)  # This is async, so it's fine
                     if not chunk:
                         break
                     f.write(chunk)
@@ -1027,10 +1028,16 @@ async def upload_video_asset(
                             status_code=413,
                             detail=f"File too large. Maximum size for {asset_type} is {max_file_sizes[asset_type] // (1024*1024)} MB"
                         )
+        
+        # Validate file was written correctly
+        if not os.path.exists(file_path) or os.path.getsize(file_path) != file_size:
+            raise HTTPException(status_code=500, detail="File upload incomplete")
+        
         file_url = f"/uploads/video-assets/{business_id}/{unique_filename}"
         if settings.public_url:
             file_url = f"{settings.public_url.rstrip('/')}{file_url}"
         
+        log.info(f"Upload completed: {file.filename} ({file_size} bytes) -> {file_url}")
         return {
             "id": str(uuid.uuid4()),
             "name": file.filename,

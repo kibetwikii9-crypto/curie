@@ -714,6 +714,9 @@ export default function VideoProjectDetailPage() {
                           setProject({ ...project, duration: formatted })
                         }
                       }}
+                      onError={(e) => {
+                        console.error('Video failed to load:', e.currentTarget.error, 'URL:', resolveAssetUrl(previewAsset.url))
+                      }}
                     />
                   </div>
                 ) : getPreviewImage(previewAsset) ? (
