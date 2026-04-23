@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import UpgradePrompt from '@/components/billing/UpgradePrompt';
 import {
   Plug,
@@ -90,42 +90,6 @@ interface AvailableChannel {
   features: string[];
 }
 
-const getChannelIconPath = (channel: string) => {
-  const iconPath = availableChannels.find((c) => c.id === channel)?.icon;
-  return iconPath || '/chat-icon.png';
-};
-
-function ChannelIcon({
-  channel,
-  alt,
-  size = 56,
-}: {
-  channel: string;
-  alt: string;
-  size?: number;
-}) {
-  const normalized = channel.toLowerCase();
-  const [srcIndex, setSrcIndex] = useState(0);
-
-  const candidates =
-    normalized === 'instagram'
-      ? ['/instagram-icon.png', '/chat-icon.png']
-      : [getChannelIconPath(normalized), '/chat-icon.png'];
-
-  const src = candidates[Math.min(srcIndex, candidates.length - 1)];
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      width={size}
-      height={size}
-      className="object-contain"
-      onError={() => setSrcIndex((prev) => (prev < candidates.length - 1 ? prev + 1 : prev))}
-    />
-  );
-}
-
 const availableChannels: AvailableChannel[] = [
   {
     name: 'WhatsApp Business',
@@ -191,8 +155,6 @@ const availableChannels: AvailableChannel[] = [
 
 export default function IntegrationsPage() {
   const { user } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [activeView, setActiveView] = useState<'connected' | 'marketplace' | 'health'>('connected');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -210,7 +172,7 @@ export default function IntegrationsPage() {
     queryKey: ['billing', 'usage'],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/billing/usage');
+        const response = await api.get('/billing/usage');
         return response.data;
       } catch (error) {
         return { usage: {} };
@@ -221,17 +183,10 @@ export default function IntegrationsPage() {
 
   const canManage = user?.role === 'admin' || user?.role === 'business_owner';
 
-  const setView = (view: 'connected' | 'marketplace' | 'health') => {
-    setActiveView(view);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('view', view);
-    router.replace(`/dashboard/integrations?${params.toString()}`);
-  };
-
   const { data: healthData, isLoading: healthLoading } = useQuery<HealthStatus>({
     queryKey: ['integrations-health'],
     queryFn: async () => {
-      const response = await api.get('/api/integrations/health/check');
+      const response = await api.get('/integrations/health/check');
       return response.data;
     },
     enabled: canManage,
@@ -246,9 +201,9 @@ export default function IntegrationsPage() {
 
     try {
       const [integrationsRes, telegramStatusRes, whatsappStatusRes] = await Promise.all([
-        api.get('/api/integrations/'),
-        api.get('/api/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
-        api.get('/api/integrations/whatsapp/status').catch(() => ({ data: null })),
+        api.get('/integrations/'),
+        api.get('/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
+        api.get('/integrations/whatsapp/status').catch(() => ({ data: null })),
       ]);
 
       setIntegrations(integrationsRes.data || []);
@@ -265,11 +220,6 @@ export default function IntegrationsPage() {
   };
 
   useEffect(() => {
-    const requestedView = searchParams.get('view');
-    if (requestedView === 'connected' || requestedView === 'marketplace' || requestedView === 'health') {
-      setActiveView(requestedView);
-    }
-
     fetchIntegrations();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -286,11 +236,11 @@ export default function IntegrationsPage() {
       alert(`Connection failed: ${error}`);
       window.history.replaceState({}, '', '/dashboard/integrations');
     }
-  }, [canManage, searchParams]);
+  }, [canManage]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await api.put(`/api/integrations/${id}`, data);
+      const response = await api.put(`/integrations/${id}`, data);
       return response.data;
     },
     onSuccess: () => {
@@ -298,34 +248,25 @@ export default function IntegrationsPage() {
       fetchIntegrations();
       setShowEditModal(false);
     },
-    onError: (error: any) => {
-      alert(error?.response?.data?.detail || 'Failed to update integration');
-    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/api/integrations/${id}`);
+      await api.delete(`/integrations/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
       fetchIntegrations();
-    },
-    onError: (error: any) => {
-      alert(error?.response?.data?.detail || 'Failed to delete integration');
     },
   });
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
-      await api.put(`/api/integrations/${id}`, { is_active });
+      await api.put(`/integrations/${id}`, { is_active });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
       fetchIntegrations();
-    },
-    onError: (error: any) => {
-      alert(error?.response?.data?.detail || 'Failed to update integration status');
     },
   });
 
@@ -342,9 +283,9 @@ export default function IntegrationsPage() {
 
     try {
       if (channel === 'telegram') {
-        await api.delete('/api/integrations/telegram/disconnect');
+        await api.delete('/integrations/telegram/disconnect');
       } else if (channel === 'whatsapp') {
-        await api.delete('/api/integrations/whatsapp/disconnect');
+        await api.delete('/integrations/whatsapp/disconnect');
       }
       fetchIntegrations();
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -397,27 +338,86 @@ export default function IntegrationsPage() {
     return channelData?.color || 'from-gray-500 to-gray-600';
   };
 
-  const getChannelIcon = (channel: string) => getChannelIconPath(channel);
+  const getChannelIcon = (channel: string) => {
+    const iconPath = availableChannels.find((c) => c.id === channel)?.icon;
+    return iconPath || '/chat-icon.png';
+  };
 
   const filteredChannels = availableChannels.filter((channel) => {
     if (categoryFilter === 'all') return true;
     return channel.category === categoryFilter;
   });
-  const connectedIntegrations = integrations;
+  const activeIntegrations = integrations.filter((integration) => integration.is_active);
 
   const connectWhatsApp = async () => {
-    await startOAuthPopup(
-      '/api/integrations/whatsapp/connect',
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const popup = window.open(
+      'about:blank',
       'WhatsApp OAuth',
-      'whatsapp-oauth-success',
-      'whatsapp-oauth-error',
-      'WhatsApp connected successfully!'
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
     );
+
+    if (!popup) {
+      alert('Please allow popups for this site to connect WhatsApp');
+      return;
+    }
+
+    try {
+      const backendUrl = api.defaults.baseURL || window.location.origin;
+      popup.location.href = `${backendUrl}/integrations/whatsapp/connect`;
+
+      const handleMessage = (event: MessageEvent) => {
+        const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
+
+        if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
+          return;
+        }
+
+        if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
+          return;
+        }
+
+        if (event.data.type === 'whatsapp-oauth-success') {
+          popup.close();
+          fetchIntegrations();
+          queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
+          alert('WhatsApp connected successfully!');
+          window.removeEventListener('message', handleMessage);
+        } else if (event.data.type === 'whatsapp-oauth-error') {
+          popup.close();
+          alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+        }
+      }, 1000);
+    } catch (error: any) {
+      console.error('WhatsApp connection error:', error);
+      popup.close();
+      if (error.response?.status === 401) {
+        alert('Please log in first');
+      } else if (error.response?.status === 403) {
+        alert(error.response?.data?.detail || 'You do not have permission');
+      } else {
+        showIntegrationError(error, 'Integration in progress... If this persists, please try again.');
+      }
+    }
   };
 
   const connectWebchat = async () => {
     try {
-      const response = await api.post('/api/integrations/webchat/connect');
+      const response = await api.post('/integrations/webchat/connect');
       const data = response.data;
 
       if (data?.success) {
@@ -481,47 +481,8 @@ export default function IntegrationsPage() {
     }
 
     try {
-      // Render a quick loading UI so the popup doesn't feel "stuck" while we fetch authUrl.
-      // (We can't open the auth URL directly because we need auth headers on the initial request.)
-      try {
-        popup.document.title = title;
-        popup.document.body.style.margin = '0';
-        popup.document.body.innerHTML = `
-          <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; display:flex; align-items:center; justify-content:center; height:100vh; background:#f8fafc;">
-            <div style="width:min(420px, 92vw); background:white; border:1px solid #e5e7eb; border-radius:14px; padding:22px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-              <div style="display:flex; align-items:center; gap:12px;">
-                <div style="width:34px; height:34px; border-radius:999px; border:3px solid #e5e7eb; border-top-color:#06b6d4; animation:spin 1s linear infinite;"></div>
-                <div>
-                  <div style="font-size:14px; font-weight:700; color:#0f172a;">Opening ${title}…</div>
-                  <div style="font-size:12px; color:#64748b; margin-top:2px;">Fetching authorization link</div>
-                </div>
-              </div>
-              <div style="margin-top:14px; font-size:12px; color:#64748b;">
-                If this takes more than a few seconds, close this window and try again.
-              </div>
-            </div>
-          </div>
-          <style>
-            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-          </style>
-        `;
-      } catch {
-        // Some browsers may restrict doc access briefly; ignore and proceed.
-      }
-
-      popup.focus();
-
-      // Fetch OAuth URL via authenticated API call first.
-      // Direct navigation to backend endpoint drops auth header and causes 401.
-      const response = await api.get(endpoint, {
-        headers: { Accept: 'application/json' },
-      });
-      const authUrl = response?.data?.auth_url;
-      if (!authUrl) {
-        throw new Error('Failed to get OAuth URL');
-      }
-      // Replace avoids adding about:blank to history and feels snappier.
-      popup.location.replace(authUrl);
+      const backendUrl = api.defaults.baseURL || window.location.origin;
+      popup.location.href = `${backendUrl}${endpoint}`;
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
@@ -559,7 +520,7 @@ export default function IntegrationsPage() {
 
   const connectInstagram = async () => {
     await startOAuthPopup(
-      '/api/integrations/instagram/connect',
+      '/integrations/instagram/connect',
       'Instagram OAuth',
       'instagram-oauth-success',
       'instagram-oauth-error',
@@ -569,7 +530,7 @@ export default function IntegrationsPage() {
 
   const connectMessenger = async () => {
     await startOAuthPopup(
-      '/api/integrations/messenger/connect',
+      '/integrations/messenger/connect',
       'Messenger OAuth',
       'messenger-oauth-success',
       'messenger-oauth-error',
@@ -579,7 +540,7 @@ export default function IntegrationsPage() {
 
   const connectEmail = async () => {
     await startOAuthPopup(
-      '/api/integrations/email/connect',
+      '/integrations/email/connect',
       'Email OAuth',
       'email-oauth-success',
       'email-oauth-error',
@@ -642,7 +603,7 @@ export default function IntegrationsPage() {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => setView('marketplace')}
+                onClick={() => setActiveView('marketplace')}
                 className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 transition-all"
               >
                 <Plus className="h-5 w-5 mr-2" />
@@ -708,7 +669,7 @@ export default function IntegrationsPage() {
         ].map((view) => (
           <button
             key={view.id}
-            onClick={() => setView(view.id as 'connected' | 'marketplace' | 'health')}
+            onClick={() => setActiveView(view.id as any)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
               activeView === view.id
                 ? 'bg-primary-500 text-white shadow-md'
@@ -728,7 +689,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div>
             </div>
-          ) : connectedIntegrations.length > 0 ? (
+          ) : activeIntegrations.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="px-6 py-5">
                 <div className="flex items-center justify-between mb-6">
@@ -759,7 +720,7 @@ export default function IntegrationsPage() {
 
                 {viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {connectedIntegrations.map((integration) => (
+                    {activeIntegrations.map((integration) => (
                       <div
                         key={integration.id}
                         className="group relative p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-xl transition-all transform hover:-translate-y-1"
@@ -767,7 +728,13 @@ export default function IntegrationsPage() {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-4">
                             <div className="flex items-center justify-center">
-                              <ChannelIcon channel={integration.channel} alt={integration.channel} size={56} />
+                              <Image
+                                src={getChannelIcon(integration.channel)}
+                                alt={integration.channel}
+                                width={56}
+                                height={56}
+                                className="w-14 h-14 object-contain"
+                              />
                             </div>
                             <div>
                               <h4 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
@@ -806,7 +773,7 @@ export default function IntegrationsPage() {
                           </div>
                         </div>
 
-                        <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() =>
                               toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })
@@ -838,14 +805,20 @@ export default function IntegrationsPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {connectedIntegrations.map((integration) => (
+                    {activeIntegrations.map((integration) => (
                       <div
                         key={integration.id}
                         className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                       >
                         <div className="flex items-center gap-4 flex-1">
                           <div className="flex items-center justify-center">
-                            <ChannelIcon channel={integration.channel} alt={integration.channel} size={48} />
+                            <Image
+                              src={getChannelIcon(integration.channel)}
+                              alt={integration.channel}
+                              width={48}
+                              height={48}
+                              className="w-12 h-12 object-contain"
+                            />
                           </div>
                           <div className="flex-1">
                             <h4 className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
@@ -913,7 +886,7 @@ export default function IntegrationsPage() {
                 Connect your first channel to start automating conversations
               </p>
               <button
-                onClick={() => setView('marketplace')}
+                onClick={() => setActiveView('marketplace')}
                 className="inline-flex items-center px-6 py-3 border border-transparent shadow-md text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 transition-all"
               >
                 <Plus className="h-5 w-5 mr-2" />
@@ -957,7 +930,13 @@ export default function IntegrationsPage() {
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center justify-center">
-                        <ChannelIcon channel={channel.id} alt={channel.name} size={64} />
+                        <Image
+                          src={channel.icon}
+                          alt={channel.name}
+                          width={64}
+                          height={64}
+                          className="w-16 h-16 object-contain"
+                        />
                       </div>
                       {channel.status === 'available' && isConnected && (
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
