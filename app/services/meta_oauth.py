@@ -170,6 +170,10 @@ class MetaOAuthService:
         Get WhatsApp Business Accounts for a business.
         Returns existing WhatsApp Business Accounts that the user has access to.
         
+        Tries both endpoints:
+        1. /owned_whatsapp_business_accounts - accounts owned by the business
+        2. /whatsapp_business_accounts - all accounts assigned to the business
+        
         Args:
             business_account_id: Meta Business Account ID
             access_token: User's access token
@@ -177,8 +181,6 @@ class MetaOAuthService:
         Returns:
             List of WhatsApp Business Accounts
         """
-        url = f"{self.BASE_URL}/{business_account_id}/owned_whatsapp_business_accounts"
-        
         headers = {
             "Authorization": f"Bearer {access_token}"
         }
@@ -187,14 +189,40 @@ class MetaOAuthService:
             "fields": "id,name,account_review_status,message_template_namespace,timezone_id"
         }
         
+        # Try first endpoint: owned accounts
+        url_owned = f"{self.BASE_URL}/{business_account_id}/owned_whatsapp_business_accounts"
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, params=params, timeout=10.0)
+                response = await client.get(url_owned, headers=headers, params=params, timeout=10.0)
                 response.raise_for_status()
                 data = response.json()
-                return data.get("data", [])
+                accounts = data.get("data", [])
+                
+                if accounts:
+                    logger.info(f"Found {len(accounts)} owned WhatsApp accounts")
+                    return accounts
+                else:
+                    logger.info("No owned WhatsApp accounts found, trying assigned accounts endpoint...")
         except Exception as e:
-            logger.error(f"Error getting WhatsApp accounts: {e}")
+            logger.warning(f"Error getting owned WhatsApp accounts: {e}")
+        
+        # Try second endpoint: all assigned accounts
+        url_all = f"{self.BASE_URL}/{business_account_id}/whatsapp_business_accounts"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url_all, headers=headers, params=params, timeout=10.0)
+                response.raise_for_status()
+                data = response.json()
+                accounts = data.get("data", [])
+                
+                if accounts:
+                    logger.info(f"Found {len(accounts)} assigned WhatsApp accounts")
+                    return accounts
+                else:
+                    logger.error("No WhatsApp accounts found on either endpoint")
+                    return []
+        except Exception as e:
+            logger.error(f"Error getting WhatsApp accounts from both endpoints: {e}")
             raise
     
     async def get_phone_numbers(
