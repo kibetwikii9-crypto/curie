@@ -96,7 +96,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'whatsapp',
     status: 'available',
     description: 'Connect WhatsApp Business API with one-click OAuth',
-    icon: '/whatsapp-icon.png',
+    icon: '/api/whatsapp-icon.png',
     category: 'Messaging',
     color: 'from-green-500 to-green-600',
     features: ['Auto-replies', 'Media support', 'Template messages', 'Analytics'],
@@ -106,7 +106,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'telegram',
     status: 'available',
     description: 'Telegram bot integration for instant messaging',
-    icon: '/telegram-icon.png',
+    icon: '/api/telegram-icon.png',
     category: 'Messaging',
     color: 'from-blue-500 to-blue-600',
     features: ['Bot commands', 'Group chats', 'File sharing', 'Inline keyboards'],
@@ -116,7 +116,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'instagram',
     status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
-    icon: '/instagram-icon.png',
+    icon: '/api/instagram-icon.png',
     category: 'Social Media',
     color: 'from-pink-500 to-purple-600',
     features: ['DM automation', 'Comment replies', 'Story mentions', 'Media'],
@@ -126,7 +126,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'messenger',
     status: 'available',
     description: 'Integrate Facebook Messenger conversations',
-    icon: '/messenger-icon.png',
+    icon: '/api/messenger-icon.png',
     category: 'Social Media',
     color: 'from-blue-600 to-indigo-600',
     features: ['Instant replies', 'Rich media', 'Quick replies', 'Templates'],
@@ -136,7 +136,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'webchat',
     status: 'available',
     description: 'Embed chat widget on your website',
-    icon: '/chat-icon.png',
+    icon: '/api/chat-icon.png',
     category: 'Web',
     color: 'from-gray-600 to-gray-700',
     features: ['Custom branding', 'Instant setup', 'Copy-paste embed', 'Real-time chat'],
@@ -146,7 +146,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'email',
     status: 'available',
     description: 'Connect Gmail with one-click OAuth',
-    icon: '/chat-icon.png',
+    icon: '/api/chat-icon.png',
     category: 'Email',
     color: 'from-red-500 to-red-600',
     features: ['Auto-responses', 'Gmail integration', 'AI-powered replies', 'Smart inbox'],
@@ -201,9 +201,9 @@ export default function IntegrationsPage() {
 
     try {
       const [integrationsRes, telegramStatusRes, whatsappStatusRes] = await Promise.all([
-        api.get('/integrations/'),
-        api.get('/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
-        api.get('/integrations/whatsapp/status').catch(() => ({ data: null })),
+        api.get('/api/integrations/'),
+        api.get('/api/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
+        api.get('/api/integrations/whatsapp/status').catch(() => ({ data: null })),
       ]);
 
       setIntegrations(integrationsRes.data || []);
@@ -231,16 +231,16 @@ export default function IntegrationsPage() {
       setTimeout(() => {
         fetchIntegrations();
       }, 1000);
-      window.history.replaceState({}, '', '/dashboard/integrations');
+      window.history.replaceState({}, '', '/api/dashboard/integrations');
     } else if (error) {
       alert(`Connection failed: ${error}`);
-      window.history.replaceState({}, '', '/dashboard/integrations');
+      window.history.replaceState({}, '', '/api/dashboard/integrations');
     }
   }, [canManage]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await api.put(`/integrations/${id}`, data);
+      const response = await api.put(`/api/integrations/${id}`, data);
       return response.data;
     },
     onSuccess: () => {
@@ -252,7 +252,7 @@ export default function IntegrationsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/integrations/${id}`);
+      await api.delete(`/api/integrations/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -262,7 +262,7 @@ export default function IntegrationsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
-      await api.put(`/integrations/${id}`, { is_active });
+      await api.put(`/api/integrations/${id}`, { is_active });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -283,9 +283,9 @@ export default function IntegrationsPage() {
 
     try {
       if (channel === 'telegram') {
-        await api.delete('/integrations/telegram/disconnect');
+        await api.delete('/api/integrations/telegram/disconnect');
       } else if (channel === 'whatsapp') {
-        await api.delete('/integrations/whatsapp/disconnect');
+        await api.delete('/api/integrations/whatsapp/disconnect');
       }
       fetchIntegrations();
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -368,7 +368,7 @@ export default function IntegrationsPage() {
 
     try {
       const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}/integrations/whatsapp/connect`;
+      popup.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
@@ -417,7 +417,7 @@ export default function IntegrationsPage() {
 
   const connectWebchat = async () => {
     try {
-      const response = await api.post('/integrations/webchat/connect');
+      const response = await api.post('/api/integrations/webchat/connect');
       const data = response.data;
 
       if (data?.success) {
@@ -520,7 +520,7 @@ export default function IntegrationsPage() {
 
   const connectInstagram = async () => {
     await startOAuthPopup(
-      '/integrations/instagram/connect',
+      '/api/integrations/instagram/connect',
       'Instagram OAuth',
       'instagram-oauth-success',
       'instagram-oauth-error',
@@ -530,7 +530,7 @@ export default function IntegrationsPage() {
 
   const connectMessenger = async () => {
     await startOAuthPopup(
-      '/integrations/messenger/connect',
+      '/api/integrations/messenger/connect',
       'Messenger OAuth',
       'messenger-oauth-success',
       'messenger-oauth-error',
@@ -540,7 +540,7 @@ export default function IntegrationsPage() {
 
   const connectEmail = async () => {
     await startOAuthPopup(
-      '/integrations/email/connect',
+      '/api/integrations/email/connect',
       'Email OAuth',
       'email-oauth-success',
       'email-oauth-error',
