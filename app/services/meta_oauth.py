@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class MetaOAuthService:
     """Handles Meta OAuth for WhatsApp Business connection"""
     
-    BASE_URL = "https://graph.facebook.com/v21.0"
+    BASE_URL = "https://graph.facebook.com/v18.0"
     
     def __init__(self):
         """Initialize with settings from config"""
@@ -49,11 +49,11 @@ class MetaOAuthService:
         # - Send messages via WhatsApp Business API
         # - Read phone numbers and business profiles
         url = (
-            f"https://www.facebook.com/v21.0/dialog/oauth?"
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.app_id}&"
             f"redirect_uri={self.redirect_uri}&"
             f"state={state}&"
-            f"scope=whatsapp_business_management,whatsapp_business_messaging&"
+            f"scope=whatsapp_business_management,whatsapp_business_messaging,business_management&"
             f"response_type=code"
         )
         
@@ -345,7 +345,7 @@ class MetaOAuthService:
             OAuth authorization URL
         """
         url = (
-            f"https://www.facebook.com/v21.0/dialog/oauth?"
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.app_id}&"
             f"redirect_uri={self.instagram_redirect_uri}&"
             f"state={state}&"
@@ -371,7 +371,7 @@ class MetaOAuthService:
             OAuth authorization URL
         """
         url = (
-            f"https://www.facebook.com/v21.0/dialog/oauth?"
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.app_id}&"
             f"redirect_uri={self.messenger_redirect_uri}&"
             f"state={state}&"

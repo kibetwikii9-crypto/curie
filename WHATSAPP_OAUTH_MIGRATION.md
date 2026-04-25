@@ -34,7 +34,7 @@ url = (
 **Key Changes**:
 - ✅ Removed `extras` parameter with embedded signup feature
 - ✅ Removed `business_config` JSON setup
-- ✅ Simplified scopes (removed `business_management`)
+- ✅ Simplified flow while keeping `business_management` where needed for business account discovery
 - ✅ Removed `register_phone_number()` method (not needed)
 - ✅ Updated docstrings to reflect standard OAuth flow
 

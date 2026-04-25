@@ -774,6 +774,24 @@ export default function IntegrationsPage() {
                         </div>
 
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {integration.channel === 'email' && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await api.post('/api/integrations/email/process');
+                                  alert(`Processed ${response.data.processed} emails successfully!`);
+                                  if (response.data.errors && response.data.errors.length > 0) {
+                                    console.warn('Email processing errors:', response.data.errors);
+                                  }
+                                } catch (error: any) {
+                                  alert(`Failed to process emails: ${error.response?.data?.detail || error.message}`);
+                                }
+                              }}
+                              className="px-3 py-2 text-xs font-medium text-green-600 dark:text-green-400 bg-white dark:bg-gray-700 border border-green-300 dark:border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-900/20"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                            </button>
+                          )}
                           <button
                             onClick={() =>
                               toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })
@@ -844,6 +862,25 @@ export default function IntegrationsPage() {
                             )}
                           </span>
                           <div className="flex gap-2">
+                            {integration.channel === 'email' && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const response = await api.post('/api/integrations/email/process');
+                                    alert(`Processed ${response.data.processed} emails successfully!`);
+                                    if (response.data.errors && response.data.errors.length > 0) {
+                                      console.warn('Email processing errors:', response.data.errors);
+                                    }
+                                  } catch (error: any) {
+                                    alert(`Failed to process emails: ${error.response?.data?.detail || error.message}`);
+                                  }
+                                }}
+                                className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
+                                title="Process new emails"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() =>
                                 toggleMutation.mutate({ id: integration.id, is_active: !integration.is_active })

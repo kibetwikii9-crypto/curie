@@ -305,3 +305,161 @@ class GmailOAuthService:
         except Exception as e:
             logger.error(f"Error modifying message: {e}")
             raise
+    
+    async def process_new_emails(
+        self,
+        access_token: str,
+        business_id: int,
+        last_processed_id: str = None
+    ) -> Dict[str, Any]:
+        """
+        Process new emails for a business.
+        Retrieves unread emails and processes them through the AI system.
+        
+        Args:
+            access_token: Gmail access token
+            business_id: Business ID for the integration
+            last_processed_id: Last processed message ID to avoid duplicates
+            
+        Returns:
+            Processing results
+        """
+        from app.services.processor import process_message
+        from app.services.conversation_service import save_conversation_from_normalized
+        from app.schemas import NormalizedMessage, MessageChannel
+        from datetime import datetime
+        
+        processed_count = 0
+        errors = []
+        
+        try:
+            # Get unread messages
+            messages = await self.list_messages(access_token, max_results=10, query="is:unread")
+            
+            if not messages:
+                return {"processed": 0, "errors": []}
+            
+            for message_info in messages:
+                try:
+                    message_id = message_info.get("id")
+                    
+                    # Skip if already processed
+                    if last_processed_id and message_id <= last_processed_id:
+                        continue
+                    
+                    # Get full message
+                    message_data = await self.get_message(access_token, message_id)
+                    
+                    # Extract email content
+                    payload = message_data.get("payload", {})
+                    headers = payload.get("headers", [])
+                    
+                    subject = ""
+                    from_email = ""
+                    to_email = ""
+                    
+                    for header in headers:
+                        name = header.get("name", "").lower()
+                        value = header.get("value", "")
+                        
+                        if name == "subject":
+                            subject = value
+                        elif name == "from":
+                            from_email = value
+                        elif name == "to":
+                            to_email = value
+                    
+                    # Get message body
+                    body = self._extract_email_body(payload)
+                    
+                    if not body:
+                        continue
+                    
+                    # Create normalized message
+                    normalized_message = NormalizedMessage(
+                        channel=MessageChannel.EMAIL,
+                        user_id=from_email,
+                        message_text=f"Subject: {subject}\n\n{body}",
+                        timestamp=datetime.utcfromtimestamp(int(message_data.get("internalDate", 0)) / 1000) if message_data.get("internalDate") else datetime.utcnow(),
+                        metadata={
+                            "message_id": message_id,
+                            "subject": subject,
+                            "from_email": from_email,
+                            "to_email": to_email,
+                            "business_id": business_id,
+                            "source": "gmail_polling",
+                        },
+                    )
+                    
+                    # Generate AI reply
+                    reply_text = await process_message(normalized_message, business_id)
+                    if not reply_text or not reply_text.strip():
+                        reply_text = "Thank you for your email. I'll get back to you soon."
+                    
+                    # Send reply email
+                    await self.send_email(
+                        access_token,
+                        from_email,  # Reply to sender
+                        f"Re: {subject}",
+                        reply_text,
+                        message_id  # In-Reply-To header
+                    )
+                    
+                    # Mark as read
+                    await self.modify_message(
+                        access_token,
+                        message_id,
+                        remove_labels=["UNREAD"]
+                    )
+                    
+                    # Save conversation
+                    try:
+                        await save_conversation_from_normalized(
+                            normalized_message=normalized_message,
+                            bot_reply=reply_text,
+                            business_id=business_id,
+                        )
+                    except Exception:
+                        pass  # Don't fail if saving fails
+                    
+                    processed_count += 1
+                    logger.info(f"Processed email {message_id} from {from_email}")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing email {message_info.get('id')}: {e}")
+                    errors.append(str(e))
+                    continue
+            
+            return {"processed": processed_count, "errors": errors}
+            
+        except Exception as e:
+            logger.error(f"Error in process_new_emails: {e}")
+            return {"processed": processed_count, "errors": [str(e)]}
+    
+    def _extract_email_body(self, payload: Dict[str, Any]) -> str:
+        """
+        Extract plain text body from Gmail message payload.
+        
+        Args:
+            payload: Gmail message payload
+            
+        Returns:
+            Plain text body
+        """
+        def get_plain_text_body(part):
+            """Recursively find plain text body"""
+            if part.get("mimeType") == "text/plain":
+                body_data = part.get("body", {}).get("data", "")
+                if body_data:
+                    import base64
+                    return base64.urlsafe_b64decode(body_data).decode("utf-8", errors="ignore")
+            
+            # Check parts
+            for subpart in part.get("parts", []):
+                result = get_plain_text_body(subpart)
+                if result:
+                    return result
+            
+            return ""
+        
+        return get_plain_text_body(payload)

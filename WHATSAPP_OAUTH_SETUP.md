@@ -85,7 +85,7 @@ WHERE channel = 'whatsapp' AND is_active = true;
 1. Go to **WhatsApp** → **Getting Started**
 2. Note the temporary phone number ID (optional - for testing only)
 3. The OAuth flow will automatically retrieve the user's WhatsApp Business phone numbers
-4. **Important**: Your app needs to be approved for advanced access to `whatsapp_business_management` and `whatsapp_business_messaging` permissions for production use. During development, standard access is sufficient.
+4. **Important**: Your app needs to be approved for advanced access to `whatsapp_business_management`, `whatsapp_business_messaging`, and `business_management` permissions for production use. During development, standard access is sufficient.
 
 ## 📋 Step 3: Environment Variables
 
