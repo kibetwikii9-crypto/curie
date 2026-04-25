@@ -95,7 +95,7 @@ const availableChannels: AvailableChannel[] = [
     name: 'WhatsApp Business',
     id: 'whatsapp',
     status: 'available',
-    description: 'Connect WhatsApp Business API with one-click OAuth',
+    description: 'Connect WhatsApp Business API (requires WhatsApp Business Account setup)',
     icon: '/api/whatsapp-icon.png',
     category: 'Messaging',
     color: 'from-green-500 to-green-600',
