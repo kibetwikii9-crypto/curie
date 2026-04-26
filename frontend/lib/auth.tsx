@@ -58,9 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       params.append('username', email);
       params.append('password', password);
 
-      const loginUrl = api.defaults.baseURL + '/api/auth/login';
+      const loginUrl = api.defaults.baseURL + '/auth/login';
       console.log('[Auth] Attempting login to:', loginUrl);
-      return api.post('/api/auth/login', params, {
+      return api.post('/auth/login', params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
