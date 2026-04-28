@@ -2,10 +2,25 @@ import axios from 'axios';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://automifyyai.com';
 
-// Fix for Render: if URL is missing protocol, add https://
-const normalizedApiBaseUrl = (API_BASE_URL && !API_BASE_URL.startsWith('http://') && !API_BASE_URL.startsWith('https://'))
-  ? `https://${API_BASE_URL}`
-  : API_BASE_URL;
+const normalizedApiBaseUrl = (() => {
+  let baseUrl = API_BASE_URL?.trim() || 'https://automifyyai.com';
+
+  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+
+  try {
+    const parsed = new URL(baseUrl);
+    // If the API URL includes a trailing /api path, remove it so requests like
+    // api.get('/api/...') do not become /api/api/...
+    if (parsed.pathname.endsWith('/api')) {
+      parsed.pathname = parsed.pathname.replace(/\/api\/?$/, '');
+    }
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return baseUrl.replace(/\/+$/, '').replace(/\/api$/, '');
+  }
+})();
 
 export const api = axios.create({
   baseURL: normalizedApiBaseUrl,
