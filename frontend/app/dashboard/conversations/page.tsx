@@ -187,7 +187,7 @@ export default function ConversationsPage() {
     queryKey: ['billing', 'usage'],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/billing/usage');
+        const response = await api.get('/billing/usage');
         return response.data;
       } catch (error) {
         return { usage: {} };

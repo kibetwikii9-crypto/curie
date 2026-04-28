@@ -240,7 +240,7 @@ export default function IntegrationsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await api.put(`/api/integrations/${id}`, data);
+      const response = await api.put(`/integrations/${id}`, data);
       return response.data;
     },
     onSuccess: () => {
@@ -252,7 +252,7 @@ export default function IntegrationsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/api/integrations/${id}`);
+      await api.delete(`/integrations/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -262,7 +262,7 @@ export default function IntegrationsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
-      await api.put(`/api/integrations/${id}`, { is_active });
+      await api.put(`/integrations/${id}`, { is_active });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -368,7 +368,7 @@ export default function IntegrationsPage() {
 
     try {
       const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
+      popup.location.href = `${backendUrl}/integrations/whatsapp/connect`;
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
@@ -520,29 +520,27 @@ export default function IntegrationsPage() {
 
   const connectInstagram = async () => {
     await startOAuthPopup(
-      '/api/integrations/instagram/connect',
-      'Instagram OAuth',
-      'instagram-oauth-success',
-      'instagram-oauth-error',
-      'Instagram connected successfully!'
-    );
-  };
+        '/integrations/instagram/connect',
+        'Instagram OAuth',
+        'instagram-oauth-success',
+        'instagram-oauth-error',
+        'Instagram connected successfully!'
+      );
+    };
 
-  const connectMessenger = async () => {
-    await startOAuthPopup(
-      '/api/integrations/messenger/connect',
-      'Messenger OAuth',
-      'messenger-oauth-success',
-      'messenger-oauth-error',
-      'Messenger connected successfully!'
-    );
-  };
+    const connectMessenger = async () => {
+      await startOAuthPopup(
+        '/integrations/messenger/connect',
+        'Messenger OAuth',
+        'messenger-oauth-success',
+        'messenger-oauth-error',
+        'Messenger connected successfully!'
+      );
+    };
 
-  const connectEmail = async () => {
-    await startOAuthPopup(
-      '/api/integrations/email/connect',
-      'Email OAuth',
-      'email-oauth-success',
+    const connectEmail = async () => {
+      await startOAuthPopup(
+        '/integrations/email/connect',
       'email-oauth-error',
       'Email connected successfully!'
     );

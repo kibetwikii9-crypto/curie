@@ -21,7 +21,7 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
 
     try {
       // Initialize Paystack payment
-      const response = await api.post('/api/billing/payment-methods/setup', { email });
+      const response = await api.post('/billing/payment-methods/setup', { email });
       
       if (response.data.authorization_url) {
         // Redirect to Paystack payment page
@@ -95,7 +95,7 @@ export default function PaymentMethodsPage() {
   const { data: paymentMethods, isLoading } = useQuery({
     queryKey: ['billing', 'payment-methods'],
     queryFn: async () => {
-      const response = await api.get('/api/billing/payment-methods');
+      const response = await api.get('/billing/payment-methods');
       return response.data;
     },
     enabled: isAuthenticated
@@ -104,7 +104,7 @@ export default function PaymentMethodsPage() {
   // Set default mutation
   const setDefaultMutation = useMutation({
     mutationFn: async (paymentMethodId: number) => {
-      await api.post(`/api/billing/payment-methods/${paymentMethodId}/default`);
+      await api.post(`/billing/payment-methods/${paymentMethodId}/default`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });
@@ -117,7 +117,7 @@ export default function PaymentMethodsPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (paymentMethodId: number) => {
-      await api.delete(`/api/billing/payment-methods/${paymentMethodId}`);
+      await api.delete(`/billing/payment-methods/${paymentMethodId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });

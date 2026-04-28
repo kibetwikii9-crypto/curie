@@ -22,7 +22,7 @@ export default function BillingPage() {
   const { data: subscriptionData, isLoading: subLoading } = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: async () => {
-      const response = await api.get('/api/billing/subscription');
+      const response = await api.get('/billing/subscription');
       return response.data;
     },
     enabled: isAuthenticated
@@ -32,7 +32,7 @@ export default function BillingPage() {
   const { data: usageData, isLoading: usageLoading } = useQuery({
     queryKey: ['billing', 'usage'],
     queryFn: async () => {
-      const response = await api.get('/api/billing/usage');
+      const response = await api.get('/billing/usage');
       return response.data;
     },
     enabled: isAuthenticated
@@ -42,7 +42,7 @@ export default function BillingPage() {
   const { data: invoicesData } = useQuery({
     queryKey: ['billing', 'invoices'],
     queryFn: async () => {
-      const response = await api.get('/api/billing/invoices?limit=5');
+      const response = await api.get('/billing/invoices?limit=5');
       return response.data;
     },
     enabled: isAuthenticated
@@ -405,7 +405,7 @@ export default function BillingPage() {
                 <button
                   onClick={async () => {
                     try {
-                      await api.post('/api/billing/subscription/resume');
+                      await api.post('/billing/subscription/resume');
                       alert('Subscription resumed successfully!');
                       window.location.reload();
                     } catch (error) {
