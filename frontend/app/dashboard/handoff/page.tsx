@@ -106,7 +106,7 @@ export default function HandoffPage() {
   const { data: stats } = useQuery<HandoffStats>({
     queryKey: ['handoff-stats'],
     queryFn: async () => {
-      const response = await api.get('/handoff/stats/dashboard');
+      const response = await api.get('/api/handoff/stats/dashboard');
       return response.data;
     },
     refetchInterval: 30000,
@@ -118,7 +118,7 @@ export default function HandoffPage() {
       const params: any = {};
       if (statusFilter) params.status = statusFilter;
       if (priorityFilter) params.priority = priorityFilter;
-      const response = await api.get('/handoff/', { params });
+      const response = await api.get('/api/handoff/', { params });
       return response.data;
     },
     refetchInterval: 30000,
@@ -127,7 +127,7 @@ export default function HandoffPage() {
   const { data: slaMetrics } = useQuery<SLAMetrics>({
     queryKey: ['sla-metrics'],
     queryFn: async () => {
-      const response = await api.get('/handoff/sla/');
+      const response = await api.get('/api/handoff/sla/');
       return response.data;
     },
     refetchInterval: 60000,
@@ -136,7 +136,7 @@ export default function HandoffPage() {
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: async () => {
-      const response = await api.get('/users/');
+      const response = await api.get('/api/users/');
       return response.data;
     },
   });
@@ -180,7 +180,7 @@ export default function HandoffPage() {
 
   const bulkAssignMutation = useMutation({
     mutationFn: async ({ handoff_ids, user_id }: { handoff_ids: number[]; user_id: number }) => {
-      const response = await api.post('/handoff/bulk/assign', handoff_ids, {
+      const response = await api.post('/api/handoff/bulk/assign', handoff_ids, {
         params: { user_id },
       });
       return response.data;
@@ -196,7 +196,7 @@ export default function HandoffPage() {
 
   const createEscalationMutation = useMutation({
     mutationFn: async (data: { handoff_id: number; to_user_id: number; reason?: string }) => {
-      const response = await api.post('/handoff/escalations/', data);
+      const response = await api.post('/api/handoff/escalations/', data);
       return response.data;
     },
     onSuccess: () => {

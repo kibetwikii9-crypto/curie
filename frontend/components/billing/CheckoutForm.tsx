@@ -54,7 +54,7 @@ export default function CheckoutForm({
     const pollInterval = setInterval(async () => {
       try {
         // Check if subscription was created
-        const response = await api.get('/billing/subscription');
+        const response = await api.get('/api/billing/subscription');
         const data = response.data;
         
         if (data.subscription && data.subscription.status === 'active') {

@@ -118,7 +118,7 @@ export default function AIRulesPage() {
   const { data: rulesData, isLoading: rulesLoading } = useQuery({
     queryKey: ['ai-rules'],
     queryFn: async () => {
-      const response = await api.get('/dashboard/ai-rules');
+      const response = await api.get('/api/dashboard/ai-rules');
       return response.data;
     },
     refetchInterval: 30000,
@@ -127,7 +127,7 @@ export default function AIRulesPage() {
   const { data: coverageData } = useQuery<RuleCoverage>({
     queryKey: ['ai-rules-coverage'],
     queryFn: async () => {
-      const response = await api.get('/dashboard/ai-rules/coverage');
+      const response = await api.get('/api/dashboard/ai-rules/coverage');
       return response.data;
     },
     refetchInterval: 30000,
@@ -136,7 +136,7 @@ export default function AIRulesPage() {
   const { data: effectivenessData } = useQuery<{ rules: RuleEffectiveness[] }>({
     queryKey: ['ai-rules-effectiveness'],
     queryFn: async () => {
-      const response = await api.get('/dashboard/ai-rules/effectiveness');
+      const response = await api.get('/api/dashboard/ai-rules/effectiveness');
       return response.data;
     },
     refetchInterval: 30000,
@@ -149,7 +149,7 @@ export default function AIRulesPage() {
   }>({
     queryKey: ['ai-rules-confidence'],
     queryFn: async () => {
-      const response = await api.get('/dashboard/ai-rules/confidence');
+      const response = await api.get('/api/dashboard/ai-rules/confidence');
       return response.data;
     },
     refetchInterval: 30000,
@@ -158,7 +158,7 @@ export default function AIRulesPage() {
   const { data: flowData } = useQuery<{ flow: AutomationFlow }>({
     queryKey: ['ai-rules-flow'],
     queryFn: async () => {
-      const response = await api.get('/dashboard/ai-rules/flow');
+      const response = await api.get('/api/dashboard/ai-rules/flow');
       return response.data;
     },
     refetchInterval: 30000,
@@ -169,7 +169,7 @@ export default function AIRulesPage() {
   }>({
     queryKey: ['ai-rules-recommendations'],
     queryFn: async () => {
-      const response = await api.get('/dashboard/ai-rules/recommendations');
+      const response = await api.get('/api/dashboard/ai-rules/recommendations');
       return response.data;
     },
     refetchInterval: 30000,
@@ -178,7 +178,7 @@ export default function AIRulesPage() {
   // Mutations
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/dashboard/ai-rules', {
+      const response = await api.post('/api/dashboard/ai-rules', {
         intent: data.intent,
         name: data.name || null,
         description: data.description || null,
@@ -199,7 +199,7 @@ export default function AIRulesPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await api.put(`/dashboard/ai-rules/${id}`, {
+      const response = await api.put(`/api/dashboard/ai-rules/${id}`, {
         intent: data.intent,
         name: data.name || null,
         description: data.description || null,
@@ -243,7 +243,7 @@ export default function AIRulesPage() {
 
   const testMutation = useMutation({
     mutationFn: async (message: string) => {
-      const response = await api.post('/dashboard/ai-rules/test', { message });
+      const response = await api.post('/api/dashboard/ai-rules/test', { message });
       return response.data;
     },
     onSuccess: (data) => {

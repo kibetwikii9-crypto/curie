@@ -75,7 +75,7 @@ export default function ConnectTelegramModal({ isOpen, onClose, onSuccess }: Con
     setSuccess(false);
 
     try {
-      const response = await api.post('/integrations/telegram/connect', {
+      const response = await api.post('/api/integrations/telegram/connect', {
         bot_token: botToken.trim(),
       });
 

@@ -42,7 +42,7 @@ function CheckoutContent() {
   const { data: plansData, isLoading: plansLoading } = useQuery({
     queryKey: ['billing', 'plans'],
     queryFn: async () => {
-      const response = await api.get('/billing/plans');
+      const response = await api.get('/api/billing/plans');
       return response.data;
     },
     enabled: isAuthenticated && !!planId
@@ -56,7 +56,7 @@ function CheckoutContent() {
 
     const createCheckoutSession = async () => {
       try {
-        const response = await api.post('/billing/checkout/create-session', {
+        const response = await api.post('/api/billing/checkout/create-session', {
           plan_id: selectedPlan.id,
           billing_cycle: billingCycle,
           payment_method_type: paymentMethod,

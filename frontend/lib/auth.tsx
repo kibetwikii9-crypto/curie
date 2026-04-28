@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      const response = await api.get('/auth/me');
+      const response = await api.get('/api/auth/me');
       setUser(response.data);
     } catch (error) {
       if (typeof window !== 'undefined') {
@@ -58,9 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       params.append('username', email);
       params.append('password', password);
 
-      const loginUrl = api.defaults.baseURL + '/auth/login';
+      const loginUrl = api.defaults.baseURL + '/api/auth/login';
       console.log('[Auth] Attempting login to:', loginUrl);
-      return api.post('/auth/login', params, {
+      return api.post('/api/auth/login', params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },

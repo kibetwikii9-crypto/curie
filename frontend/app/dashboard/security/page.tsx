@@ -105,7 +105,7 @@ export default function SecurityPage() {
   const { data: stats } = useQuery<SecurityStats>({
     queryKey: ['security-stats'],
     queryFn: async () => {
-      const response = await api.get('/security/stats/dashboard');
+      const response = await api.get('/api/security/stats/dashboard');
       return response.data;
     },
     refetchInterval: 30000,
@@ -114,7 +114,7 @@ export default function SecurityPage() {
   const { data: twoFaStatus } = useQuery({
     queryKey: ['security', '2fa', 'status'],
     queryFn: async () => {
-      const response = await api.get('/security/2fa/status');
+      const response = await api.get('/api/security/2fa/status');
       return response.data;
     },
   });
@@ -122,7 +122,7 @@ export default function SecurityPage() {
   const { data: sessions = [] } = useQuery<Session[]>({
     queryKey: ['security', 'sessions'],
     queryFn: async () => {
-      const response = await api.get('/security/sessions/');
+      const response = await api.get('/api/security/sessions/');
       return response.data;
     },
   });
@@ -130,7 +130,7 @@ export default function SecurityPage() {
   const { data: apiKeys = [] } = useQuery<ApiKey[]>({
     queryKey: ['security', 'api-keys'],
     queryFn: async () => {
-      const response = await api.get('/security/api-keys/');
+      const response = await api.get('/api/security/api-keys/');
       return response.data;
     },
   });
@@ -138,7 +138,7 @@ export default function SecurityPage() {
   const { data: ipAllowlist = [] } = useQuery<IPAllowlist[]>({
     queryKey: ['security', 'ip-allowlist'],
     queryFn: async () => {
-      const response = await api.get('/security/ip-allowlist/');
+      const response = await api.get('/api/security/ip-allowlist/');
       return response.data;
     },
   });
@@ -148,7 +148,7 @@ export default function SecurityPage() {
     queryFn: async () => {
       const params: any = {};
       if (actionFilter) params.action = actionFilter;
-      const response = await api.get('/security/audit-logs/', { params });
+      const response = await api.get('/api/security/audit-logs/', { params });
       return response.data;
     },
   });
@@ -156,7 +156,7 @@ export default function SecurityPage() {
   // Mutations
   const setup2FAMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.post('/security/2fa/setup');
+      const response = await api.post('/api/security/2fa/setup');
       return response.data;
     },
     onSuccess: (data) => {
@@ -170,7 +170,7 @@ export default function SecurityPage() {
 
   const enable2FAMutation = useMutation({
     mutationFn: async (code: string) => {
-      await api.post(`/security/2fa/enable?code=${code}`);
+      await api.post(`/api/security/2fa/enable?code=${code}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security'] });
@@ -181,7 +181,7 @@ export default function SecurityPage() {
 
   const revokeSessionMutation = useMutation({
     mutationFn: async (sessionId: number) => {
-      await api.delete(`/security/sessions/${sessionId}`);
+      await api.delete(`/api/security/sessions/${sessionId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security', 'sessions'] });
@@ -191,7 +191,7 @@ export default function SecurityPage() {
 
   const createApiKeyMutation = useMutation({
     mutationFn: async (name: string) => {
-      const response = await api.post('/security/api-keys/', { name, permissions: [] });
+      const response = await api.post('/api/security/api-keys/', { name, permissions: [] });
       return response.data;
     },
     onSuccess: (data) => {
@@ -204,7 +204,7 @@ export default function SecurityPage() {
 
   const revokeApiKeyMutation = useMutation({
     mutationFn: async (keyId: number) => {
-      await api.delete(`/security/api-keys/${keyId}`);
+      await api.delete(`/api/security/api-keys/${keyId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security', 'api-keys'] });
@@ -214,7 +214,7 @@ export default function SecurityPage() {
 
   const createIPMutation = useMutation({
     mutationFn: async (data: { ip_address: string; description?: string }) => {
-      const response = await api.post('/security/ip-allowlist/', data);
+      const response = await api.post('/api/security/ip-allowlist/', data);
       return response.data;
     },
     onSuccess: () => {
@@ -228,7 +228,7 @@ export default function SecurityPage() {
 
   const deleteIPMutation = useMutation({
     mutationFn: async (ipId: number) => {
-      await api.delete(`/security/ip-allowlist/${ipId}`);
+      await api.delete(`/api/security/ip-allowlist/${ipId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security', 'ip-allowlist'] });

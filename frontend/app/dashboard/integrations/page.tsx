@@ -172,7 +172,7 @@ export default function IntegrationsPage() {
     queryKey: ['billing', 'usage'],
     queryFn: async () => {
       try {
-        const response = await api.get('/billing/usage');
+        const response = await api.get('/api/billing/usage');
         return response.data;
       } catch (error) {
         return { usage: {} };
@@ -186,7 +186,7 @@ export default function IntegrationsPage() {
   const { data: healthData, isLoading: healthLoading } = useQuery<HealthStatus>({
     queryKey: ['integrations-health'],
     queryFn: async () => {
-      const response = await api.get('/integrations/health/check');
+      const response = await api.get('/api/integrations/health/check');
       return response.data;
     },
     enabled: canManage,
@@ -201,9 +201,9 @@ export default function IntegrationsPage() {
 
     try {
       const [integrationsRes, telegramStatusRes, whatsappStatusRes] = await Promise.all([
-        api.get('/integrations/'),
-        api.get('/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
-        api.get('/integrations/whatsapp/status').catch(() => ({ data: null })),
+        api.get('/api/integrations/'),
+        api.get('/api/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
+        api.get('/api/integrations/whatsapp/status').catch(() => ({ data: null })),
       ]);
 
       setIntegrations(integrationsRes.data || []);
@@ -240,7 +240,7 @@ export default function IntegrationsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await api.put(`/integrations/${id}`, data);
+      const response = await api.put(`/api/integrations/${id}`, data);
       return response.data;
     },
     onSuccess: () => {
@@ -252,7 +252,7 @@ export default function IntegrationsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/integrations/${id}`);
+      await api.delete(`/api/integrations/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -262,7 +262,7 @@ export default function IntegrationsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
-      await api.put(`/integrations/${id}`, { is_active });
+      await api.put(`/api/integrations/${id}`, { is_active });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -283,9 +283,9 @@ export default function IntegrationsPage() {
 
     try {
       if (channel === 'telegram') {
-        await api.delete('/integrations/telegram/disconnect');
+        await api.delete('/api/integrations/telegram/disconnect');
       } else if (channel === 'whatsapp') {
-        await api.delete('/integrations/whatsapp/disconnect');
+        await api.delete('/api/integrations/whatsapp/disconnect');
       }
       fetchIntegrations();
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -368,7 +368,7 @@ export default function IntegrationsPage() {
 
     try {
       const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}/integrations/whatsapp/connect`;
+      popup.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
@@ -417,7 +417,7 @@ export default function IntegrationsPage() {
 
   const connectWebchat = async () => {
     try {
-      const response = await api.post('/integrations/webchat/connect');
+      const response = await api.post('/api/integrations/webchat/connect');
       const data = response.data;
 
       if (data?.success) {
@@ -520,7 +520,7 @@ export default function IntegrationsPage() {
 
   const connectInstagram = async () => {
     await startOAuthPopup(
-        '/integrations/instagram/connect',
+        '/api/integrations/instagram/connect',
         'Instagram OAuth',
         'instagram-oauth-success',
         'instagram-oauth-error',
@@ -530,7 +530,7 @@ export default function IntegrationsPage() {
 
     const connectMessenger = async () => {
       await startOAuthPopup(
-        '/integrations/messenger/connect',
+        '/api/integrations/messenger/connect',
         'Messenger OAuth',
         'messenger-oauth-success',
         'messenger-oauth-error',
@@ -540,7 +540,9 @@ export default function IntegrationsPage() {
 
     const connectEmail = async () => {
       await startOAuthPopup(
-        '/integrations/email/connect',
+        '/api/integrations/email/connect',
+      'Email OAuth',
+      'email-oauth-success',
       'email-oauth-error',
       'Email connected successfully!'
     );
@@ -776,7 +778,7 @@ export default function IntegrationsPage() {
                             <button
                               onClick={async () => {
                                 try {
-                                  const response = await api.post('/integrations/email/process');
+                                  const response = await api.post('/api/integrations/email/process');
                                   alert(`Processed ${response.data.processed} emails successfully!`);
                                   if (response.data.errors && response.data.errors.length > 0) {
                                     console.warn('Email processing errors:', response.data.errors);
@@ -864,7 +866,7 @@ export default function IntegrationsPage() {
                               <button
                                 onClick={async () => {
                                   try {
-                                    const response = await api.post('/integrations/email/process');
+                                    const response = await api.post('/api/integrations/email/process');
                                     alert(`Processed ${response.data.processed} emails successfully!`);
                                     if (response.data.errors && response.data.errors.length > 0) {
                                       console.warn('Email processing errors:', response.data.errors);

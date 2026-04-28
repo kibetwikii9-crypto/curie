@@ -20,7 +20,7 @@ export default function InvoicesPage() {
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['billing', 'invoices'],
     queryFn: async () => {
-      const response = await api.get('/billing/invoices?limit=50');
+      const response = await api.get('/api/billing/invoices?limit=50');
       return response.data;
     },
     enabled: isAuthenticated

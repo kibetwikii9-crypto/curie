@@ -25,7 +25,7 @@ export default function BillingPlansPage() {
   const { data: plansData, isLoading: plansLoading } = useQuery({
     queryKey: ['billing', 'plans'],
     queryFn: async () => {
-      const response = await api.get('/billing/plans');
+      const response = await api.get('/api/billing/plans');
       return response.data;
     },
     enabled: isAuthenticated
@@ -35,7 +35,7 @@ export default function BillingPlansPage() {
   const { data: subscriptionData } = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: async () => {
-      const response = await api.get('/billing/subscription');
+      const response = await api.get('/api/billing/subscription');
       return response.data;
     },
     enabled: isAuthenticated
