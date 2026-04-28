@@ -201,9 +201,9 @@ export default function IntegrationsPage() {
 
     try {
       const [integrationsRes, telegramStatusRes, whatsappStatusRes] = await Promise.all([
-        api.get('/api/integrations/'),
-        api.get('/api/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
-        api.get('/api/integrations/whatsapp/status').catch(() => ({ data: null })),
+        api.get('/integrations/'),
+        api.get('/integrations/telegram/status').catch(() => ({ data: { connected: false } })),
+        api.get('/integrations/whatsapp/status').catch(() => ({ data: null })),
       ]);
 
       setIntegrations(integrationsRes.data || []);
@@ -283,9 +283,9 @@ export default function IntegrationsPage() {
 
     try {
       if (channel === 'telegram') {
-        await api.delete('/api/integrations/telegram/disconnect');
+        await api.delete('/integrations/telegram/disconnect');
       } else if (channel === 'whatsapp') {
-        await api.delete('/api/integrations/whatsapp/disconnect');
+        await api.delete('/integrations/whatsapp/disconnect');
       }
       fetchIntegrations();
       queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
@@ -417,7 +417,7 @@ export default function IntegrationsPage() {
 
   const connectWebchat = async () => {
     try {
-      const response = await api.post('/api/integrations/webchat/connect');
+      const response = await api.post('/integrations/webchat/connect');
       const data = response.data;
 
       if (data?.success) {
@@ -778,7 +778,7 @@ export default function IntegrationsPage() {
                             <button
                               onClick={async () => {
                                 try {
-                                  const response = await api.post('/api/integrations/email/process');
+                                  const response = await api.post('/integrations/email/process');
                                   alert(`Processed ${response.data.processed} emails successfully!`);
                                   if (response.data.errors && response.data.errors.length > 0) {
                                     console.warn('Email processing errors:', response.data.errors);
@@ -866,7 +866,7 @@ export default function IntegrationsPage() {
                               <button
                                 onClick={async () => {
                                   try {
-                                    const response = await api.post('/api/integrations/email/process');
+                                    const response = await api.post('/integrations/email/process');
                                     alert(`Processed ${response.data.processed} emails successfully!`);
                                     if (response.data.errors && response.data.errors.length > 0) {
                                       console.warn('Email processing errors:', response.data.errors);

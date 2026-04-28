@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      const response = await api.get('/api/auth/me');
+      const response = await api.get('/auth/me');
       setUser(response.data);
     } catch (error) {
       if (typeof window !== 'undefined') {

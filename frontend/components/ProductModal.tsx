@@ -63,7 +63,7 @@ export default function ProductModal({ isOpen, onClose, onSave, product, isLoadi
 
     setIsGeneratingDescription(true);
     try {
-      const response = await api.post('/api/sales/ai/generate-description', {
+      const response = await api.post('/sales/ai/generate-description', {
         product_name: formData.name,
         category: formData.category || null,
         key_features: formData.tags ? formData.tags.split(',').map(t => t.trim()) : null,
@@ -87,7 +87,7 @@ export default function ProductModal({ isOpen, onClose, onSave, product, isLoadi
 
     setIsSuggestingPrice(true);
     try {
-      const response = await api.post('/api/sales/ai/suggest-price', {
+      const response = await api.post('/sales/ai/suggest-price', {
         product_name: formData.name,
         category: formData.category || null,
         description: formData.description || null,

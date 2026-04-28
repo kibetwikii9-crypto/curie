@@ -237,7 +237,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'signin', isFr
       // Call the register API endpoint
       // Backend will auto-create Business and assign business_owner role
       const { api } = await import('@/lib/api');
-      const response = await api.post('/api/auth/register', {
+      const response = await api.post('/auth/register', {
         email: signUpData.email,
         password: signUpData.password,
         full_name: signUpData.fullName,

@@ -94,7 +94,7 @@ export default function SettingsPage() {
   const { data: profile, isLoading: profileLoading } = useQuery<Profile>({
     queryKey: ['profile'],
     queryFn: async () => {
-      const response = await api.get('/api/settings/profile');
+      const response = await api.get('/settings/profile');
       const data = response.data;
       setProfileData({
         full_name: data.full_name || '',
@@ -107,7 +107,7 @@ export default function SettingsPage() {
   const { data: business, isLoading: businessLoading } = useQuery<BusinessSettings>({
     queryKey: ['business-settings'],
     queryFn: async () => {
-      const response = await api.get('/api/settings/business');
+      const response = await api.get('/settings/business');
       const data = response.data;
       setBusinessData({
         name: data.name || '',
@@ -122,7 +122,7 @@ export default function SettingsPage() {
   const { data: preferences = [] } = useQuery<NotificationPreference[]>({
     queryKey: ['notification-preferences'],
     queryFn: async () => {
-      const response = await api.get('/api/settings/notifications/preferences');
+      const response = await api.get('/settings/notifications/preferences');
       return response.data;
     },
   });
@@ -130,7 +130,7 @@ export default function SettingsPage() {
   // Mutations
   const updateProfileMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.put('/api/settings/profile', data);
+      const response = await api.put('/settings/profile', data);
       return response.data;
     },
     onSuccess: () => {
@@ -146,7 +146,7 @@ export default function SettingsPage() {
 
   const updateBusinessMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.put('/api/settings/business', data);
+      const response = await api.put('/settings/business', data);
       return response.data;
     },
     onSuccess: () => {
@@ -162,7 +162,7 @@ export default function SettingsPage() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/api/settings/password', data);
+      const response = await api.post('/settings/password', data);
       return response.data;
     },
     onSuccess: () => {

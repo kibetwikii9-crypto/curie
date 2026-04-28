@@ -103,7 +103,7 @@ export default function UsersPage() {
   const { data: stats } = useQuery<UserStats>({
     queryKey: ['user-stats'],
     queryFn: async () => {
-      const response = await api.get('/api/users/stats');
+      const response = await api.get('/users/stats');
       return response.data;
     },
     refetchInterval: 30000,
@@ -114,7 +114,7 @@ export default function UsersPage() {
     queryKey: ['billing', 'usage'],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/billing/usage');
+        const response = await api.get('/billing/usage');
         return response.data;
       } catch (error) {
         return { usage: {} };
@@ -137,7 +137,7 @@ export default function UsersPage() {
   const { data: roles = [] } = useQuery<Role[]>({
     queryKey: ['roles'],
     queryFn: async () => {
-      const response = await api.get('/api/users/roles/');
+      const response = await api.get('/users/roles/');
       return response.data;
     },
   });
@@ -145,7 +145,7 @@ export default function UsersPage() {
   const { data: permissions = [] } = useQuery<Permission[]>({
     queryKey: ['permissions'],
     queryFn: async () => {
-      const response = await api.get('/api/users/permissions/');
+      const response = await api.get('/users/permissions/');
       return response.data;
     },
   });
@@ -153,7 +153,7 @@ export default function UsersPage() {
   // Mutations
   const addUserMutation = useMutation({
     mutationFn: async (userData: { email: string; full_name?: string; role: string }) => {
-      const response = await api.post('/api/users/', userData);
+      const response = await api.post('/users/', userData);
       return response.data;
     },
     onSuccess: () => {
@@ -189,7 +189,7 @@ export default function UsersPage() {
 
   const addRoleMutation = useMutation({
     mutationFn: async (roleData: { name: string; description?: string; permission_ids: number[] }) => {
-      const response = await api.post('/api/users/roles/', roleData);
+      const response = await api.post('/users/roles/', roleData);
       return response.data;
     },
     onSuccess: () => {
@@ -222,7 +222,7 @@ export default function UsersPage() {
 
   const bulkToggleMutation = useMutation({
     mutationFn: async ({ user_ids, is_active }: { user_ids: number[]; is_active: boolean }) => {
-      const response = await api.post('/api/users/bulk/toggle-active', user_ids, {
+      const response = await api.post('/users/bulk/toggle-active', user_ids, {
         params: { is_active },
       });
       return response.data;
