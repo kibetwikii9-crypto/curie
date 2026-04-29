@@ -1,16 +1,14 @@
 import axios from 'axios';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://automifyyai.com';
+const normalizeApiUrl = (rawUrl: string) => {
+  let url = rawUrl?.trim() || 'https://automifyyai.com';
 
-const normalizedApiBaseUrl = (() => {
-  let baseUrl = API_BASE_URL?.trim() || 'https://automifyyai.com';
-
-  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-    baseUrl = `https://${baseUrl}`;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
   }
 
   try {
-    const parsed = new URL(baseUrl);
+    const parsed = new URL(url);
     // If the API URL includes a trailing /api path, remove it so requests like
     // api.get('/api/...') do not become /api/api/...
     if (parsed.pathname.endsWith('/api')) {
@@ -18,9 +16,13 @@ const normalizedApiBaseUrl = (() => {
     }
     return parsed.toString().replace(/\/+$/, '');
   } catch {
-    return baseUrl.replace(/\/+$/, '').replace(/\/api$/, '');
+    return url.replace(/\/+$/, '').replace(/\/api$/, '');
   }
-})();
+};
+
+export const API_BASE_URL = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL || 'https://automifyyai.com');
+
+const normalizedApiBaseUrl = API_BASE_URL;
 
 export const api = axios.create({
   baseURL: normalizedApiBaseUrl,
