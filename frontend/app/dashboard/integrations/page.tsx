@@ -96,7 +96,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'whatsapp',
     status: 'available',
     description: 'Connect WhatsApp Business API (requires WhatsApp Business Account setup)',
-    icon: '/api/whatsapp-icon.png',
+    icon: '/whatsapp-icon.png',
     category: 'Messaging',
     color: 'from-green-500 to-green-600',
     features: ['Auto-replies', 'Media support', 'Template messages', 'Analytics'],
@@ -106,7 +106,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'telegram',
     status: 'available',
     description: 'Telegram bot integration for instant messaging',
-    icon: '/api/telegram-icon.png',
+    icon: '/telegram-icon.png',
     category: 'Messaging',
     color: 'from-blue-500 to-blue-600',
     features: ['Bot commands', 'Group chats', 'File sharing', 'Inline keyboards'],
@@ -116,7 +116,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'instagram',
     status: 'available',
     description: 'Manage Instagram Direct Messages and comments',
-    icon: '/api/instagram-icon.png',
+    icon: '/instagram-icon.png',
     category: 'Social Media',
     color: 'from-pink-500 to-purple-600',
     features: ['DM automation', 'Comment replies', 'Story mentions', 'Media'],
@@ -126,7 +126,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'messenger',
     status: 'available',
     description: 'Integrate Facebook Messenger conversations',
-    icon: '/api/messenger-icon.png',
+    icon: '/messenger-icon.png',
     category: 'Social Media',
     color: 'from-blue-600 to-indigo-600',
     features: ['Instant replies', 'Rich media', 'Quick replies', 'Templates'],
@@ -136,7 +136,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'webchat',
     status: 'available',
     description: 'Embed chat widget on your website',
-    icon: '/api/chat-icon.png',
+    icon: '/chat-icon.png',
     category: 'Web',
     color: 'from-gray-600 to-gray-700',
     features: ['Custom branding', 'Instant setup', 'Copy-paste embed', 'Real-time chat'],
@@ -146,7 +146,7 @@ const availableChannels: AvailableChannel[] = [
     id: 'email',
     status: 'available',
     description: 'Connect Gmail with one-click OAuth',
-    icon: '/api/chat-icon.png',
+    icon: '/chat-icon.png',
     category: 'Email',
     color: 'from-red-500 to-red-600',
     features: ['Auto-responses', 'Gmail integration', 'AI-powered replies', 'Smart inbox'],
@@ -350,69 +350,13 @@ export default function IntegrationsPage() {
   const activeIntegrations = integrations.filter((integration) => integration.is_active);
 
   const connectWhatsApp = async () => {
-    const width = 600;
-    const height = 700;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    const popup = window.open(
-      'about:blank',
+    await startOAuthPopup(
+      '/api/integrations/whatsapp/connect',
       'WhatsApp OAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      'whatsapp-oauth-success',
+      'whatsapp-oauth-error',
+      'WhatsApp connected successfully!'
     );
-
-    if (!popup) {
-      alert('Please allow popups for this site to connect WhatsApp');
-      return;
-    }
-
-    try {
-      const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}/api/integrations/whatsapp/connect`;
-
-      const handleMessage = (event: MessageEvent) => {
-        const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
-
-        if (event.origin !== window.location.origin && event.origin !== backendOrigin) {
-          return;
-        }
-
-        if (event.data?.type !== 'whatsapp-oauth-success' && event.data?.type !== 'whatsapp-oauth-error') {
-          return;
-        }
-
-        if (event.data.type === 'whatsapp-oauth-success') {
-          popup.close();
-          fetchIntegrations();
-          queryClient.invalidateQueries({ queryKey: ['integrations-health'] });
-          alert('WhatsApp connected successfully!');
-          window.removeEventListener('message', handleMessage);
-        } else if (event.data.type === 'whatsapp-oauth-error') {
-          popup.close();
-          alert(`WhatsApp connection failed: ${event.data.error || 'Unknown error'}`);
-          window.removeEventListener('message', handleMessage);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.error('WhatsApp connection error:', error);
-      popup.close();
-      if (error.response?.status === 401) {
-        alert('Please log in first');
-      } else if (error.response?.status === 403) {
-        alert(error.response?.data?.detail || 'You do not have permission');
-      } else {
-        showIntegrationError(error, 'Integration in progress... If this persists, please try again.');
-      }
-    }
   };
 
   const connectWebchat = async () => {
@@ -481,8 +425,14 @@ export default function IntegrationsPage() {
     }
 
     try {
-      const backendUrl = api.defaults.baseURL || window.location.origin;
-      popup.location.href = `${backendUrl}${endpoint}`;
+      const response = await api.get(endpoint, {
+        headers: { Accept: 'application/json' },
+      });
+      const authUrl = response.data?.auth_url;
+      if (!authUrl) {
+        throw new Error('Missing OAuth redirect URL from server');
+      }
+      popup.location.href = authUrl;
 
       const handleMessage = (event: MessageEvent) => {
         const backendOrigin = new URL(api.defaults.baseURL || window.location.origin).origin;
