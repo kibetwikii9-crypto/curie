@@ -343,6 +343,53 @@ export default function IntegrationsPage() {
     return iconPath || '/chat-icon.png';
   };
 
+  const showWebchatModal = (embedCode: string, isActive: boolean) => {
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
+    modal.innerHTML = `
+      <div style="background:white;padding:2rem;border-radius:12px;max-width:640px;width:90%;">
+        <h2 style="margin:0 0 1rem 0;font-size:1.5rem;color:#111;">Website Chat Setup</h2>
+        <p style="color:#666;margin-bottom:0.5rem;">Your widget is created and ready to install on your website.</p>
+        <p style="color:#666;margin-bottom:1rem;">Paste this script before the closing &lt;/body&gt; tag. The widget is not live until you install it and confirm below.</p>
+        <div style="background:#f5f5f5;padding:1rem;border-radius:8px;margin-bottom:1rem;overflow-x:auto;max-height:260px;">
+          <code style="font-family:monospace;font-size:0.875rem;white-space:pre;display:block;">${embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">
+          <button id="copy-webchat-embed" style="padding:0.75rem 1rem;background:#10b981;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+            Copy Embed Code
+          </button>
+          ${!isActive ? '<button id="approve-webchat-installation" style="padding:0.75rem 1rem;background:#2563eb;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">I installed it</button>' : ''}
+          <button id="close-webchat-modal" style="padding:0.75rem 1rem;background:#6b7280;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeModal = () => modal.remove();
+    const copyButton = modal.querySelector<HTMLButtonElement>('#copy-webchat-embed');
+    copyButton?.addEventListener('click', () => {
+      navigator.clipboard.writeText(embedCode).then(() => alert('Embed code copied to clipboard!'));
+    });
+
+    const closeButton = modal.querySelector<HTMLButtonElement>('#close-webchat-modal');
+    closeButton?.addEventListener('click', closeModal);
+
+    const approveButton = modal.querySelector<HTMLButtonElement>('#approve-webchat-installation');
+    approveButton?.addEventListener('click', async () => {
+      approveButton.disabled = true;
+      try {
+        const response = await api.post('/api/integrations/webchat/approve');
+        alert(response.data.message || 'Website chat marked as installed.');
+        fetchIntegrations();
+      } catch (error: any) {
+        alert(error?.response?.data?.detail || error?.message || 'Failed to confirm installation.');
+      } finally {
+        closeModal();
+      }
+    });
+  };
+
   const filteredChannels = availableChannels.filter((channel) => {
     if (categoryFilter === 'all') return true;
     return channel.category === categoryFilter;
@@ -359,34 +406,23 @@ export default function IntegrationsPage() {
     );
   };
 
+  const approveWebchatInstallation = async () => {
+    try {
+      const response = await api.post('/api/integrations/webchat/approve');
+      alert(response.data.message || 'Website chat installation confirmed.');
+      fetchIntegrations();
+    } catch (error: any) {
+      alert(error?.response?.data?.detail || error?.message || 'Failed to confirm installation.');
+    }
+  };
+
   const connectWebchat = async () => {
     try {
       const response = await api.post('/api/integrations/webchat/connect');
       const data = response.data;
 
       if (data?.success) {
-        const embedCode = data.embed_code;
-        const modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
-        modal.innerHTML = `
-          <div style="background:white;padding:2rem;border-radius:12px;max-width:600px;width:90%;">
-            <h2 style="margin:0 0 1rem 0;font-size:1.5rem;color:#111;">Website Chat Widget Created 🎉</h2>
-            <p style="color:#666;margin-bottom:0.5rem;">Step 1 complete: your widget is ready.</p>
-            <p style="color:#666;margin-bottom:1rem;">Step 2: paste this code before the closing &lt;/body&gt; tag on your website. It is not live until this is installed.</p>
-            <div style="background:#f5f5f5;padding:1rem;border-radius:8px;margin-bottom:1rem;overflow-x:auto;">
-              <code style="font-family:monospace;font-size:0.875rem;white-space:pre;display:block;">${embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
-            </div>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-              <button onclick="navigator.clipboard.writeText(\`${embedCode.replace(/`/g, '\\`')}\`).then(() => alert('Copied to clipboard!')); this.textContent='✓ Copied!';" style="flex:1;padding:0.75rem;background:#10b981;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
-                Copy Embed Code
-              </button>
-              <button onclick="this.parentElement.parentElement.parentElement.remove();" style="flex:1;padding:0.75rem;background:#6b7280;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
-                Close
-              </button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modal);
+        showWebchatModal(data.embed_code, data.is_active);
         fetchIntegrations();
       }
     } catch (error: any) {
@@ -909,6 +945,9 @@ export default function IntegrationsPage() {
                 const isConnected = integrations.some(
                   (i) => i.channel === channel.id && i.is_active
                 );
+                const isPending = channel.id === 'webchat' && integrations.some(
+                  (i) => i.channel === channel.id && !i.is_active
+                );
 
                 return (
                   <div
@@ -969,7 +1008,11 @@ export default function IntegrationsPage() {
                           } else if (channel.id === 'email') {
                             connectEmail();
                           } else if (channel.id === 'webchat') {
-                            connectWebchat();
+                            if (isPending) {
+                              approveWebchatInstallation();
+                            } else {
+                              connectWebchat();
+                            }
                           }
                         } else {
                           alert('This integration is coming soon!');
@@ -984,6 +1027,8 @@ export default function IntegrationsPage() {
                     >
                       {isConnected ? (
                         <><Check className="h-4 w-4 inline mr-2" /> Connected</>
+                      ) : isPending ? (
+                        <><Check className="h-4 w-4 inline mr-2" /> Finish Setup</>
                       ) : channel.status === 'available' ? (
                         <><Plus className="h-4 w-4 inline mr-2" /> Connect Now</>
                       ) : (
