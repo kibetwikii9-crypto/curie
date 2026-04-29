@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const normalizeApiUrl = (rawUrl: string) => {
-  let url = rawUrl?.trim() || 'https://automifyyai.com';
+  let url = rawUrl?.trim() || 'https://www.automifyyai.com';
 
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = `https://${url}`;
@@ -20,7 +20,7 @@ const normalizeApiUrl = (rawUrl: string) => {
   }
 };
 
-export const API_BASE_URL = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL || 'https://automifyyai.com');
+export const API_BASE_URL = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL || 'https://www.automifyyai.com');
 
 const normalizedApiBaseUrl = API_BASE_URL;
 

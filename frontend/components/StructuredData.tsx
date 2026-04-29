@@ -7,7 +7,7 @@ export default function StructuredData() {
     name: 'Automify',
     applicationCategory: 'BusinessApplication',
     description: 'Multi-channel AI chatbot, support, and marketing automation platform',
-    url: 'https://automifyyai.com',
+    url: 'https://www.automifyyai.com',
     operatingSystem: 'Web',
     offers: {
       '@type': 'Offer',
