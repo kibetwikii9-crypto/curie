@@ -174,7 +174,10 @@
         // Clear input
         document.getElementById('automify-message-input').value = '';
 
-        // Send to API (placeholder - implement actual API call)
+        console.log('Sending message to:', apiUrl + '/api/integrations/webchat/webhook');
+        console.log('Widget ID:', widgetId);
+
+        // Send to API
         fetch(apiUrl + '/api/integrations/webchat/webhook', {
             method: 'POST',
             headers: {
@@ -186,14 +189,31 @@
                 sender_id: 'visitor_' + Date.now()
             })
         })
-        .then(response => response.json())
-        .then(data => {
-            // Handle response (placeholder)
-            console.log('Message sent:', data);
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            return response.json().then(data => ({
+                status: response.status,
+                data: data
+            }));
+        })
+        .then(result => {
+            console.log('Message response:', result);
+            if (result.status === 200 && result.data.status === 'ok') {
+                addMessage('Message sent successfully!', 'bot');
+            } else if (result.status === 401) {
+                console.error('Authentication failed:', result.data);
+                addMessage('Error: Authentication failed. Please check your widget setup.', 'bot');
+            } else {
+                console.error('API error:', result.data);
+                addMessage(result.data.message || 'There was an error processing your message.', 'bot');
+            }
         })
         .catch(error => {
             console.error('Error sending message:', error);
-            addMessage('Sorry, there was an error sending your message. Please try again.', 'bot');
+            console.error('API URL was:', apiUrl);
+            console.error('Widget ID was:', widgetId);
+            addMessage('Sorry, there was an error sending your message. Please check the console for details.', 'bot');
         });
     }
 
