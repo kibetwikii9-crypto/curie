@@ -22,7 +22,23 @@ const normalizeApiUrl = (rawUrl: string) => {
 
 export const API_BASE_URL = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL || 'https://www.automifyyai.com');
 
-const normalizedApiBaseUrl = API_BASE_URL;
+const getBrowserApiBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    return API_BASE_URL;
+  }
+
+  const browserOrigin = window.location.origin;
+  const stripHost = (url: string) =>
+    url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+
+  if (stripHost(browserOrigin) === stripHost(API_BASE_URL)) {
+    return browserOrigin;
+  }
+
+  return API_BASE_URL;
+};
+
+const normalizedApiBaseUrl = getBrowserApiBaseUrl();
 
 export const api = axios.create({
   baseURL: normalizedApiBaseUrl,
