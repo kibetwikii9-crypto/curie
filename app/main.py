@@ -67,6 +67,7 @@ if hasattr(settings, "frontend_url") and settings.frontend_url:
 # Add all known frontend URLs
 # (Keep this list aligned with your deployed frontend domains.)
 cors_origins.append("https://www.automifyyai.com")
+cors_origins.append("https://automifyyai.com")
 cors_origins.append("http://76.13.48.35")
 
 # Remove duplicates
