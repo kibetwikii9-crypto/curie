@@ -59,12 +59,13 @@ class MetaOAuthService:
         
         return url
     
-    async def exchange_code_for_token(self, code: str) -> Dict[str, Any]:
+    async def exchange_code_for_token(self, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """
         Exchange authorization code for access token.
         
         Args:
             code: Authorization code from callback
+            redirect_uri: Callback URI used in the authorization request. Defaults to the WhatsApp redirect URI.
             
         Returns:
             Token response with access_token, expires_in, etc.
@@ -74,7 +75,7 @@ class MetaOAuthService:
         params = {
             "client_id": self.app_id,
             "client_secret": self.app_secret,
-            "redirect_uri": self.redirect_uri,
+            "redirect_uri": redirect_uri or self.redirect_uri,
             "code": code
         }
         
