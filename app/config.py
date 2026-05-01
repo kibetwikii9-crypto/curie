@@ -1,4 +1,5 @@
 import warnings
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -66,7 +67,7 @@ class Settings(BaseSettings):
     billing_admin_email: str = ""  # Admin inbox for billing alerts (set via BILLING_ADMIN_EMAIL env var)
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).resolve().parents[1] / ".env",
         env_file_encoding="utf-8",
         extra="ignore"  # Allow extra env vars without raising errors
     )
