@@ -108,6 +108,7 @@ def _is_public_or_billing_path(path: str) -> bool:
     """Allow auth/billing/public paths without subscription lock."""
     public_prefixes = (
         "/health",
+        "/api/health",  # Health check endpoint - must be public for monitoring
         "/docs",
         "/redoc",
         "/openapi.json",

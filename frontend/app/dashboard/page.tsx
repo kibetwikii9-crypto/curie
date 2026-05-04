@@ -1,7 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import TimeAgo from '@/components/TimeAgo';
 import {
   MessageSquare,
@@ -101,7 +104,16 @@ interface OverviewData {
 }
 
 export default function DashboardPage() {
-  const { data, isLoading, refetch } = useQuery<OverviewData>({
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/');
+    }
+  }, [isAuthenticated, authLoading, router]);
+
+  const { data, isLoading, error, refetch } = useQuery<OverviewData>({
     queryKey: ['dashboard', 'overview'],
     queryFn: async () => {
       const response = await api.get('/api/dashboard/overview');
@@ -115,12 +127,91 @@ export default function DashboardPage() {
     refetchOnWindowFocus: true,
     // Don't refetch on reconnect if data is fresh (less than 30 seconds old)
     staleTime: 30000,
+    enabled: isAuthenticated, // Only run query if authenticated
   });
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    // Check if it's a subscription error
+    const isSubscriptionError = error?.response?.status === 402;
+    const isAuthError = error?.response?.status === 401;
+
+    if (isSubscriptionError) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <CreditCard className="mx-auto h-12 w-12 text-orange-500" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Subscription Required</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Your free trial has ended. Please upgrade to continue using the dashboard.
+            </p>
+            <div className="mt-6">
+              <button
+                onClick={() => router.push('/dashboard/billing')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+              >
+                Upgrade Now
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (isAuthError) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Authentication Required</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Please log in to access the dashboard.
+            </p>
+            <div className="mt-6">
+              <button
+                onClick={() => router.push('/')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+              >
+                Go to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">Error loading dashboard</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Unable to load dashboard data. Please try refreshing the page.
+          </p>
+          <div className="mt-6">
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
